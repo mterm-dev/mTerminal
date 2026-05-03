@@ -1,0 +1,31 @@
+node_modules
+dist
+src-tauri/target
+src-tauri/gen
+.DS_Store
+*.log
+
+# claude code workspace state
+.claude/
+CLAUDE.md
+
+# editor / OS
+.vscode/
+.idea/
+*.swp
+*~
+
+# build outputs
+release-artifacts/
+
+# PKGBUILD build dirs
+packaging/src/
+packaging/pkg/
+packaging/*.pkg.tar.zst
+packaging/*.AppImage
+packaging/*.deb
+
+# user-specific bundle copies (terminal/ is the design handoff, keep)
+# but ignore the original .napkin sources
+terminal/project/scraps/*.napkin
+terminal/project/scraps/*.thumbnail.png

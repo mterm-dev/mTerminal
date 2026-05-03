@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=mTerminal
+GenericName=Terminal Emulator
+Comment=Custom terminal emulator with grouped tabs
+Exec=mterminal
+Icon=mterminal
+Terminal=false
+Categories=System;TerminalEmulator;Utility;
+Keywords=shell;prompt;command;commandline;cmd;
+StartupNotify=true
+StartupWMClass=mTerminal

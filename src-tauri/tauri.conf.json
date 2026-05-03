@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "mTerminal",
+  "version": "0.1.0",
+  "identifier": "dev.mterminal.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Terminal",
+        "label": "main",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 720,
+        "minHeight": 420,
+        "resizable": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "icon": ["icons/icon.png"],
+    "category": "Utility",
+    "shortDescription": "mTerminal — custom terminal emulator",
+    "longDescription": "Tauri-based terminal emulator for Linux with grouped tabs, per-group accent colors, real PTY sessions, and a warm neutral dark UI inspired by entire.io.",
+    "publisher": "arthurr0",
+    "homepage": "https://github.com/arthurr0/mTerminal",
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0"
+        ],
+        "section": "utils"
+      }
+    }
+  }
+}
