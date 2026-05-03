@@ -117,6 +117,7 @@ html, body {
   border-radius: 0;
   border: 0;
   box-shadow: none;
+  padding-bottom: var(--safe-bottom, 0);
 }
 
 /* ── titlebar ────────────────────────────────────────────── */

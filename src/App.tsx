@@ -61,6 +61,22 @@ export default function App() {
   }, [settings.windowOpacity]);
 
   useEffect(() => {
+    const apply = () => {
+      const overflow = Math.max(
+        0,
+        window.outerHeight - window.screen.availHeight,
+      );
+      document.documentElement.style.setProperty(
+        "--safe-bottom",
+        `${overflow}px`,
+      );
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, []);
+
+  useEffect(() => {
     const win = getCurrentWindow();
     const unlistenPromise = win.onCloseRequested((event) => {
       const tabs = tabsRef.current;
