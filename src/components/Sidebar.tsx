@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { Group, Tab } from "../hooks/useWorkspace";
 import { InlineEdit } from "./InlineEdit";
 
@@ -25,6 +25,8 @@ interface Props {
     groupId: string | null,
   ) => void;
   onOpenSettings: () => void;
+  activeGroupId: string | null;
+  onSelectGroup: (id: string) => void;
 }
 
 type DropMark =
@@ -51,10 +53,15 @@ export function Sidebar(props: Props) {
     onGroupContextMenu,
     onReorderTab,
     onOpenSettings,
+    activeGroupId,
+    onSelectGroup,
   } = props;
 
   const [dragTabId, setDragTabId] = useState<number | null>(null);
   const [dropMark, setDropMark] = useState<DropMark | null>(null);
+  const dragTabRef = useRef<number | null>(null);
+  const dropMarkRef = useRef<DropMark | null>(null);
+  dropMarkRef.current = dropMark;
 
   const tabIndexMap = new Map<number, number>();
   tabs.forEach((t, i) => tabIndexMap.set(t.id, i));
@@ -76,8 +83,15 @@ export function Sidebar(props: Props) {
   };
 
   const resetDrag = () => {
+    dragTabRef.current = null;
+    dropMarkRef.current = null;
     setDragTabId(null);
     setDropMark(null);
+  };
+
+  const setMark = (m: DropMark | null) => {
+    dropMarkRef.current = m;
+    setDropMark(m);
   };
 
   const handleTabDragOver = (
@@ -85,41 +99,38 @@ export function Sidebar(props: Props) {
     t: Tab,
     sectionTabs: Tab[],
   ) => {
-    if (dragTabId == null) return;
+    const drag = dragTabRef.current;
+    if (drag == null) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
     const rect = e.currentTarget.getBoundingClientRect();
     const upper = e.clientY < rect.top + rect.height / 2;
     if (upper) {
-      if (t.id === dragTabId) {
-        setDropMark(null);
+      if (t.id === drag) {
+        setMark(null);
         return;
       }
-      setDropMark({
-        kind: "before",
-        beforeId: t.id,
-        groupId: t.groupId,
-      });
+      setMark({ kind: "before", beforeId: t.id, groupId: t.groupId });
     } else {
       const idx = sectionTabs.findIndex((x) => x.id === t.id);
       const next = sectionTabs[idx + 1];
       if (next) {
-        if (next.id === dragTabId || t.id === dragTabId) {
-          setDropMark(null);
+        if (next.id === drag || t.id === drag) {
+          setMark(null);
           return;
         }
-        setDropMark({
+        setMark({
           kind: "before",
           beforeId: next.id,
           groupId: t.groupId,
         });
       } else {
-        if (t.id === dragTabId) {
-          setDropMark(null);
+        if (t.id === drag) {
+          setMark(null);
           return;
         }
-        setDropMark({ kind: "endOf", groupId: t.groupId });
+        setMark({ kind: "endOf", groupId: t.groupId });
       }
     }
   };
@@ -129,21 +140,24 @@ export function Sidebar(props: Props) {
     groupId: string | null,
     sectionTabs: Tab[],
   ) => {
-    if (dragTabId == null) return;
+    if (dragTabRef.current == null) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     if (sectionTabs.length === 0) {
-      setDropMark({ kind: "endOf", groupId });
+      setMark({ kind: "endOf", groupId });
     }
   };
 
   const commitDrop = (e: React.DragEvent) => {
+    const drag = dragTabRef.current;
+    const mark = dropMarkRef.current;
     e.preventDefault();
-    if (dragTabId != null && dropMark) {
-      if (dropMark.kind === "before") {
-        onReorderTab(dragTabId, dropMark.beforeId, dropMark.groupId);
+    e.stopPropagation();
+    if (drag != null && mark) {
+      if (mark.kind === "before") {
+        onReorderTab(drag, mark.beforeId, mark.groupId);
       } else {
-        onReorderTab(dragTabId, null, dropMark.groupId);
+        onReorderTab(drag, null, mark.groupId);
       }
     }
     resetDrag();
@@ -168,6 +182,7 @@ export function Sidebar(props: Props) {
           }`}
           draggable={editingTabId !== t.id}
           onDragStart={(e) => {
+            dragTabRef.current = t.id;
             setDragTabId(t.id);
             e.dataTransfer.effectAllowed = "move";
             try {
@@ -255,33 +270,45 @@ export function Sidebar(props: Props) {
         className="term-side-scroll"
         role="tablist"
         aria-orientation="vertical"
+        onDragOver={(e) => {
+          if (dragTabRef.current == null) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (dropMarkRef.current == null) {
+            setMark({ kind: "endOf", groupId: null });
+          }
+        }}
+        onDrop={commitDrop}
       >
-        {(ungroupedTabs.length > 0 || dragTabId != null) && (
-          <div
-            className={`term-ungrouped ${
-              dropMark?.kind === "endOf" && dropMark.groupId === null
-                ? "drop-target"
-                : ""
-            }`}
-            onDragOver={(e) => handleSectionDragOver(e, null, ungroupedTabs)}
-            onDrop={commitDrop}
-          >
-            {ungroupedTabs.map((t) => renderTab(t, ungroupedTabs))}
-            {renderEndMarker(null)}
-            {ungroupedTabs.length === 0 && dragTabId != null && (
-              <div className="drop-hint">drop here to ungroup</div>
-            )}
-          </div>
-        )}
+        <div
+          className={`term-ungrouped ${
+            dropMark?.kind === "endOf" && dropMark.groupId === null
+              ? "drop-target"
+              : ""
+          } ${ungroupedTabs.length === 0 ? "empty" : ""}`}
+          onDragOver={(e) => handleSectionDragOver(e, null, ungroupedTabs)}
+          onDrop={commitDrop}
+        >
+          {ungroupedTabs.map((t) => renderTab(t, ungroupedTabs))}
+          {renderEndMarker(null)}
+          {ungroupedTabs.length === 0 && (
+            <div className="drop-hint">
+              {dragTabId != null
+                ? "drop here to ungroup"
+                : "ungrouped tabs"}
+            </div>
+          )}
+        </div>
 
         {groups.map((g) => {
           const groupTabs = tabs.filter((t) => t.groupId === g.id);
           const isDropTarget =
             dropMark?.kind === "endOf" && dropMark.groupId === g.id;
+          const isActiveGroup = activeGroupId === g.id;
           return (
             <div
               key={g.id}
-              className={`term-group ${isDropTarget ? "drop-target" : ""}`}
+              className={`term-group ${isDropTarget ? "drop-target" : ""} ${isActiveGroup ? "active" : ""}`}
               style={{ ["--group-accent" as never]: `var(--c-${g.accent})` }}
             >
               <div
@@ -289,6 +316,13 @@ export function Sidebar(props: Props) {
                 role="button"
                 tabIndex={0}
                 aria-expanded={!g.collapsed}
+                aria-pressed={isActiveGroup}
+                onClick={(e) => {
+                  const tag = (e.target as HTMLElement).tagName;
+                  if (tag === "INPUT" || tag === "BUTTON") return;
+                  if (editingGroupId === g.id) return;
+                  onSelectGroup(g.id);
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   onGroupContextMenu(g.id, e.clientX, e.clientY);
@@ -305,7 +339,7 @@ export function Sidebar(props: Props) {
                   if (e.key === "Enter" || e.key === " ") {
                     if ((e.target as HTMLElement).tagName === "INPUT") return;
                     e.preventDefault();
-                    onToggleGroup(g.id);
+                    onSelectGroup(g.id);
                   }
                 }}
               >

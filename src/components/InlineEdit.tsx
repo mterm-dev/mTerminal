@@ -22,14 +22,14 @@ export function InlineEdit({
   const committedRef = useRef(false);
 
   useEffect(() => {
-    if (editing) {
-      setDraft(value);
-      committedRef.current = false;
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      });
-    }
+    if (!editing) return;
+    setDraft(value);
+    committedRef.current = false;
+    const raf = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(raf);
   }, [editing, value]);
 
   if (!editing) {

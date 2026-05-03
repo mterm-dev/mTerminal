@@ -15,7 +15,7 @@ depends=(
 provides=("$_pkgname")
 conflicts=("$_pkgname" "mterminal-git")
 source=(
-  "$_pkgname-$pkgver.AppImage::https://github.com/arthurr0/mTerminal/releases/download/v$pkgver/mTerminal-x86_64.AppImage"
+  "$_pkgname-$pkgver.AppImage::https://github.com/arthurr0/mTerminal/releases/download/v$pkgver/mTerminal_${pkgver}_amd64.AppImage"
   "https://raw.githubusercontent.com/arthurr0/mTerminal/v$pkgver/packaging/$_pkgname.desktop"
   "https://raw.githubusercontent.com/arthurr0/mTerminal/v$pkgver/src-tauri/icons/icon.png"
   "https://raw.githubusercontent.com/arthurr0/mTerminal/v$pkgver/LICENSE"

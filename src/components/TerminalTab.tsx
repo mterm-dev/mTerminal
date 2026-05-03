@@ -4,11 +4,13 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { CursorStyle } from "../settings/useSettings";
 
 interface Props {
   tabId: number;
   active: boolean;
+  gridSlot?: number | null;
   onExit: (tabId: number) => void;
   onInfo?: (tabId: number, info: { cwd: string | null; cmd: string | null }) => void;
   fontFamily: string;
@@ -30,6 +32,7 @@ type PtyEvent =
 export function TerminalTab({
   tabId,
   active,
+  gridSlot,
   onExit,
   onInfo,
   fontFamily,
@@ -80,10 +83,51 @@ export function TerminalTab({
       term.loadAddon(new CanvasAddon());
     } catch {}
 
+    let disposed = false;
+    const pendingInput: string[] = [];
+    let pendingResize: { rows: number; cols: number } | null = null;
+
+    const copySelection = () => {
+      const sel = term.getSelection();
+      if (!sel) return false;
+      writeText(sel).catch(() => {});
+      return true;
+    };
+    const pasteFromClipboard = () => {
+      readText()
+        .then((text) => {
+          if (!text) return;
+          const id = ptyIdRef.current;
+          if (id == null) {
+            pendingInput.push(text);
+            return;
+          }
+          invoke("pty_write", { id, data: text }).catch(() => {});
+        })
+        .catch(() => {});
+    };
+
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown") return true;
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
+        const k = e.key.toLowerCase();
+        if (k === "c") {
+          if (copySelection()) {
+            term.clearSelection();
+            return false;
+          }
+        } else if (k === "v") {
+          pasteFromClipboard();
+          return false;
+        }
+      }
+      return true;
+    });
+
     if (copyOnSelect) {
       term.onSelectionChange(() => {
         const sel = term.getSelection();
-        if (sel) navigator.clipboard?.writeText(sel).catch(() => {});
+        if (sel) writeText(sel).catch(() => {});
       });
     }
 
@@ -93,10 +137,6 @@ export function TerminalTab({
 
     termRef.current = term;
     fitRef.current = fit;
-
-    let disposed = false;
-    const pendingInput: string[] = [];
-    let pendingResize: { rows: number; cols: number } | null = null;
 
     const events = new Channel<PtyEvent>();
     events.onmessage = (msg) => {
@@ -245,12 +285,17 @@ export function TerminalTab({
     return () => clearTimeout(id);
   }, [fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink, scrollback, theme]);
 
+  const inGrid = typeof gridSlot === "number" && gridSlot >= 0;
+  const hostStyle: React.CSSProperties | undefined = inGrid
+    ? { order: gridSlot }
+    : undefined;
   return (
     <div
       ref={hostRef}
       role="application"
       aria-label="terminal"
-      className={`term-pane-host ${active ? "" : "hidden"}`}
+      className={`term-pane-host ${active ? "" : "hidden"} ${inGrid ? "in-grid" : ""}`}
+      style={hostStyle}
       onMouseDown={(e) => {
         mouseDownTargetRef.current = e.target;
       }}

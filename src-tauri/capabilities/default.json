@@ -14,6 +14,8 @@
     "core:window:allow-start-dragging",
     "core:window:allow-is-maximized",
     "core:event:default",
-    "os:default"
+    "os:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text"
   ]
 }

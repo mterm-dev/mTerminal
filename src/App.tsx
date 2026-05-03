@@ -29,11 +29,16 @@ export default function App() {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [closeConfirm, setCloseConfirm] = useState<{ count: number } | null>(null);
+  const [gridGroupId, setGridGroupId] = useState<string | null>(null);
 
   const tabsRef = useRef(ws.tabs);
   tabsRef.current = ws.tabs;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  const wsRef = useRef(ws);
+  wsRef.current = ws;
+  const updateRef = useRef(update);
+  updateRef.current = update;
 
   useEffect(() => {
     (window as unknown as { __MT_HOME?: string }).__MT_HOME = `/home/${sys.user}`;
@@ -91,6 +96,51 @@ export default function App() {
     [ws.tabs, ws.activeId],
   );
 
+  const gridTabs = useMemo(
+    () =>
+      gridGroupId
+        ? ws.tabs.filter((t) => t.groupId === gridGroupId)
+        : [],
+    [ws.tabs, gridGroupId],
+  );
+
+  useEffect(() => {
+    if (gridGroupId && gridTabs.length === 0) setGridGroupId(null);
+  }, [gridGroupId, gridTabs.length]);
+
+  const visibleTabIds = useMemo(() => {
+    if (gridGroupId && gridTabs.length > 0) {
+      return new Set(gridTabs.map((t) => t.id));
+    }
+    return new Set(ws.activeId != null ? [ws.activeId] : []);
+  }, [gridGroupId, gridTabs, ws.activeId]);
+
+  const gridDims = useMemo(() => {
+    const n = gridTabs.length;
+    if (!gridGroupId || n === 0) return null;
+    const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
+    return { cols, rows };
+  }, [gridGroupId, gridTabs.length]);
+
+  const selectTab = (id: number) => {
+    setGridGroupId(null);
+    ws.setActive(id);
+  };
+
+  const selectGroup = (id: string) => {
+    const tabsInGroup = ws.tabs.filter((t) => t.groupId === id);
+    if (tabsInGroup.length === 0) {
+      ws.addTab(id);
+      setGridGroupId(id);
+      return;
+    }
+    setGridGroupId(id);
+    if (!tabsInGroup.some((t) => t.id === ws.activeId)) {
+      ws.setActive(tabsInGroup[0].id);
+    }
+  };
+
   const toggleSidebar = () =>
     update("sidebarCollapsed", !settings.sidebarCollapsed);
 
@@ -99,22 +149,24 @@ export default function App() {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
 
+      const w = wsRef.current;
       if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
         if (e.key === "t" || e.key === "T") {
           e.preventDefault();
-          ws.addTab();
+          setGridGroupId(null);
+          w.addTab();
           return;
         }
         if (e.key === "w" || e.key === "W") {
-          if (ws.activeId != null) {
+          if (w.activeId != null) {
             e.preventDefault();
-            ws.closeTab(ws.activeId);
+            w.closeTab(w.activeId);
           }
           return;
         }
         if (e.key === "b" || e.key === "B") {
           e.preventDefault();
-          update(
+          updateRef.current(
             "sidebarCollapsed",
             !settingsRef.current.sidebarCollapsed,
           );
@@ -123,13 +175,14 @@ export default function App() {
         if (e.key >= "1" && e.key <= "9") {
           const idx = Number(e.key) - 1;
           e.preventDefault();
-          ws.selectIndex(idx);
+          setGridGroupId(null);
+          w.selectIndex(idx);
           return;
         }
       }
       if (e.ctrlKey && e.shiftKey && (e.key === "G" || e.key === "g")) {
         e.preventDefault();
-        ws.addGroup();
+        w.addGroup();
       }
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ",") {
         e.preventDefault();
@@ -138,7 +191,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ws, update]);
+  }, []);
 
   const openTabMenu = (id: number, x: number, y: number) => {
     const tab = ws.tabs.find((t) => t.id === id);
@@ -220,8 +273,11 @@ export default function App() {
           editingGroupId={editingGroupId}
           setEditingTabId={setEditingTabId}
           setEditingGroupId={setEditingGroupId}
-          onSelectTab={ws.setActive}
-          onAddTab={(g) => ws.addTab(g)}
+          onSelectTab={selectTab}
+          onAddTab={(g) => {
+            setGridGroupId(null);
+            ws.addTab(g);
+          }}
           onAddGroup={() => ws.addGroup()}
           onToggleGroup={ws.toggleGroup}
           onRenameTab={ws.renameTab}
@@ -230,15 +286,32 @@ export default function App() {
           onGroupContextMenu={openGroupMenu}
           onReorderTab={ws.reorderTab}
           onOpenSettings={() => setShowSettings(true)}
+          activeGroupId={gridGroupId}
+          onSelectGroup={selectGroup}
         />
 
         <main className="term-main">
-          <div className="term-pane">
+          <div
+            className={`term-pane${gridDims ? " grid" : ""}`}
+            style={
+              gridDims
+                ? ({
+                    ["--grid-cols" as never]: gridDims.cols,
+                    ["--grid-rows" as never]: gridDims.rows,
+                  } as React.CSSProperties)
+                : undefined
+            }
+          >
             {ws.tabs.map((t) => (
               <TerminalTab
                 key={t.id}
                 tabId={t.id}
-                active={t.id === ws.activeId}
+                active={visibleTabIds.has(t.id)}
+                gridSlot={
+                  gridDims && t.groupId === gridGroupId
+                    ? gridTabs.findIndex((x) => x.id === t.id)
+                    : null
+                }
                 onExit={(id) => ws.closeTab(id)}
                 onInfo={ws.updateTabInfo}
                 fontFamily={settings.fontFamily}

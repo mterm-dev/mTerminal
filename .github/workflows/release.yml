@@ -104,3 +104,85 @@ jobs:
             release-artifacts/*.AppImage
             release-artifacts/*.deb
             release-artifacts/mterminal-x86_64-linux
+
+  aur-publish:
+    name: Publish to AUR
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Pacman deps
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm git openssh base-devel sudo curl
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          echo "$AUR_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+          git config --global user.email "koeckiartur@gmail.com"
+          git config --global user.name "arthurr0"
+          git config --global --add safe.directory '*'
+
+      - name: Publish mterminal-git
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          rm -rf /tmp/aur-git
+          git clone ssh://aur@aur.archlinux.org/mterminal-git.git /tmp/aur-git
+          cp packaging/PKGBUILD /tmp/aur-git/PKGBUILD
+          cd /tmp/aur-git
+          chown -R builder:builder .
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          if [ -n "$(git status --porcelain)" ]; then
+            git add PKGBUILD .SRCINFO
+            git commit -m "release $VERSION"
+            git push
+          else
+            echo "no PKGBUILD changes for mterminal-git"
+          fi
+
+      - name: Publish mterminal-bin
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BASE="https://github.com/arthurr0/mTerminal/releases/download/v$VERSION"
+          RAW="https://raw.githubusercontent.com/arthurr0/mTerminal/v$VERSION"
+
+          APPIMAGE_SHA=$(curl -fsSL "$BASE/mTerminal_${VERSION}_amd64.AppImage" | sha256sum | awk '{print $1}')
+          DESKTOP_SHA=$(curl -fsSL "$RAW/packaging/mterminal.desktop" | sha256sum | awk '{print $1}')
+          ICON_SHA=$(curl -fsSL "$RAW/src-tauri/icons/icon.png" | sha256sum | awk '{print $1}')
+          LICENSE_SHA=$(curl -fsSL "$RAW/LICENSE" | sha256sum | awk '{print $1}')
+
+          rm -rf /tmp/aur-bin
+          git clone ssh://aur@aur.archlinux.org/mterminal-bin.git /tmp/aur-bin
+          cp packaging/PKGBUILD-bin /tmp/aur-bin/PKGBUILD
+          cd /tmp/aur-bin
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('$APPIMAGE_SHA' '$DESKTOP_SHA' '$ICON_SHA' '$LICENSE_SHA')/" PKGBUILD
+          chown -R builder:builder .
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          if [ -n "$(git status --porcelain)" ]; then
+            git add PKGBUILD .SRCINFO
+            git commit -m "release $VERSION"
+            git push
+          else
+            echo "no PKGBUILD changes for mterminal-bin"
+          fi
