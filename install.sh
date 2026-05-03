@@ -36,17 +36,24 @@ fi
 
 BIN_DIR="$PREFIX/bin"
 APP_DIR="$PREFIX/share/applications"
-ICON_DIR="$PREFIX/share/icons/hicolor/512x512/apps"
+ICON_ROOT="$PREFIX/share/icons/hicolor"
 LICENSE_DIR="$PREFIX/share/licenses/$APP_NAME"
+ICON_SIZES=(32 128 256 512)
 
 if [[ "$ACTION" == "uninstall" ]]; then
   echo "→ removing $APP_DISPLAY from $PREFIX"
   $SUDO rm -f "$BIN_DIR/$APP_NAME"
   $SUDO rm -f "$APP_DIR/$APP_NAME.desktop"
-  $SUDO rm -f "$ICON_DIR/$APP_NAME.png"
+  for s in "${ICON_SIZES[@]}"; do
+    $SUDO rm -f "$ICON_ROOT/${s}x${s}/apps/$APP_NAME.png"
+  done
+  $SUDO rm -f "$ICON_ROOT/scalable/apps/$APP_NAME.svg"
   $SUDO rm -rf "$LICENSE_DIR"
   if command -v update-desktop-database >/dev/null 2>&1; then
     $SUDO update-desktop-database "$APP_DIR" 2>/dev/null || true
+  fi
+  if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    $SUDO gtk-update-icon-cache -q "$ICON_ROOT" 2>/dev/null || true
   fi
   echo "✓ uninstalled"
   exit 0
@@ -75,21 +82,30 @@ if [[ ! -x "$BIN_SRC" ]]; then
   exit 1
 fi
 
-ICON_SRC="$REPO_ROOT/src-tauri/icons/icon.png"
+ICON_DIR_SRC="$REPO_ROOT/src-tauri/icons"
 DESKTOP_SRC="$REPO_ROOT/packaging/$APP_NAME.desktop"
 
 # ── install ──────────────────────────────────────────────────────
 echo "→ installing to $PREFIX"
 $SUDO install -Dm755 "$BIN_SRC"     "$BIN_DIR/$APP_NAME"
 $SUDO install -Dm644 "$DESKTOP_SRC" "$APP_DIR/$APP_NAME.desktop"
-$SUDO install -Dm644 "$ICON_SRC"    "$ICON_DIR/$APP_NAME.png"
+for s in "${ICON_SIZES[@]}"; do
+  case "$s" in
+    32)  SRC="$ICON_DIR_SRC/32x32.png" ;;
+    128) SRC="$ICON_DIR_SRC/128x128.png" ;;
+    256) SRC="$ICON_DIR_SRC/128x128@2x.png" ;;
+    512) SRC="$ICON_DIR_SRC/512x512.png" ;;
+  esac
+  $SUDO install -Dm644 "$SRC" "$ICON_ROOT/${s}x${s}/apps/$APP_NAME.png"
+done
+$SUDO install -Dm644 "$ICON_DIR_SRC/icon.svg" "$ICON_ROOT/scalable/apps/$APP_NAME.svg"
 $SUDO install -Dm644 "$REPO_ROOT/LICENSE" "$LICENSE_DIR/LICENSE"
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   $SUDO update-desktop-database "$APP_DIR" 2>/dev/null || true
 fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-  $SUDO gtk-update-icon-cache -q "$PREFIX/share/icons/hicolor" 2>/dev/null || true
+  $SUDO gtk-update-icon-cache -q "$ICON_ROOT" 2>/dev/null || true
 fi
 
 echo

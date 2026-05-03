@@ -19,10 +19,12 @@ export function InlineEdit({
 }: Props) {
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const committedRef = useRef(false);
 
   useEffect(() => {
     if (editing) {
       setDraft(value);
+      committedRef.current = false;
       requestAnimationFrame(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -33,6 +35,13 @@ export function InlineEdit({
   if (!editing) {
     return <span className={className}>{value}</span>;
   }
+
+  const commit = (next: string) => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    onCommit(next);
+    setEditing(false);
+  };
 
   return (
     <input
@@ -45,17 +54,14 @@ export function InlineEdit({
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
-          onCommit(draft);
-          setEditing(false);
+          commit(draft);
         } else if (e.key === "Escape") {
+          committedRef.current = true;
           setEditing(false);
         }
         e.stopPropagation();
       }}
-      onBlur={() => {
-        onCommit(draft);
-        setEditing(false);
-      }}
+      onBlur={() => commit(draft)}
     />
   );
 }

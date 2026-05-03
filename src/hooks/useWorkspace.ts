@@ -15,7 +15,7 @@ export interface Tab {
   label: string;
   sub?: string;
   cwd?: string;
-  groupId: string;
+  groupId: string | null;
   autoLabel: boolean;
 }
 
@@ -49,7 +49,6 @@ export interface WorkspaceState {
 }
 
 const STORAGE_KEY = "mterminal:workspace:v1";
-const DEFAULT_GROUP_ID = "default";
 
 function loadInitial(): WorkspaceState {
   if (typeof window !== "undefined") {
@@ -63,31 +62,29 @@ function loadInitial(): WorkspaceState {
           Array.isArray(parsed.tabs) &&
           typeof parsed.nextTabId === "number"
         ) {
-          const tabs: Tab[] = parsed.tabs.map((t) => ({
-            id: t.id!,
-            label: t.label || "shell",
-            sub: t.sub,
-            cwd: t.cwd,
-            groupId: t.groupId || DEFAULT_GROUP_ID,
-            autoLabel: t.autoLabel ?? true,
+          const groups: Group[] = parsed.groups.map((g, i) => ({
+            id: g.id!,
+            name: g.name || "group",
+            collapsed: !!g.collapsed,
+            accent: (GROUP_ACCENTS.includes(g.accent as GroupAccent)
+              ? (g.accent as GroupAccent)
+              : GROUP_ACCENTS[i % GROUP_ACCENTS.length]) as GroupAccent,
           }));
-          const groups: Group[] = parsed.groups.length
-            ? parsed.groups.map((g, i) => ({
-                id: g.id!,
-                name: g.name || "group",
-                collapsed: !!g.collapsed,
-                accent: (GROUP_ACCENTS.includes(g.accent as GroupAccent)
-                  ? (g.accent as GroupAccent)
-                  : GROUP_ACCENTS[i % GROUP_ACCENTS.length]) as GroupAccent,
-              }))
-            : [
-                {
-                  id: DEFAULT_GROUP_ID,
-                  name: "main",
-                  collapsed: false,
-                  accent: "orange",
-                },
-              ];
+          const groupIds = new Set(groups.map((g) => g.id));
+          const tabs: Tab[] = parsed.tabs.map((t) => {
+            const gid =
+              typeof t.groupId === "string" && groupIds.has(t.groupId)
+                ? t.groupId
+                : null;
+            return {
+              id: t.id!,
+              label: t.label || "shell",
+              sub: t.sub,
+              cwd: t.cwd,
+              groupId: gid,
+              autoLabel: t.autoLabel ?? true,
+            };
+          });
           return {
             tabs,
             groups,
@@ -107,18 +104,11 @@ function loadInitial(): WorkspaceState {
       {
         id: firstId,
         label: "shell",
-        groupId: DEFAULT_GROUP_ID,
+        groupId: null,
         autoLabel: true,
       },
     ],
-    groups: [
-      {
-        id: DEFAULT_GROUP_ID,
-        name: "main",
-        collapsed: false,
-        accent: "orange",
-      },
-    ],
+    groups: [],
     activeId: firstId,
     nextTabId: firstId + 1,
   };
@@ -130,23 +120,25 @@ export function useWorkspace() {
   stateRef.current = state;
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {}
+    const id = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {}
+    }, 200);
+    return () => window.clearTimeout(id);
   }, [state]);
 
   const setActive = useCallback((id: number | null) => {
     setState((s) => ({ ...s, activeId: id }));
   }, []);
 
-  const addTab = useCallback((groupId?: string): number => {
+  const addTab = useCallback((groupId?: string | null): number => {
     let createdId = -1;
     setState((s) => {
       const targetGroup =
-        groupId ||
-        s.tabs.find((t) => t.id === s.activeId)?.groupId ||
-        s.groups[0]?.id ||
-        DEFAULT_GROUP_ID;
+        groupId === undefined
+          ? s.tabs.find((t) => t.id === s.activeId)?.groupId ?? null
+          : groupId;
       const id = s.nextTabId;
       createdId = id;
       const tab: Tab = {
@@ -155,20 +147,8 @@ export function useWorkspace() {
         groupId: targetGroup,
         autoLabel: true,
       };
-      const groups = s.groups.some((g) => g.id === targetGroup)
-        ? s.groups
-        : [
-            ...s.groups,
-            {
-              id: targetGroup,
-              name: "main",
-              collapsed: false,
-              accent: GROUP_ACCENTS[s.groups.length % GROUP_ACCENTS.length],
-            },
-          ];
       return {
         ...s,
-        groups,
         tabs: [...s.tabs, tab],
         activeId: id,
         nextTabId: id + 1,
@@ -242,26 +222,41 @@ export function useWorkspace() {
     [],
   );
 
-  const moveTab = useCallback((id: number, groupId: string) => {
-    setState((s) => {
-      const groups = s.groups.some((g) => g.id === groupId)
-        ? s.groups
-        : [
-            ...s.groups,
-            {
-              id: groupId,
-              name: "group",
-              collapsed: false,
-              accent: GROUP_ACCENTS[s.groups.length % GROUP_ACCENTS.length],
-            },
-          ];
-      return {
-        ...s,
-        groups,
-        tabs: s.tabs.map((t) => (t.id === id ? { ...t, groupId } : t)),
-      };
-    });
+  const moveTab = useCallback((id: number, groupId: string | null) => {
+    setState((s) => ({
+      ...s,
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, groupId } : t)),
+    }));
   }, []);
+
+  const reorderTab = useCallback(
+    (id: number, beforeId: number | null, groupId: string | null) => {
+      setState((s) => {
+        const tab = s.tabs.find((t) => t.id === id);
+        if (!tab) return s;
+        const without = s.tabs.filter((t) => t.id !== id);
+        const updated: Tab = { ...tab, groupId };
+        let insertAt: number;
+        if (beforeId == null) {
+          let lastIdx = -1;
+          without.forEach((t, i) => {
+            if (t.groupId === groupId) lastIdx = i;
+          });
+          insertAt = lastIdx >= 0 ? lastIdx + 1 : without.length;
+        } else {
+          insertAt = without.findIndex((t) => t.id === beforeId);
+          if (insertAt < 0) insertAt = without.length;
+        }
+        const tabs = [
+          ...without.slice(0, insertAt),
+          updated,
+          ...without.slice(insertAt),
+        ];
+        return { ...s, tabs };
+      });
+    },
+    [],
+  );
 
   const addGroup = useCallback((name?: string): string => {
     const id = `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -306,26 +301,31 @@ export function useWorkspace() {
   }, []);
 
   const deleteGroup = useCallback((id: string) => {
-    setState((s) => {
-      if (s.groups.length <= 1) return s;
-      const remaining = s.groups.filter((g) => g.id !== id);
-      const fallback = remaining[0].id;
-      return {
-        ...s,
-        groups: remaining,
-        tabs: s.tabs.map((t) =>
-          t.groupId === id ? { ...t, groupId: fallback } : t,
-        ),
-      };
-    });
+    setState((s) => ({
+      ...s,
+      groups: s.groups.filter((g) => g.id !== id),
+      tabs: s.tabs.map((t) =>
+        t.groupId === id ? { ...t, groupId: null } : t,
+      ),
+    }));
   }, []);
 
   const selectIndex = useCallback((idx: number) => {
     const cur = stateRef.current;
-    if (idx >= 0 && idx < cur.tabs.length) {
-      setActive(cur.tabs[idx].id);
-    }
-  }, [setActive]);
+    if (idx < 0 || idx >= cur.tabs.length) return;
+    const target = cur.tabs[idx];
+    setState((s) => {
+      const group = target.groupId
+        ? s.groups.find((g) => g.id === target.groupId)
+        : null;
+      const groups = group?.collapsed
+        ? s.groups.map((g) =>
+            g.id === target.groupId ? { ...g, collapsed: false } : g,
+          )
+        : s.groups;
+      return { ...s, groups, activeId: target.id };
+    });
+  }, []);
 
   return {
     ...state,
@@ -335,6 +335,7 @@ export function useWorkspace() {
     renameTab,
     updateTabInfo,
     moveTab,
+    reorderTab,
     addGroup,
     renameGroup,
     setGroupAccent,

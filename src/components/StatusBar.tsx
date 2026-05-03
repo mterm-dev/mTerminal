@@ -17,16 +17,22 @@ export function StatusBar({
 }: Props) {
   return (
     <div className="term-status">
-      <div className="seg">{activeLabel.toUpperCase()}</div>
-      {cwd && <div className="seg" title={cwd}>{shortenCwd(cwd)}</div>}
-      {cmd && <div className="seg">{cmd}</div>}
+      <div className="seg" title={activeLabel}>
+        {activeLabel.toUpperCase()}
+      </div>
+      {cwd && (
+        <div className="seg shrink" title={cwd}>
+          {shortenCwd(cwd)}
+        </div>
+      )}
+      {cmd && <div className="seg" title={cmd}>{cmd}</div>}
       <div className="seg">UTF-8</div>
       <div className="grow" />
       <div className="seg">
         {tabCount} tab{tabCount === 1 ? "" : "s"} · {groupCount} group
         {groupCount === 1 ? "" : "s"}
       </div>
-      <div style={{ padding: "0 12px" }}>
+      <div className="clock-seg">
         <Clock />
       </div>
     </div>

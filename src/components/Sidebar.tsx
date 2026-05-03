@@ -1,6 +1,6 @@
+import { Fragment, useState } from "react";
 import type { Group, Tab } from "../hooks/useWorkspace";
 import { InlineEdit } from "./InlineEdit";
-import { useState } from "react";
 
 interface Props {
   tabs: Tab[];
@@ -12,16 +12,24 @@ interface Props {
   setEditingTabId: (id: number | null) => void;
   setEditingGroupId: (id: string | null) => void;
   onSelectTab: (id: number) => void;
-  onAddTabInGroup: (groupId: string) => void;
+  onAddTab: (groupId?: string | null) => void;
   onAddGroup: () => void;
   onToggleGroup: (id: string) => void;
   onRenameTab: (id: number, name: string) => void;
   onRenameGroup: (id: string, name: string) => void;
   onTabContextMenu: (id: number, x: number, y: number) => void;
   onGroupContextMenu: (id: string, x: number, y: number) => void;
-  onTabDragStart: (id: number) => void;
-  onTabDropOnGroup: (groupId: string) => void;
+  onReorderTab: (
+    id: number,
+    beforeId: number | null,
+    groupId: string | null,
+  ) => void;
+  onOpenSettings: () => void;
 }
+
+type DropMark =
+  | { kind: "before"; beforeId: number; groupId: string | null }
+  | { kind: "endOf"; groupId: string | null };
 
 export function Sidebar(props: Props) {
   const {
@@ -34,67 +42,276 @@ export function Sidebar(props: Props) {
     setEditingTabId,
     setEditingGroupId,
     onSelectTab,
-    onAddTabInGroup,
+    onAddTab,
     onAddGroup,
     onToggleGroup,
     onRenameTab,
     onRenameGroup,
     onTabContextMenu,
     onGroupContextMenu,
-    onTabDragStart,
-    onTabDropOnGroup,
+    onReorderTab,
+    onOpenSettings,
   } = props;
 
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [dragTabId, setDragTabId] = useState<number | null>(null);
+  const [dropMark, setDropMark] = useState<DropMark | null>(null);
 
   const tabIndexMap = new Map<number, number>();
   tabs.forEach((t, i) => tabIndexMap.set(t.id, i));
 
+  const ungroupedTabs = tabs.filter((t) => t.groupId === null);
+
+  const focusTabByOffset = (currentId: number, offset: number) => {
+    const idx = tabs.findIndex((t) => t.id === currentId);
+    if (idx < 0) return;
+    const next = tabs[idx + offset];
+    if (!next) return;
+    onSelectTab(next.id);
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLDivElement>(
+        `[data-tab-id="${next.id}"]`,
+      );
+      el?.focus();
+    });
+  };
+
+  const resetDrag = () => {
+    setDragTabId(null);
+    setDropMark(null);
+  };
+
+  const handleTabDragOver = (
+    e: React.DragEvent,
+    t: Tab,
+    sectionTabs: Tab[],
+  ) => {
+    if (dragTabId == null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    const rect = e.currentTarget.getBoundingClientRect();
+    const upper = e.clientY < rect.top + rect.height / 2;
+    if (upper) {
+      if (t.id === dragTabId) {
+        setDropMark(null);
+        return;
+      }
+      setDropMark({
+        kind: "before",
+        beforeId: t.id,
+        groupId: t.groupId,
+      });
+    } else {
+      const idx = sectionTabs.findIndex((x) => x.id === t.id);
+      const next = sectionTabs[idx + 1];
+      if (next) {
+        if (next.id === dragTabId || t.id === dragTabId) {
+          setDropMark(null);
+          return;
+        }
+        setDropMark({
+          kind: "before",
+          beforeId: next.id,
+          groupId: t.groupId,
+        });
+      } else {
+        if (t.id === dragTabId) {
+          setDropMark(null);
+          return;
+        }
+        setDropMark({ kind: "endOf", groupId: t.groupId });
+      }
+    }
+  };
+
+  const handleSectionDragOver = (
+    e: React.DragEvent,
+    groupId: string | null,
+    sectionTabs: Tab[],
+  ) => {
+    if (dragTabId == null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (sectionTabs.length === 0) {
+      setDropMark({ kind: "endOf", groupId });
+    }
+  };
+
+  const commitDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragTabId != null && dropMark) {
+      if (dropMark.kind === "before") {
+        onReorderTab(dragTabId, dropMark.beforeId, dropMark.groupId);
+      } else {
+        onReorderTab(dragTabId, null, dropMark.groupId);
+      }
+    }
+    resetDrag();
+  };
+
+  const renderTab = (t: Tab, sectionTabs: Tab[]) => {
+    const idx = tabIndexMap.get(t.id) ?? 0;
+    const active = activeId === t.id;
+    const showLineBefore =
+      dropMark?.kind === "before" && dropMark.beforeId === t.id;
+    const isDragging = dragTabId === t.id;
+    return (
+      <Fragment key={t.id}>
+        {showLineBefore && <div className="drop-line" />}
+        <div
+          data-tab-id={t.id}
+          role="tab"
+          tabIndex={active ? 0 : -1}
+          aria-selected={active}
+          className={`term-tab ${active ? "active" : "idle"} ${
+            isDragging ? "dragging" : ""
+          }`}
+          draggable={editingTabId !== t.id}
+          onDragStart={(e) => {
+            setDragTabId(t.id);
+            e.dataTransfer.effectAllowed = "move";
+            try {
+              e.dataTransfer.setData("text/plain", String(t.id));
+            } catch {}
+          }}
+          onDragEnd={resetDrag}
+          onDragOver={(e) => handleTabDragOver(e, t, sectionTabs)}
+          onDrop={commitDrop}
+          onClick={() => onSelectTab(t.id)}
+          onDoubleClick={() => setEditingTabId(t.id)}
+          onKeyDown={(e) => {
+            if ((e.target as HTMLElement).tagName === "INPUT") return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onSelectTab(t.id);
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              focusTabByOffset(t.id, 1);
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              focusTabByOffset(t.id, -1);
+            } else if (e.key === "F2") {
+              e.preventDefault();
+              setEditingTabId(t.id);
+            }
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onTabContextMenu(t.id, e.clientX, e.clientY);
+          }}
+        >
+          <span className="dot" aria-hidden="true" />
+          <span className="label-block">
+            <InlineEdit
+              value={t.label}
+              className="label-main"
+              editing={editingTabId === t.id}
+              setEditing={(b) => setEditingTabId(b ? t.id : null)}
+              onCommit={(v) => onRenameTab(t.id, v)}
+            />
+            {t.sub && t.sub !== t.label && (
+              <span className="label-sub" title={t.sub}>
+                {t.sub}
+              </span>
+            )}
+          </span>
+          <span className="num" aria-hidden="true">
+            {idx + 1}
+          </span>
+        </div>
+      </Fragment>
+    );
+  };
+
+  const renderEndMarker = (groupId: string | null) =>
+    dropMark?.kind === "endOf" && dropMark.groupId === groupId ? (
+      <div className="drop-line" />
+    ) : null;
+
   return (
-    <aside className="term-side">
+    <aside className="term-side" aria-label="Workspace">
       <div className="term-side-h">
         <span className="name">mTerminal</span>
-        <span>{sessionLabel}</span>
+        <span title={sessionLabel}>{sessionLabel}</span>
       </div>
 
       <div className="term-side-section term-side-section-row">
         <span>Workspace</span>
-        <button className="ghost-btn" title="new group" onClick={onAddGroup}>
-          + group
-        </button>
+        <div className="term-side-actions">
+          <button
+            className="ghost-btn"
+            title="new tab"
+            onClick={() => onAddTab()}
+          >
+            + tab
+          </button>
+          <button className="ghost-btn" title="new group" onClick={onAddGroup}>
+            + group
+          </button>
+        </div>
       </div>
 
-      <div className="term-side-scroll">
+      <div
+        className="term-side-scroll"
+        role="tablist"
+        aria-orientation="vertical"
+      >
+        {(ungroupedTabs.length > 0 || dragTabId != null) && (
+          <div
+            className={`term-ungrouped ${
+              dropMark?.kind === "endOf" && dropMark.groupId === null
+                ? "drop-target"
+                : ""
+            }`}
+            onDragOver={(e) => handleSectionDragOver(e, null, ungroupedTabs)}
+            onDrop={commitDrop}
+          >
+            {ungroupedTabs.map((t) => renderTab(t, ungroupedTabs))}
+            {renderEndMarker(null)}
+            {ungroupedTabs.length === 0 && dragTabId != null && (
+              <div className="drop-hint">drop here to ungroup</div>
+            )}
+          </div>
+        )}
+
         {groups.map((g) => {
           const groupTabs = tabs.filter((t) => t.groupId === g.id);
-          const isDropTarget = dropTarget === g.id;
+          const isDropTarget =
+            dropMark?.kind === "endOf" && dropMark.groupId === g.id;
           return (
             <div
               key={g.id}
               className={`term-group ${isDropTarget ? "drop-target" : ""}`}
               style={{ ["--group-accent" as never]: `var(--c-${g.accent})` }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDropTarget(g.id);
-              }}
-              onDragLeave={() => {
-                if (dropTarget === g.id) setDropTarget(null);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDropTarget(null);
-                onTabDropOnGroup(g.id);
-              }}
             >
               <div
                 className="term-group-h"
+                role="button"
+                tabIndex={0}
+                aria-expanded={!g.collapsed}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   onGroupContextMenu(g.id, e.clientX, e.clientY);
                 }}
+                onDragOver={(e) => {
+                  if (dragTabId == null) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = "move";
+                  setDropMark({ kind: "endOf", groupId: g.id });
+                }}
+                onDrop={commitDrop}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    if ((e.target as HTMLElement).tagName === "INPUT") return;
+                    e.preventDefault();
+                    onToggleGroup(g.id);
+                  }
+                }}
               >
                 <button
                   className="chevron"
+                  aria-label={g.collapsed ? "expand group" : "collapse group"}
                   onClick={() => onToggleGroup(g.id)}
                   title={g.collapsed ? "expand" : "collapse"}
                 >
@@ -111,70 +328,73 @@ export function Sidebar(props: Props) {
                     onCommit={(v) => onRenameGroup(g.id, v)}
                   />
                 </span>
-                <span className="term-group-count">{groupTabs.length}</span>
+                <span
+                  className="term-group-count"
+                  aria-label={`${groupTabs.length} tabs`}
+                >
+                  {groupTabs.length}
+                </span>
                 <button
                   className="ghost-btn small"
                   title="new tab in group"
-                  onClick={() => onAddTabInGroup(g.id)}
+                  aria-label="new tab in group"
+                  onClick={() => onAddTab(g.id)}
                 >
                   +
                 </button>
               </div>
 
-              {!g.collapsed &&
-                groupTabs.map((t) => {
-                  const idx = tabIndexMap.get(t.id) ?? 0;
-                  const active = activeId === t.id;
-                  return (
-                    <div
-                      key={t.id}
-                      className={`term-tab ${active ? "active" : "idle"}`}
-                      draggable={editingTabId !== t.id}
-                      onDragStart={() => onTabDragStart(t.id)}
-                      onClick={() => onSelectTab(t.id)}
-                      onDoubleClick={() => setEditingTabId(t.id)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        onTabContextMenu(t.id, e.clientX, e.clientY);
-                      }}
-                    >
-                      <span className="dot" />
-                      <span className="label-block">
-                        <InlineEdit
-                          value={t.label}
-                          className="label-main"
-                          editing={editingTabId === t.id}
-                          setEditing={(b) => setEditingTabId(b ? t.id : null)}
-                          onCommit={(v) => onRenameTab(t.id, v)}
-                        />
-                        {t.sub && t.sub !== t.label && (
-                          <span className="label-sub">{t.sub}</span>
-                        )}
-                      </span>
-                      <span className="num">{idx + 1}</span>
+              {!g.collapsed && (
+                <div
+                  className="term-group-body"
+                  onDragOver={(e) =>
+                    handleSectionDragOver(e, g.id, groupTabs)
+                  }
+                  onDrop={commitDrop}
+                >
+                  {groupTabs.map((t) => renderTab(t, groupTabs))}
+                  {renderEndMarker(g.id)}
+                  {groupTabs.length === 0 && (
+                    <div className="drop-hint">
+                      {dragTabId != null ? "drop here" : "empty group"}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
+
+        {groups.length === 0 && ungroupedTabs.length > 0 && (
+          <div className="term-empty-groups">
+            tip — click <span className="kbd">+ group</span> to organize tabs
+          </div>
+        )}
       </div>
 
       <div className="term-side-foot">
-        <div>
-          <span className="kbd">1-9</span> switch
-        </div>
-        <div>
-          <span className="kbd">Ctrl+T</span> new tab
-        </div>
-        <div>
-          <span className="kbd">Ctrl+W</span> close
-        </div>
-        <div>
-          <span className="kbd">Ctrl+Shift+G</span> new group
-        </div>
-        <div>
-          <span className="kbd">2× click</span> rename
+        <button className="settings-btn" onClick={onOpenSettings}>
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>Settings</span>
+          <span className="kbd" style={{ marginLeft: "auto", marginRight: 0 }}>
+            Ctrl+,
+          </span>
+        </button>
+        <div className="term-side-foot-keys">
+          <div><span className="kbd">1-9</span> switch</div>
+          <div><span className="kbd">Ctrl+T</span> new tab</div>
+          <div><span className="kbd">Ctrl+W</span> close</div>
+          <div><span className="kbd">Ctrl+B</span> sidebar</div>
+          <div><span className="kbd">Ctrl+Shift+G</span> new group</div>
         </div>
       </div>
     </aside>

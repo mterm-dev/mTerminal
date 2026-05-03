@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
@@ -7,6 +8,9 @@ import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { GROUP_ACCENTS, useWorkspace } from "./hooks/useWorkspace";
 import { useSystemInfo } from "./hooks/useSystemInfo";
 import { useMaximized } from "./hooks/useMaximized";
+import { useSettings } from "./settings/useSettings";
+import { findTheme } from "./settings/themes";
+import { SettingsModal } from "./settings/SettingsModal";
 
 interface CtxState {
   x: number;
@@ -18,24 +22,82 @@ export default function App() {
   const ws = useWorkspace();
   const sys = useSystemInfo();
   const maximized = useMaximized();
+  const { settings, update, reset } = useSettings();
+  const theme = useMemo(() => findTheme(settings.themeId), [settings.themeId]);
   const [ctx, setCtx] = useState<CtxState | null>(null);
   const [editingTabId, setEditingTabId] = useState<number | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const dragTabRef = useRef<number | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [closeConfirm, setCloseConfirm] = useState<{ count: number } | null>(null);
+
+  const tabsRef = useRef(ws.tabs);
+  tabsRef.current = ws.tabs;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   useEffect(() => {
     (window as unknown as { __MT_HOME?: string }).__MT_HOME = `/home/${sys.user}`;
   }, [sys.user]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    for (const [k, v] of Object.entries(theme.cssVars)) {
+      root.setProperty(k, v);
+    }
+    root.setProperty("--ui-font-size", `${settings.uiFontSize}px`);
+    document.body.style.fontSize = `${settings.uiFontSize}px`;
+  }, [theme, settings.uiFontSize]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--window-opacity",
+      String(settings.windowOpacity),
+    );
+  }, [settings.windowOpacity]);
+
+  useEffect(() => {
+    const win = getCurrentWindow();
+    const unlistenPromise = win.onCloseRequested((event) => {
+      const tabs = tabsRef.current;
+      const cfg = settingsRef.current;
+      if (cfg.confirmCloseMultipleTabs && tabs.length > 1) {
+        event.preventDefault();
+        setCloseConfirm({ count: tabs.length });
+      }
+    });
+    return () => {
+      unlistenPromise.then((u) => u()).catch(() => {});
+    };
+  }, []);
+
+  const confirmQuit = () => {
+    setCloseConfirm(null);
+    getCurrentWindow()
+      .destroy()
+      .catch((err) => console.error("destroy failed", err));
+  };
+
+  const shellArgs = useMemo(
+    () =>
+      settings.shellArgs
+        .split(/\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    [settings.shellArgs],
+  );
 
   const activeTab = useMemo(
     () => ws.tabs.find((t) => t.id === ws.activeId) ?? null,
     [ws.tabs, ws.activeId],
   );
 
+  const toggleSidebar = () =>
+    update("sidebarCollapsed", !settings.sidebarCollapsed);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea") return;
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
 
       if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
         if (e.key === "t" || e.key === "T") {
@@ -50,6 +112,14 @@ export default function App() {
           }
           return;
         }
+        if (e.key === "b" || e.key === "B") {
+          e.preventDefault();
+          update(
+            "sidebarCollapsed",
+            !settingsRef.current.sidebarCollapsed,
+          );
+          return;
+        }
         if (e.key >= "1" && e.key <= "9") {
           const idx = Number(e.key) - 1;
           e.preventDefault();
@@ -61,24 +131,40 @@ export default function App() {
         e.preventDefault();
         ws.addGroup();
       }
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ",") {
+        e.preventDefault();
+        setShowSettings(true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ws]);
+  }, [ws, update]);
 
   const openTabMenu = (id: number, x: number, y: number) => {
     const tab = ws.tabs.find((t) => t.id === id);
     if (!tab) return;
     const otherGroups = ws.groups.filter((g) => g.id !== tab.groupId);
-    const items: MenuItem[] = [
-      { label: "rename", onSelect: () => setEditingTabId(id) },
-      ...(otherGroups.length
-        ? [{ label: "", onSelect: () => {}, separator: true } as MenuItem]
-        : []),
-      ...otherGroups.map<MenuItem>((g) => ({
+    const moveItems: MenuItem[] = [];
+    if (tab.groupId !== null) {
+      moveItems.push({
+        label: "move to → ungrouped",
+        onSelect: () => ws.moveTab(id, null),
+      });
+    }
+    for (const g of otherGroups) {
+      moveItems.push({
         label: `move to → ${g.name}`,
         onSelect: () => ws.moveTab(id, g.id),
-      })),
+      });
+    }
+    const items: MenuItem[] = [
+      { label: "rename", onSelect: () => setEditingTabId(id) },
+      ...(moveItems.length
+        ? [
+            { label: "", onSelect: () => {}, separator: true } as MenuItem,
+            ...moveItems,
+          ]
+        : []),
       { label: "", onSelect: () => {}, separator: true },
       { label: "close tab", onSelect: () => ws.closeTab(id), danger: true },
     ];
@@ -86,7 +172,6 @@ export default function App() {
   };
 
   const openGroupMenu = (id: string, x: number, y: number) => {
-    const canDelete = ws.groups.length > 1;
     const items: MenuItem[] = [
       { label: "rename group", onSelect: () => setEditingGroupId(id) },
       { label: "new tab here", onSelect: () => ws.addTab(id) },
@@ -96,16 +181,12 @@ export default function App() {
         label: `accent: ${c}`,
         onSelect: () => ws.setGroupAccent(id, c),
       })),
-      ...(canDelete
-        ? [
-            { label: "", onSelect: () => {}, separator: true } as MenuItem,
-            {
-              label: "delete group",
-              onSelect: () => ws.deleteGroup(id),
-              danger: true,
-            } as MenuItem,
-          ]
-        : []),
+      { label: "", onSelect: () => {}, separator: true },
+      {
+        label: "delete group",
+        onSelect: () => ws.deleteGroup(id),
+        danger: true,
+      },
     ];
     setCtx({ x, y, items });
   };
@@ -113,9 +194,21 @@ export default function App() {
   const labelLower = (activeTab?.label ?? "shell").toLowerCase();
   const titleSize = `${ws.tabs.length} tab${ws.tabs.length === 1 ? "" : "s"}`;
 
+  const shellCls = [
+    "term-shell",
+    maximized ? "maximized" : "",
+    settings.sidebarCollapsed ? "sidebar-collapsed" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className={`term-shell ${maximized ? "maximized" : ""}`}>
-      <Titlebar title={`mTerminal — ${labelLower} — ${titleSize}`} />
+    <div className={shellCls}>
+      <Titlebar
+        title={`mTerminal — ${labelLower} — ${titleSize}`}
+        sidebarCollapsed={settings.sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
+      />
 
       <div className="term-body">
         <Sidebar
@@ -128,21 +221,15 @@ export default function App() {
           setEditingTabId={setEditingTabId}
           setEditingGroupId={setEditingGroupId}
           onSelectTab={ws.setActive}
-          onAddTabInGroup={(g) => ws.addTab(g)}
+          onAddTab={(g) => ws.addTab(g)}
           onAddGroup={() => ws.addGroup()}
           onToggleGroup={ws.toggleGroup}
           onRenameTab={ws.renameTab}
           onRenameGroup={ws.renameGroup}
           onTabContextMenu={openTabMenu}
           onGroupContextMenu={openGroupMenu}
-          onTabDragStart={(id) => {
-            dragTabRef.current = id;
-          }}
-          onTabDropOnGroup={(gid) => {
-            const id = dragTabRef.current;
-            if (id != null) ws.moveTab(id, gid);
-            dragTabRef.current = null;
-          }}
+          onReorderTab={ws.reorderTab}
+          onOpenSettings={() => setShowSettings(true)}
         />
 
         <main className="term-main">
@@ -154,6 +241,16 @@ export default function App() {
                 active={t.id === ws.activeId}
                 onExit={(id) => ws.closeTab(id)}
                 onInfo={ws.updateTabInfo}
+                fontFamily={settings.fontFamily}
+                fontSize={settings.fontSize}
+                lineHeight={settings.lineHeight}
+                cursorStyle={settings.cursorStyle}
+                cursorBlink={settings.cursorBlink}
+                scrollback={settings.scrollback}
+                theme={theme.xterm}
+                shell={settings.shellOverride}
+                shellArgs={shellArgs}
+                copyOnSelect={settings.copyOnSelect}
               />
             ))}
             {ws.tabs.length === 0 && (
@@ -181,7 +278,82 @@ export default function App() {
           onClose={() => setCtx(null)}
         />
       )}
+
+      {showSettings && (
+        <SettingsModal
+          settings={settings}
+          update={update}
+          reset={reset}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {closeConfirm && (
+        <ConfirmDialog
+          message={`quit mTerminal? ${closeConfirm.count} tabs are still open.`}
+          confirmLabel="quit"
+          cancelLabel="cancel"
+          onConfirm={confirmQuit}
+          onCancel={() => setCloseConfirm(null)}
+        />
+      )}
     </div>
   );
 }
 
+interface ConfirmDialogProps {
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmDialog({
+  message,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        onConfirm();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onConfirm, onCancel]);
+
+  return (
+    <div
+      className="confirm-overlay"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className="confirm-dialog">
+        <div className="confirm-message">{message}</div>
+        <div className="confirm-actions">
+          <button className="confirm-btn" onClick={onCancel}>
+            {cancelLabel}
+          </button>
+          <button
+            className="confirm-btn confirm-btn-primary"
+            onClick={onConfirm}
+            autoFocus
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

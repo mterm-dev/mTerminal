@@ -1,42 +1,48 @@
 import { useEffect, useRef } from "react";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { CanvasAddon } from "@xterm/addon-canvas";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import type { CursorStyle } from "../settings/useSettings";
 
 interface Props {
   tabId: number;
   active: boolean;
   onExit: (tabId: number) => void;
   onInfo?: (tabId: number, info: { cwd: string | null; cmd: string | null }) => void;
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  cursorStyle: CursorStyle;
+  cursorBlink: boolean;
+  scrollback: number;
+  theme: ITheme;
+  shell: string;
+  shellArgs: string[];
+  copyOnSelect: boolean;
 }
 
-const THEME = {
-  background: "#0c0c0c",
-  foreground: "#ebebeb",
-  cursor: "#f5b056",
-  cursorAccent: "#0c0c0c",
-  selectionBackground: "rgba(245, 176, 86, 0.30)",
-  black: "#181818",
-  red: "#e8847a",
-  green: "#6dd5a4",
-  yellow: "#f5b056",
-  blue: "#7eb1ee",
-  magenta: "#c79cf2",
-  cyan: "#7ed7d3",
-  white: "#cecece",
-  brightBlack: "#717171",
-  brightRed: "#f0a097",
-  brightGreen: "#90e0bb",
-  brightYellow: "#fbc77a",
-  brightBlue: "#9bc4f5",
-  brightMagenta: "#d4b3f7",
-  brightCyan: "#9ee2de",
-  brightWhite: "#f5f5f5",
-};
+type PtyEvent =
+  | { kind: "data"; value: string }
+  | { kind: "exit" };
 
-export function TerminalTab({ tabId, active, onExit, onInfo }: Props) {
+export function TerminalTab({
+  tabId,
+  active,
+  onExit,
+  onInfo,
+  fontFamily,
+  fontSize,
+  lineHeight,
+  cursorStyle,
+  cursorBlink,
+  scrollback,
+  theme,
+  shell,
+  shellArgs,
+  copyOnSelect,
+}: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -45,75 +51,110 @@ export function TerminalTab({ tabId, active, onExit, onInfo }: Props) {
   onExitRef.current = onExit;
   const onInfoRef = useRef(onInfo);
   onInfoRef.current = onInfo;
+  const initialShellRef = useRef({ shell, shellArgs });
+  const mouseDownTargetRef = useRef<EventTarget | null>(null);
 
   useEffect(() => {
-    if (!hostRef.current) return;
+    const host = hostRef.current;
+    if (!host) return;
 
     const term = new Terminal({
-      fontFamily:
-        '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-      fontSize: 13,
-      lineHeight: 1.25,
+      fontFamily,
+      fontSize,
+      lineHeight,
       letterSpacing: 0,
-      cursorBlink: true,
-      cursorStyle: "bar",
-      cursorWidth: 2,
+      cursorBlink,
+      cursorStyle,
+      cursorWidth: cursorStyle === "bar" ? 2 : 1,
       allowTransparency: false,
-      scrollback: 5000,
-      theme: THEME,
+      scrollback,
+      theme,
       smoothScrollDuration: 80,
     });
+
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon());
-    term.open(hostRef.current);
-    fit.fit();
+    term.open(host);
+    try {
+      term.loadAddon(new CanvasAddon());
+    } catch {}
+
+    if (copyOnSelect) {
+      term.onSelectionChange(() => {
+        const sel = term.getSelection();
+        if (sel) navigator.clipboard?.writeText(sel).catch(() => {});
+      });
+    }
+
+    try {
+      fit.fit();
+    } catch {}
 
     termRef.current = term;
     fitRef.current = fit;
 
-    let unlistenData: UnlistenFn | null = null;
-    let unlistenExit: UnlistenFn | null = null;
     let disposed = false;
-    let pollHandle: ReturnType<typeof setInterval> | null = null;
+    const pendingInput: string[] = [];
+    let pendingResize: { rows: number; cols: number } | null = null;
+
+    const events = new Channel<PtyEvent>();
+    events.onmessage = (msg) => {
+      if (disposed) return;
+      if (msg.kind === "data") {
+        term.write(msg.value);
+      } else if (msg.kind === "exit") {
+        onExitRef.current(tabId);
+      }
+    };
+
+    term.onData((data) => {
+      const id = ptyIdRef.current;
+      if (id == null) {
+        pendingInput.push(data);
+        return;
+      }
+      invoke("pty_write", { id, data }).catch(() => {});
+    });
+    term.onResize(({ cols, rows }) => {
+      const id = ptyIdRef.current;
+      if (id == null) {
+        pendingResize = { rows, cols };
+        return;
+      }
+      invoke("pty_resize", { id, rows, cols }).catch(() => {});
+    });
 
     const start = async () => {
-      const cols = term.cols;
-      const rows = term.rows;
       try {
-        const id = await invoke<number>("pty_spawn", { rows, cols });
+        const init = initialShellRef.current;
+        const id = await invoke<number>("pty_spawn", {
+          events,
+          rows: term.rows,
+          cols: term.cols,
+          shell: init.shell || null,
+          args: init.shellArgs.length ? init.shellArgs : null,
+        });
         if (disposed) {
           await invoke("pty_kill", { id }).catch(() => {});
           return;
         }
         ptyIdRef.current = id;
 
-        unlistenData = await listen<string>(`pty://data/${id}`, (e) => {
-          term.write(e.payload);
-        });
-        unlistenExit = await listen(`pty://exit/${id}`, () => {
-          onExitRef.current(tabId);
-        });
-
-        term.onData((data) => {
-          invoke("pty_write", { id, data }).catch(() => {});
-        });
-        term.onResize(({ cols, rows }) => {
-          invoke("pty_resize", { id, rows, cols }).catch(() => {});
-        });
-
-        const pollInfo = async () => {
-          try {
-            const info = await invoke<{
-              cwd: string | null;
-              cmd: string | null;
-              pid: number;
-            }>("pty_info", { id });
-            onInfoRef.current?.(tabId, { cwd: info.cwd, cmd: info.cmd });
-          } catch {}
-        };
-        pollInfo();
-        pollHandle = setInterval(pollInfo, 1500);
+        if (pendingResize) {
+          invoke("pty_resize", {
+            id,
+            rows: pendingResize.rows,
+            cols: pendingResize.cols,
+          }).catch(() => {});
+          pendingResize = null;
+        }
+        if (pendingInput.length) {
+          for (const data of pendingInput) {
+            invoke("pty_write", { id, data }).catch(() => {});
+          }
+          pendingInput.length = 0;
+        }
       } catch (err) {
         term.write(`\r\n\x1b[31mfailed to spawn pty: ${String(err)}\x1b[0m\r\n`);
       }
@@ -130,18 +171,12 @@ export function TerminalTab({ tabId, active, onExit, onInfo }: Props) {
       }, 30);
     };
     const ro = new ResizeObserver(scheduleFit);
-    ro.observe(hostRef.current);
-    if (hostRef.current.parentElement) {
-      ro.observe(hostRef.current.parentElement);
-    }
+    ro.observe(host);
 
     return () => {
       disposed = true;
       ro.disconnect();
       if (fitTimer) clearTimeout(fitTimer);
-      if (pollHandle) clearInterval(pollHandle);
-      unlistenData?.();
-      unlistenExit?.();
       const id = ptyIdRef.current;
       if (id != null) {
         invoke("pty_kill", { id }).catch(() => {});
@@ -150,24 +185,82 @@ export function TerminalTab({ tabId, active, onExit, onInfo }: Props) {
       termRef.current = null;
       fitRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId]);
 
   useEffect(() => {
-    if (active) {
-      requestAnimationFrame(() => {
-        try {
-          fitRef.current?.fit();
-          termRef.current?.focus();
-        } catch {}
-      });
-    }
+    if (!active) return;
+    const t = setTimeout(() => {
+      try {
+        fitRef.current?.fit();
+        termRef.current?.focus();
+      } catch {}
+    }, 0);
+    return () => clearTimeout(t);
   }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const pollInfo = async () => {
+      const id = ptyIdRef.current;
+      if (id == null) return;
+      try {
+        const info = await invoke<{
+          cwd: string | null;
+          cmd: string | null;
+          pid: number;
+        }>("pty_info", { id });
+        if (cancelled) return;
+        onInfoRef.current?.(tabId, { cwd: info.cwd, cmd: info.cmd });
+      } catch {}
+    };
+    pollInfo();
+    const handle = setInterval(pollInfo, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }, [active, tabId]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    const fit = fitRef.current;
+    if (!term) return;
+    try {
+      term.options.fontFamily = fontFamily;
+      term.options.fontSize = fontSize;
+      term.options.lineHeight = lineHeight;
+      term.options.cursorStyle = cursorStyle;
+      term.options.cursorBlink = cursorBlink;
+      term.options.cursorWidth = cursorStyle === "bar" ? 2 : 1;
+      term.options.scrollback = scrollback;
+      term.options.theme = theme;
+    } catch {}
+    const id = setTimeout(() => {
+      try {
+        fit?.fit();
+      } catch {}
+    }, 30);
+    return () => clearTimeout(id);
+  }, [fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink, scrollback, theme]);
 
   return (
     <div
       ref={hostRef}
+      role="application"
+      aria-label="terminal"
       className={`term-pane-host ${active ? "" : "hidden"}`}
-      onClick={() => termRef.current?.focus()}
+      onMouseDown={(e) => {
+        mouseDownTargetRef.current = e.target;
+      }}
+      onMouseUp={(e) => {
+        if (mouseDownTargetRef.current === e.target) {
+          const sel = termRef.current?.getSelection();
+          if (!sel) termRef.current?.focus();
+        }
+        mouseDownTargetRef.current = null;
+      }}
     />
   );
 }

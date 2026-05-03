@@ -32,7 +32,13 @@
   "bundle": {
     "active": true,
     "targets": ["deb", "appimage"],
-    "icon": ["icons/icon.png"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
     "category": "Utility",
     "shortDescription": "mTerminal — custom terminal emulator",
     "longDescription": "Tauri-based terminal emulator for Linux with grouped tabs, per-group accent colors, real PTY sessions, and a warm neutral dark UI inspired by entire.io.",

@@ -7,7 +7,14 @@ use anyhow::Result;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::ipc::Channel;
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind", content = "value")]
+pub enum PtyEvent {
+    Data(String),
+    Exit,
+}
 
 pub struct PtySession {
     master: Box<dyn MasterPty + Send>,
@@ -39,9 +46,18 @@ fn login_shell() -> String {
     std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
 }
 
-fn shell_command() -> CommandBuilder {
-    let shell = login_shell();
+fn shell_command(shell_override: Option<&str>, args: &[String]) -> CommandBuilder {
+    let shell = shell_override
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(login_shell);
+
     let mut cmd = CommandBuilder::new(&shell);
+    for a in args {
+        if !a.is_empty() {
+            cmd.arg(a);
+        }
+    }
 
     if let Ok(home) = std::env::var("HOME") {
         cmd.cwd(home);
@@ -54,11 +70,23 @@ fn shell_command() -> CommandBuilder {
 }
 
 #[tauri::command]
-pub fn pty_spawn<R: Runtime>(app: AppHandle<R>, rows: u16, cols: u16) -> Result<u32, String> {
-    spawn_internal(app, rows, cols).map_err(|e| e.to_string())
+pub fn pty_spawn(
+    events: Channel<PtyEvent>,
+    rows: u16,
+    cols: u16,
+    shell: Option<String>,
+    args: Option<Vec<String>>,
+) -> Result<u32, String> {
+    spawn_internal(events, rows, cols, shell, args.unwrap_or_default()).map_err(|e| e.to_string())
 }
 
-fn spawn_internal<R: Runtime>(app: AppHandle<R>, rows: u16, cols: u16) -> Result<u32> {
+fn spawn_internal(
+    events: Channel<PtyEvent>,
+    rows: u16,
+    cols: u16,
+    shell_override: Option<String>,
+    args: Vec<String>,
+) -> Result<u32> {
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(PtySize {
         rows,
@@ -67,7 +95,7 @@ fn spawn_internal<R: Runtime>(app: AppHandle<R>, rows: u16, cols: u16) -> Result
         pixel_height: 0,
     })?;
 
-    let cmd = shell_command();
+    let cmd = shell_command(shell_override.as_deref(), &args);
     let child = pair.slave.spawn_command(cmd)?;
     drop(pair.slave);
 
@@ -87,8 +115,6 @@ fn spawn_internal<R: Runtime>(app: AppHandle<R>, rows: u16, cols: u16) -> Result
         },
     );
 
-    let event_name = format!("pty://data/{}", id);
-    let app_clone = app.clone();
     thread::spawn(move || {
         let mut buf = [0u8; 8192];
         loop {
@@ -96,14 +122,14 @@ fn spawn_internal<R: Runtime>(app: AppHandle<R>, rows: u16, cols: u16) -> Result
                 Ok(0) => break,
                 Ok(n) => {
                     let chunk = String::from_utf8_lossy(&buf[..n]).to_string();
-                    if app_clone.emit(&event_name, chunk).is_err() {
+                    if events.send(PtyEvent::Data(chunk)).is_err() {
                         break;
                     }
                 }
                 Err(_) => break,
             }
         }
-        let _ = app_clone.emit(&format!("pty://exit/{}", id), ());
+        let _ = events.send(PtyEvent::Exit);
         SESSIONS.lock().remove(&id);
     });
 

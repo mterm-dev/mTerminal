@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export interface MenuItem {
   label: string;
@@ -16,6 +16,24 @@ interface Props {
 
 export function ContextMenu({ x, y, items, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number }>({
+    left: x,
+    top: y,
+  });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 6;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = x;
+    let top = y;
+    if (left + rect.width + margin > vw) left = Math.max(margin, vw - rect.width - margin);
+    if (top + rect.height + margin > vh) top = Math.max(margin, vh - rect.height - margin);
+    setPos({ left, top });
+  }, [x, y, items]);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -36,16 +54,18 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
     <div
       ref={ref}
       className="ctx-menu"
-      style={{ left: x, top: y }}
+      style={{ left: pos.left, top: pos.top }}
+      role="menu"
       onContextMenu={(e) => e.preventDefault()}
     >
       {items.map((it, i) =>
         it.separator ? (
-          <div key={`sep-${i}`} className="ctx-sep" />
+          <div key={`sep-${i}`} className="ctx-sep" role="separator" />
         ) : (
           <button
             key={it.label + i}
             className={`ctx-item ${it.danger ? "danger" : ""}`}
+            role="menuitem"
             onClick={() => {
               it.onSelect();
               onClose();
