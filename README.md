@@ -4,11 +4,11 @@
 
 **A modern, multi-tab terminal emulator for Linux and Windows.**
 
-Built with [Tauri 2](https://tauri.app), [React 19](https://react.dev), and Rust. Real PTY sessions via [`portable-pty`](https://crates.io/crates/portable-pty), ANSI rendering by [xterm.js](https://xtermjs.org), and an encrypted vault for SSH credentials.
+Built with [Electron](https://www.electronjs.org), [electron-vite](https://electron-vite.org), [React 19](https://react.dev), and TypeScript. Real PTY sessions via [`node-pty`](https://github.com/microsoft/node-pty), ANSI rendering by [xterm.js](https://xtermjs.org), and an encrypted vault for SSH credentials.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tauri](https://img.shields.io/badge/tauri-2-24C8DB.svg)](https://tauri.app)
-[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
+[![Electron](https://img.shields.io/badge/electron-latest-47848F.svg)](https://www.electronjs.org)
+[![TypeScript](https://img.shields.io/badge/typescript-strict-3178C6.svg)](https://www.typescriptlang.org)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey.svg)](#install)
 
 </div>
@@ -19,11 +19,13 @@ Built with [Tauri 2](https://tauri.app), [React 19](https://react.dev), and Rust
 
 ## Highlights
 
-- **Multi-tab PTY** — each tab is an independent shell. Login shell from `/etc/passwd` on Linux; `pwsh.exe` → `powershell.exe` → `cmd.exe` fallback on Windows.
+- **Multi-tab PTY** — each tab is an independent shell. Login shell from `/etc/passwd` on Linux; `pwsh.exe` → `powershell.exe` → `cmd.exe` fallback on Windows (ConPTY).
 - **Tab groups** — collapsible, drag-and-drop reordering, inline rename, 10-color accent palette.
 - **Live tab labels** — auto-update from process `cwd` and the running command (`vim`, `htop`, etc.).
 - **SSH host manager** — saved hosts, optional grouping, key-based or password auth, last-used tracking.
-- **Encrypted credential vault** — SSH passwords stored locally, encrypted with ChaCha20-Poly1305 + Argon2id key derivation. Master password never leaves the device.
+- **Encrypted credential vault** — SSH passwords stored locally, encrypted with XChaCha20-Poly1305 + Argon2id key derivation. Master password never leaves the device. Vault file format byte-compatible with the previous Tauri build.
+- **AI integration** — Anthropic, OpenAI, and Ollama providers. Inline command palette (Ctrl+Shift+P), side panel chat (Ctrl+Shift+A), explain-selection popover, one-shot Claude Code tab (Ctrl+Shift+L).
+- **Embedded MCP server** — JSON-RPC over Unix domain socket (Linux/macOS) exposes `list_tabs`, `get_output`, `send_keys` to local agents.
 - **Themes** — 6 built-ins: mTerminal, Tokyo Night, Catppuccin Mocha, Solarized Dark, Gruvbox Dark, mTerminal Light.
 - **Custom titlebar** — macOS-style traffic lights, drag region, rounded corners when windowed.
 - **Persistent workspace** — tabs, groups, names, and accent colors survive restarts.
@@ -43,7 +45,11 @@ Built with [Tauri 2](https://tauri.app), [React 19](https://react.dev), and Rust
 | `Ctrl+W` | Close active tab |
 | `Ctrl+1` … `Ctrl+9` | Switch to tab N |
 | `Ctrl+Shift+G` | New group |
+| `Ctrl+Shift+P` | AI command palette |
+| `Ctrl+Shift+A` | AI side panel |
+| `Ctrl+Shift+L` | New Claude Code tab |
 | `Ctrl+,` | Open settings |
+| `Ctrl+B` | Toggle sidebar |
 | `Double-click` | Rename tab or group |
 | `Right-click` | Context menu (rename, move, accent, delete) |
 
@@ -67,7 +73,7 @@ Grab the latest from the [Releases page](https://github.com/arthurr0/mTerminal/r
 
 | Artifact | Use case |
 |---|---|
-| `mTerminal-x86_64.AppImage` | Portable. `chmod +x` and run. |
+| `mTerminal_<version>_amd64.AppImage` | Portable. `chmod +x` and run. |
 | `mterminal_<version>_amd64.deb` | Debian / Ubuntu / Mint. `sudo dpkg -i mterminal_*.deb` |
 
 ### Arch / CachyOS (AUR)
@@ -94,10 +100,9 @@ Or download from Releases:
 
 | Artifact | Use case |
 |---|---|
-| `mTerminal_<version>_x64-setup.exe` | NSIS installer, per-user, no admin. |
-| `mTerminal-x86_64-windows.exe` | Portable executable, no installer. |
+| `mTerminal-<version>-setup.exe` | NSIS installer, per-user, no admin. |
 
-WebView2 ships with Windows 11 and recent Windows 10. The installer's bootstrapper fetches it silently when missing.
+Bundled Electron ships its own Chromium runtime — no WebView2 install needed.
 
 ---
 
@@ -105,36 +110,38 @@ WebView2 ships with Windows 11 and recent Windows 10. The installer's bootstrapp
 
 ### Requirements
 
-- **Rust** stable — `rustup default stable`
 - **Node.js** 20+ and **pnpm** 9+
 - Platform packages:
 
   | OS | Packages |
   |---|---|
-  | Arch / CachyOS | `webkit2gtk-4.1 base-devel curl wget file openssl appmenu-gtk-module libappindicator-gtk3 librsvg` |
-  | Debian / Ubuntu | `libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev` |
-  | Fedora | `webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel @"C Development Tools and Libraries"` |
-  | Windows | MSVC C++ Build Tools (or VS with "Desktop development with C++" workload) + WebView2 runtime |
+  | Arch / CachyOS | `nodejs pnpm base-devel python` |
+  | Debian / Ubuntu | `nodejs build-essential python3` (and `pnpm` via Corepack) |
+  | Fedora | `nodejs @"C Development Tools and Libraries" python3` |
+  | Windows | MSVC C++ Build Tools (or VS with "Desktop development with C++" workload) — required to compile `node-pty` |
 
 ### Linux
 
 ```bash
 pnpm install
-pnpm tauri:dev          # hot-reload dev build
-pnpm tauri:build        # release bundle → src-tauri/target/release/bundle/
+pnpm exec electron-rebuild -f -w node-pty   # rebuild node-pty against Electron's ABI
+pnpm dev                                    # electron-vite dev (HMR)
+pnpm package:linux                          # AppImage + deb → release/
 ```
 
 ### Windows
 
 ```powershell
 pnpm install
-pnpm tauri:dev:win
-pnpm tauri:build:win    # NSIS installer → src-tauri\target\release\bundle\nsis\
+pnpm exec electron-rebuild -f -w node-pty
+pnpm dev
+pnpm package:win                            # NSIS installer → release/
 ```
 
-### Wayland note
+### Notes
 
-webkit2gtk's DMABUF renderer crashes on some Wayland compositors. The dev/build scripts export `WEBKIT_DISABLE_DMABUF_RENDERER=1` as a workaround. Native transparency works on KDE Plasma, GNOME Mutter, and Hyprland.
+- `pnpm rebuild` (the npm built-in) targets the host Node ABI. Always use `pnpm exec electron-rebuild` for `node-pty` after install or after upgrading Electron.
+- Wayland: works out of the box on most compositors. If GPU/compositor issues, launch with `--ozone-platform=wayland` or `--disable-gpu`.
 
 ---
 
@@ -171,9 +178,10 @@ Spawned shells receive:
 | Workspace (tabs, groups, accents) | `localStorage` key `mterminal:workspace:v1` |
 | Settings (theme, font) | `localStorage` key `mterminal:settings:v1` |
 | SSH hosts (no secrets) | `$XDG_CONFIG_HOME/mterminal/hosts.json` · `%APPDATA%\mterminal\hosts.json` |
-| Encrypted vault (SSH passwords) | `$XDG_CONFIG_HOME/mterminal/vault.bin` · `%APPDATA%\mterminal\vault.bin` |
+| Encrypted vault (SSH + AI keys) | `$XDG_CONFIG_HOME/mterminal/vault.bin` · `%APPDATA%\mterminal\vault.bin` |
+| MCP socket (Linux/macOS) | `$XDG_RUNTIME_DIR/mterminal-mcp-$USER.sock` |
 
-The vault is encrypted with ChaCha20-Poly1305 using a key derived from your master password via Argon2id. The plaintext master password and decrypted secrets are kept in memory only while the vault is unlocked.
+The vault is encrypted with XChaCha20-Poly1305 using a key derived from your master password via Argon2id (m=64 MiB, t=3, p=4). The plaintext master password and decrypted secrets are kept in memory only while the vault is unlocked.
 
 ---
 
@@ -181,17 +189,20 @@ The vault is encrypted with ChaCha20-Poly1305 using a key derived from your mast
 
 ```
 ┌─────────────────────────────┐         ┌──────────────────────────────┐
-│       Frontend (React)      │         │        Backend (Rust)        │
-│  ─────────────────────────  │ invoke  │  ──────────────────────────  │
-│   xterm.js · workspace      │ ◀─────▶ │   portable-pty · sysinfo     │
-│   settings · SSH host UI    │  events │   ssh · vault (ChaCha20)     │
+│      Renderer (React)       │         │       Main (Node.js)         │
+│  ─────────────────────────  │   IPC   │  ──────────────────────────  │
+│   xterm.js · workspace      │ ◀─────▶ │   node-pty · ssh · MCP       │
+│   settings · SSH host UI    │ events  │   AI providers · vault       │
 └─────────────────────────────┘         └──────────────────────────────┘
 ```
 
-- **`src-tauri/src/pty.rs`** — owns the PTY session table; spawns shells, streams output via `pty://data/<id>` events, walks the process tree to surface the running command.
-- **`src-tauri/src/ssh.rs`** — `ssh_spawn` wraps a saved host into a PTY-attached `ssh` invocation.
-- **`src-tauri/src/vault.rs`** — Argon2id-derived key, ChaCha20-Poly1305 sealed payload.
-- **`src-tauri/src/hosts.rs`** — host metadata persistence (clear-text, no secrets).
+- **`electron/main/pty.ts`** — owns the PTY session table (`node-pty`); spawns shells, streams output via `pty:event:<id>` IPC, walks the process tree to surface the running command.
+- **`electron/main/ssh.ts`** — `ssh:spawn` wraps a saved host into a PTY-attached `ssh` invocation.
+- **`electron/main/vault.ts`** — Argon2id-derived key, XChaCha20-Poly1305 sealed payload (`@noble/ciphers` + `@noble/hashes`).
+- **`electron/main/hosts.ts`** — host metadata persistence (clear-text, no secrets) + SSH key scanner.
+- **`electron/main/ai/`** — provider-agnostic streaming completion (Anthropic, OpenAI, Ollama).
+- **`electron/main/mcp.ts`** — embedded JSON-RPC MCP server on a Unix domain socket.
+- **`electron/preload/index.ts`** — `contextBridge` exposes the typed `window.mt` API to the renderer.
 - **`src/hooks/useWorkspace.ts`** — single source of truth for tabs/groups/active selection.
 - **`src/components/TerminalTab.tsx`** — xterm.js wrapper; one Terminal instance per tab, font/theme changes applied in place to avoid killing the shell.
 
@@ -201,7 +212,7 @@ See [`CLAUDE.md`](CLAUDE.md) for deeper architecture notes.
 
 ## Contributing
 
-Issues and PRs welcome at <https://github.com/arthurr0/mTerminal>. There is no test suite yet; please verify changes manually with `pnpm tauri:dev` on at least one of Linux / Windows before opening a PR.
+Issues and PRs welcome at <https://github.com/arthurr0/mTerminal>. There is no test suite yet; please verify changes manually with `pnpm dev` on at least one of Linux / Windows before opening a PR.
 
 ## License
 
@@ -209,9 +220,9 @@ Issues and PRs welcome at <https://github.com/arthurr0/mTerminal>. There is no t
 
 ## Credits
 
-- [Tauri 2](https://tauri.app) — webview shell and IPC
+- [Electron](https://www.electronjs.org) + [electron-vite](https://electron-vite.org) — desktop runtime and dev tooling
 - [xterm.js](https://xtermjs.org) — terminal rendering
-- [portable-pty](https://github.com/wez/wezterm/tree/main/pty) — cross-platform PTY (from Wezterm)
-- [argon2](https://crates.io/crates/argon2) + [chacha20poly1305](https://crates.io/crates/chacha20poly1305) — vault crypto
+- [node-pty](https://github.com/microsoft/node-pty) — cross-platform PTY bindings
+- [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) + [@noble/hashes](https://github.com/paulmillr/noble-hashes) — vault crypto (XChaCha20-Poly1305 + Argon2id)
 - Visual language inspired by [entire.io](https://entire.io)
 - Original design mockup: Anthropic Design (Claude AI)
