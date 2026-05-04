@@ -79,8 +79,7 @@ Grab the latest from the [Releases page](https://github.com/arthurr0/mTerminal/r
 ### Arch / CachyOS (AUR)
 
 ```bash
-paru -S mterminal-bin       # binary release
-paru -S mterminal-git       # build from source
+yay -S mterminal-bin       # binary release
 ```
 
 Or build locally from the cloned repo with `makepkg -si`.
@@ -224,5 +223,3 @@ Issues and PRs welcome at <https://github.com/arthurr0/mTerminal>. There is no t
 - [xterm.js](https://xtermjs.org) — terminal rendering
 - [node-pty](https://github.com/microsoft/node-pty) — cross-platform PTY bindings
 - [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) + [@noble/hashes](https://github.com/paulmillr/noble-hashes) — vault crypto (XChaCha20-Poly1305 + Argon2id)
-- Visual language inspired by [entire.io](https://entire.io)
-- Original design mockup: Anthropic Design (Claude AI)
