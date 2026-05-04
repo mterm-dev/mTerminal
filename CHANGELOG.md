@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-04
+
+### Added
+- **Windows support** — NSIS installer (per-user, no admin), ConPTY-backed PTY via `node-pty`, login-shell fallback chain `pwsh.exe` → `powershell.exe` → `cmd.exe`, vault path under `$APPDATA/mterminal/vault.bin`.
+- **AI integration** — provider-agnostic streaming completion across Anthropic, OpenAI, and Ollama (OpenAI-compatible at `http://localhost:11434/v1`). Per-task `AbortController` cancellation, model list discovery, and live cost estimation using a copied-from-Rust pricing table.
+  - `Ctrl+Shift+P` — AI command palette: NL → shell command (Enter pastes, Ctrl+Enter pastes + runs).
+  - `Ctrl+Shift+A` — side panel chat with per-tab history and optional terminal-context attachment.
+  - `Ctrl+Shift+L` — opens a new tab and runs `claude` against the active tab's cwd.
+  - Right-click selected terminal text → explain popover.
+  - Status bar shows running session token / cost usage.
+- **Embedded MCP server** — JSON-RPC 2.0 over Unix domain socket at `$XDG_RUNTIME_DIR/mterminal-mcp-$USER.sock` (Linux/macOS). Tools: `list_tabs`, `get_output`, `send_keys`. Toggle from settings via `mcp:status|start|stop` IPC.
+- **Claude Code awareness** — `claude-code:status` IPC walks the PTY process tree and scans the ring buffer for awaiting-input / thinking markers. Background tabs entering `awaitingInput` fire a desktop notification (rate-limited 30 s/tab).
+- **mTerminal greeting toggle** — `MT_GREETING` env var injected into the spawned shell so users can gate a custom greeting in their rc file.
+
 ### Changed
 - **Migrated runtime from Tauri 2 / Rust to Electron + electron-vite + TypeScript.** All backend logic ported to the Node main process under `electron/main/`; `src-tauri/` removed.
   - PTY: `portable-pty` (Rust) → `node-pty`. Rebuild via `pnpm exec electron-rebuild -f -w node-pty`.
@@ -14,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - IPC: Tauri `invoke` / `Channel` → Electron `ipcMain.handle` / `webContents.send`. Preload exposes a typed `window.mt` namespace; renderer uses a `tauri-shim` compatibility layer so existing components work unchanged.
   - Bundling: `tauri build` → `electron-builder`. Linux outputs AppImage + deb under `release/`; Windows outputs an NSIS installer. WebView2 is no longer needed — Electron ships its own Chromium.
 - Build commands changed: `pnpm tauri:dev` → `pnpm dev`, `pnpm tauri:build` → `pnpm package` (or `package:linux` / `package:win`).
+- CI restructured into reusable composite actions (`setup-build`, `install-linux-deps`) and split workflows for Linux build, Windows build, lint, and GitHub release publishing. Rust toolchain and `cargo fmt`/`clippy` steps removed in favor of `pnpm typecheck`.
+- Windows artifact name: `mTerminal-<version>-setup.exe` (was `mTerminal_<version>_x64-setup.exe`); portable `.exe` no longer shipped — Electron bundle is too large for the unpacked-binary distribution.
+
+### Known limitations
+- MCP server is Linux/macOS only. Windows needs a named-pipe (or TCP loopback) transport.
+- Multi-tab quit confirmation is currently a no-op — `Window.onCloseRequested` from the old Tauri API has no Electron-side bridge yet.
 
 ## [0.2.0] - 2026-05-04
 
@@ -65,6 +85,7 @@ Initial release.
 - Login shell detection from `/etc/passwd` (avoids inherited `$SHELL` env)
 - xterm.js theme aligned with mTerminal palette
 
-[Unreleased]: https://github.com/arthurr0/mTerminal/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/arthurr0/mTerminal/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/arthurr0/mTerminal/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arthurr0/mTerminal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arthurr0/mTerminal/releases/tag/v0.1.0
