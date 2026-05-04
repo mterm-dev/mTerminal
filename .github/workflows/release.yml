@@ -129,13 +129,15 @@ jobs:
           mkdir -p ~/.ssh
           echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
-          ssh-keyscan -t rsa,ed25519 aur.archlinux.org > ~/.ssh/known_hosts
+          ssh-keyscan -T 15 -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/tmp/keyscan.err || cat /tmp/keyscan.err
           chmod 644 ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts && echo "known_hosts populated" || echo "known_hosts empty — accept-new will populate"
           cat > ~/.ssh/config <<EOF
           Host aur.archlinux.org
             User aur
             IdentityFile ~/.ssh/aur
-            StrictHostKeyChecking yes
+            StrictHostKeyChecking accept-new
+            UserKnownHostsFile ~/.ssh/known_hosts
           EOF
           chmod 600 ~/.ssh/config
           git config --global user.email "koeckiartur@gmail.com"
