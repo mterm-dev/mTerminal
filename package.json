@@ -20,7 +20,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
-    "tauri:build": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri build"
+    "tauri:build": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri build",
+    "tauri:dev:win": "tauri dev",
+    "tauri:build:win": "tauri build --bundles nsis"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",

@@ -26,6 +26,7 @@ pub struct PtySession {
 static SESSIONS: Lazy<Mutex<HashMap<u32, PtySession>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
+#[cfg(unix)]
 fn login_shell() -> String {
     let user = std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
@@ -46,7 +47,41 @@ fn login_shell() -> String {
     std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
 }
 
-fn shell_command(shell_override: Option<&str>, args: &[String]) -> CommandBuilder {
+#[cfg(windows)]
+fn login_shell() -> String {
+    use std::path::Path;
+    let candidates = [
+        std::env::var("MTERMINAL_SHELL").ok(),
+        which_path("pwsh.exe"),
+        which_path("powershell.exe"),
+        std::env::var("COMSPEC").ok(),
+        Some("cmd.exe".to_string()),
+    ];
+    for c in candidates.into_iter().flatten() {
+        if !c.is_empty() && (Path::new(&c).exists() || which_path(&c).is_some()) {
+            return c;
+        }
+    }
+    "cmd.exe".to_string()
+}
+
+#[cfg(windows)]
+fn which_path(prog: &str) -> Option<String> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join(prog);
+        if candidate.is_file() {
+            return Some(candidate.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+fn shell_command(
+    shell_override: Option<&str>,
+    args: &[String],
+    extra_env: &HashMap<String, String>,
+) -> CommandBuilder {
     let shell = shell_override
         .filter(|s| !s.trim().is_empty())
         .map(|s| s.to_string())
@@ -59,13 +94,19 @@ fn shell_command(shell_override: Option<&str>, args: &[String]) -> CommandBuilde
         }
     }
 
-    if let Ok(home) = std::env::var("HOME") {
+    let home = std::env::var("HOME")
+        .ok()
+        .or_else(|| std::env::var("USERPROFILE").ok());
+    if let Some(home) = home {
         cmd.cwd(home);
     }
     cmd.env("SHELL", &shell);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("MTERMINAL", "1");
+    for (k, v) in extra_env {
+        cmd.env(k, v);
+    }
     cmd
 }
 
@@ -76,8 +117,13 @@ pub fn pty_spawn(
     cols: u16,
     shell: Option<String>,
     args: Option<Vec<String>>,
+    env: Option<HashMap<String, String>>,
 ) -> Result<u32, String> {
-    let cmd = shell_command(shell.as_deref(), &args.unwrap_or_default());
+    let cmd = shell_command(
+        shell.as_deref(),
+        &args.unwrap_or_default(),
+        &env.unwrap_or_default(),
+    );
     spawn_with_command(events, rows, cols, cmd).map_err(|e| e.to_string())
 }
 
@@ -173,7 +219,7 @@ pub fn pty_kill(id: u32) -> Result<(), String> {
     Ok(())
 }
 
-fn descendant_leaf(root_pid: u32) -> u32 {
+fn descendant_leaf(sys: &sysinfo::System, root_pid: u32) -> u32 {
     let mut current = root_pid;
     let mut depth = 0;
     loop {
@@ -181,41 +227,22 @@ fn descendant_leaf(root_pid: u32) -> u32 {
             return current;
         }
         let mut newest_child: Option<(u32, u64)> = None;
-        let read_dir = match std::fs::read_dir("/proc") {
-            Ok(d) => d,
-            Err(_) => return current,
-        };
-        for entry in read_dir.flatten() {
-            let name = entry.file_name();
-            let pid_str = match name.to_str() {
-                Some(s) => s,
+        for (pid, proc_) in sys.processes() {
+            let parent = match proc_.parent() {
+                Some(p) => p.as_u32(),
                 None => continue,
             };
-            let pid: u32 = match pid_str.parse() {
-                Ok(p) => p,
-                Err(_) => continue,
-            };
-            let stat = match std::fs::read_to_string(format!("/proc/{}/stat", pid)) {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
-            let after_paren = match stat.rfind(") ") {
-                Some(i) => &stat[i + 2..],
-                None => continue,
-            };
-            let mut fields = after_paren.split_whitespace();
-            fields.next();
-            let ppid: u32 = match fields.next().and_then(|s| s.parse().ok()) {
-                Some(p) => p,
-                None => continue,
-            };
-            if ppid != current {
+            if parent != current {
                 continue;
             }
-            let starttime: u64 = fields.nth(16).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let pid_u32 = pid.as_u32();
+            if pid_u32 == current {
+                continue;
+            }
+            let starttime = proc_.start_time();
             match newest_child {
-                None => newest_child = Some((pid, starttime)),
-                Some((_, prev)) if starttime >= prev => newest_child = Some((pid, starttime)),
+                None => newest_child = Some((pid_u32, starttime)),
+                Some((_, prev)) if starttime >= prev => newest_child = Some((pid_u32, starttime)),
                 _ => {}
             }
         }
@@ -238,6 +265,7 @@ pub struct TabInfo {
 
 #[tauri::command]
 pub fn pty_info(id: u32) -> Result<TabInfo, String> {
+    use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
     let pid = {
         let sessions = SESSIONS.lock();
         let s = sessions
@@ -245,13 +273,26 @@ pub fn pty_info(id: u32) -> Result<TabInfo, String> {
             .ok_or_else(|| format!("no pty session {}", id))?;
         s.pid.ok_or_else(|| "no pid".to_string())?
     };
-    let leaf = descendant_leaf(pid);
-    let cwd = std::fs::read_link(format!("/proc/{}/cwd", leaf))
-        .ok()
+    let mut sys = System::new_with_specifics(
+        RefreshKind::new().with_processes(ProcessRefreshKind::everything()),
+    );
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let leaf = descendant_leaf(&sys, pid);
+    let proc_ = sys.process(Pid::from_u32(leaf));
+    let cwd = proc_
+        .and_then(|p| p.cwd())
         .map(|p| p.to_string_lossy().to_string());
-    let cmd = std::fs::read_to_string(format!("/proc/{}/comm", leaf))
-        .ok()
-        .map(|s| s.trim().to_string());
+    let cmd = proc_.map(|p| {
+        let name = p.name().to_string_lossy().to_string();
+        #[cfg(windows)]
+        {
+            name.trim_end_matches(".exe").to_string()
+        }
+        #[cfg(not(windows))]
+        {
+            name
+        }
+    });
     Ok(TabInfo {
         cwd,
         cmd,
@@ -269,10 +310,12 @@ pub struct SystemInfo {
 pub fn system_info() -> SystemInfo {
     let user = std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
+        .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "user".to_string());
-    let host = std::fs::read_to_string("/etc/hostname")
+    let host = hostname::get()
         .ok()
-        .map(|s| s.trim().to_string())
+        .map(|h| h.to_string_lossy().to_string())
+        .or_else(|| std::env::var("COMPUTERNAME").ok())
         .or_else(|| std::env::var("HOSTNAME").ok())
         .unwrap_or_else(|| "host".to_string());
     SystemInfo { user, host }

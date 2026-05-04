@@ -1,16 +1,16 @@
 # mTerminal
 
-A custom terminal emulator for Linux. Built with Tauri 2 + React + Rust.
+A custom terminal emulator for Linux and Windows. Built with Tauri 2 + React + Rust.
 
-Warm, neutral dark UI inspired by [entire.io](https://entire.io). Multi-tab with **per-group accent colors**, drag-and-drop tab moves, inline rename, and persistent workspace state. Real PTY sessions via [`portable-pty`](https://crates.io/crates/portable-pty), ANSI rendering by [xterm.js](https://xtermjs.org).
+Warm, neutral dark UI inspired by [entire.io](https://entire.io). Multi-tab with **per-group accent colors**, drag-and-drop tab moves, inline rename, and persistent workspace state. Real PTY sessions via [`portable-pty`](https://crates.io/crates/portable-pty) (Linux PTY / Windows ConPTY), ANSI rendering by [xterm.js](https://xtermjs.org).
 
-> Status: alpha. Linux only (X11 + Wayland). Tested on KDE Plasma / CachyOS.
+> Status: alpha. Linux (X11 + Wayland) tested on KDE Plasma / CachyOS. Windows 10/11 build via NSIS installer.
 
 ---
 
 ## Features
 
-- **Multi-tab PTY** — each tab is an independent shell process (uses your login shell from `/etc/passwd`)
+- **Multi-tab PTY** — each tab is an independent shell process (login shell from `/etc/passwd` on Linux, `pwsh.exe` → `powershell.exe` → `cmd.exe` fallback chain on Windows)
 - **Tab groups** — collapsible, with rename, drag-and-drop, and 10 accent colors (orange / blue / violet / cyan / emerald / purple / sky / amber / pink / red)
 - **Live tab labels** — auto-update from process `cwd` / running command (`vim`, `htop`, etc.)
 - **Inline rename** — double-click tab or group name
@@ -47,8 +47,22 @@ The script builds a release binary, installs it to `~/.local/bin/mterminal`, and
 
 Download the latest release from the [Releases page](https://github.com/arthurr0/mTerminal/releases):
 
-- **`mTerminal-x86_64.AppImage`** — portable, no install needed. `chmod +x` and run.
+- **`mTerminal-x86_64.AppImage`** — portable Linux, no install needed. `chmod +x` and run.
 - **`mterminal_<version>_amd64.deb`** — Debian / Ubuntu / Mint. `sudo dpkg -i mterminal_*.deb`.
+- **`mTerminal_<version>_x64-setup.exe`** — Windows NSIS installer (per-user, no admin required). Double-click to install; uninstall via Settings → Apps.
+- **`mTerminal-x86_64-windows.exe`** — portable Windows binary (no installer). Run directly. WebView2 runtime required (preinstalled on Windows 11; on Windows 10 the installer's bootstrapper fetches it automatically).
+
+### Windows (build & install)
+
+```powershell
+git clone https://github.com/arthurr0/mTerminal.git
+cd mTerminal
+pwsh -File .\install.ps1            # per-user install via NSIS
+pwsh -File .\install.ps1 -Mode System   # system-wide (UAC prompt)
+pwsh -File .\install.ps1 -Uninstall     # remove
+```
+
+Requires Rust (stable), Node 20+, pnpm 9+, and the **Microsoft Visual Studio C++ Build Tools** (or full Visual Studio with the "Desktop development with C++" workload). WebView2 runtime ships with Windows 11 and recent Windows 10.
 
 ### Arch / CachyOS (AUR)
 
@@ -82,8 +96,16 @@ paru -S mterminal-git    # build from source
 
 ```bash
 pnpm install
-pnpm tauri:dev          # development with hot reload
-pnpm tauri:build        # release bundle (AppImage + deb in src-tauri/target/release/bundle/)
+pnpm tauri:dev          # Linux dev with hot reload
+pnpm tauri:build        # Linux release bundle (AppImage + deb in src-tauri/target/release/bundle/)
+```
+
+Windows (PowerShell):
+
+```powershell
+pnpm install
+pnpm tauri:dev:win      # dev with hot reload
+pnpm tauri:build:win    # NSIS installer in src-tauri\target\release\bundle\nsis\
 ```
 
 ### Wayland note
@@ -94,12 +116,17 @@ If the window crashes on launch under Wayland, the dev/build scripts already exp
 
 ## Configuration
 
-mTerminal launches your **login shell** from `/etc/passwd` (not `$SHELL`, which can be inherited from a parent process). The shell is started with:
+mTerminal launches your **login shell**:
 
-- `cwd` set to `$HOME`
+- **Linux**: from `/etc/passwd` field 7 (not `$SHELL`, which can be inherited from a parent process).
+- **Windows**: `pwsh.exe` if installed, else `powershell.exe`, else `%COMSPEC%` / `cmd.exe`. Override with the `MTERMINAL_SHELL` env var.
+
+The shell is started with:
+
+- `cwd` set to `$HOME` / `%USERPROFILE%`
 - `TERM=xterm-256color`
 - `COLORTERM=truecolor`
-- `MTERMINAL=1` (use this in your shell rc to detect mTerminal: `if [ -n "$MTERMINAL" ]; ...`)
+- `MTERMINAL=1` (detect in shell rc: `if [ -n "$MTERMINAL" ]; ...`)
 
 Workspace state (tabs, groups, accents) is kept in browser `localStorage` under key `mterminal:workspace:v1`.
 

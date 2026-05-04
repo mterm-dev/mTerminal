@@ -81,7 +81,10 @@ fn build_command(
         }
     }
 
-    if let Ok(home) = std::env::var("HOME") {
+    let home = std::env::var("HOME")
+        .ok()
+        .or_else(|| std::env::var("USERPROFILE").ok());
+    if let Some(home) = home {
         cmd.env("HOME", &home);
         cmd.cwd(home);
     }

@@ -1,5 +1,7 @@
 // Vault — Argon2id KDF + XChaCha20-Poly1305 encrypted secrets store.
-// File: $XDG_CONFIG_HOME/mterminal/vault.bin (or $HOME/.config/mterminal/vault.bin)
+// File: platform config dir / mterminal / vault.bin
+//   Linux:   $XDG_CONFIG_HOME or $HOME/.config
+//   Windows: %APPDATA%
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -51,12 +53,14 @@ pub fn config_dir() -> Result<PathBuf> {
         .ok()
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
+        .or_else(dirs::config_dir)
         .or_else(|| {
             std::env::var("HOME")
                 .ok()
                 .map(|h| PathBuf::from(h).join(".config"))
         })
-        .ok_or_else(|| anyhow!("cannot resolve config dir (no $XDG_CONFIG_HOME or $HOME)"))?;
+        .or_else(|| std::env::var("APPDATA").ok().map(PathBuf::from))
+        .ok_or_else(|| anyhow!("cannot resolve config dir"))?;
     let dir = base.join("mterminal");
     std::fs::create_dir_all(&dir).with_context(|| format!("create {:?}", dir))?;
     Ok(dir)

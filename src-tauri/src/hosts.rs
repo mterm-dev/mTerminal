@@ -327,7 +327,9 @@ pub struct SshKey {
 
 #[tauri::command]
 pub fn list_ssh_keys() -> Result<Vec<SshKey>, String> {
-    let home = std::env::var("HOME").map_err(|_| "no $HOME".to_string())?;
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|_| "no home directory".to_string())?;
     let dir = PathBuf::from(home).join(".ssh");
     if !dir.exists() {
         return Ok(vec![]);
@@ -378,9 +380,22 @@ fn which(prog: &str) -> bool {
         Some(p) => p,
         None => return false,
     };
+    #[cfg(windows)]
+    let exts: Vec<String> = std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".EXE;.CMD;.BAT".into())
+        .split(';')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
     for dir in std::env::split_paths(&path) {
         if dir.join(prog).is_file() {
             return true;
+        }
+        #[cfg(windows)]
+        for ext in &exts {
+            if dir.join(format!("{}{}", prog, ext)).is_file() {
+                return true;
+            }
         }
     }
     false
