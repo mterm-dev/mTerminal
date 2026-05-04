@@ -9,205 +9,28 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   build-linux:
-    name: Build Linux bundles
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/build-linux.yml
 
-      - name: Install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-          run_install: false
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/pnpm/store
-          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install JS deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Build bundles
-        env:
-          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
-        run: pnpm tauri build
-
-      - name: Collect artifacts
-        run: |
-          mkdir -p release-artifacts
-          cp src-tauri/target/release/bundle/appimage/*.AppImage release-artifacts/ || true
-          cp src-tauri/target/release/bundle/deb/*.deb release-artifacts/ || true
-          cp src-tauri/target/release/mterminal release-artifacts/mterminal-x86_64-linux || true
-          ls -la release-artifacts/
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-bundles
-          path: release-artifacts/*
-          if-no-files-found: error
-
-  release:
-    name: Publish GitHub Release
-    needs: build-linux
+  publish-github:
+    needs: [build-linux, build-windows]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/publish-github.yml
 
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-bundles
-          path: release-artifacts
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            release-artifacts/*.AppImage
-            release-artifacts/*.deb
-            release-artifacts/mterminal-x86_64-linux
-
-  aur-publish:
-    name: Publish to AUR
-    needs: release
+  publish-aur-git:
+    needs: publish-github
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-22.04
-    container:
-      image: archlinux:latest
-    steps:
-      - name: Pacman deps
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm git openssh base-devel sudo curl
-          useradd -m builder
-          echo "builder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+    uses: ./.github/workflows/publish-aur-git.yml
+    secrets:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v4
-
-      - name: Setup SSH
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          # strip CRLF, ensure trailing newline
-          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/aur
-          # collapse possible double-blank end
-          sed -i -e '$a\' ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-          # validate key parses
-          if ! ssh-keygen -y -f ~/.ssh/aur > ~/.ssh/aur.pub 2> /tmp/keyerr; then
-            echo "::error::AUR_SSH_PRIVATE_KEY failed to parse:"
-            cat /tmp/keyerr
-            head -1 ~/.ssh/aur
-            tail -1 ~/.ssh/aur
-            wc -l ~/.ssh/aur
-            exit 1
-          fi
-          echo "key OK: $(cat ~/.ssh/aur.pub)"
-          ssh-keyscan -T 15 -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/tmp/keyscan.err || cat /tmp/keyscan.err
-          chmod 644 ~/.ssh/known_hosts
-          git config --global user.email "koeckiartur@gmail.com"
-          git config --global user.name "arthurr0"
-          git config --global --add safe.directory '*'
-
-      - name: SSH debug
-        continue-on-error: true
-        run: |
-          echo "HOME=$HOME"
-          echo "whoami=$(whoami)"
-          ls -la ~/.ssh
-          echo "--- known_hosts ---"
-          cat ~/.ssh/known_hosts || true
-          echo "--- ssh test ---"
-          ssh -vv -o BatchMode=yes -i ~/.ssh/aur -o StrictHostKeyChecking=accept-new aur@aur.archlinux.org 2>&1 | head -120 || true
-
-      - name: Publish mterminal-git
-        env:
-          GIT_SSH_COMMAND: "ssh -i $HOME/.ssh/aur -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          rm -rf /tmp/aur-git
-          git clone ssh://aur@aur.archlinux.org/mterminal-git.git /tmp/aur-git
-          cp packaging/PKGBUILD /tmp/aur-git/PKGBUILD
-          cd /tmp/aur-git
-          chown -R builder:builder .
-          sudo -u builder makepkg --printsrcinfo > .SRCINFO
-          if [ -n "$(git status --porcelain)" ]; then
-            git add PKGBUILD .SRCINFO
-            git commit -m "release $VERSION"
-            git push
-          else
-            echo "no PKGBUILD changes for mterminal-git"
-          fi
-
-      - name: Publish mterminal-bin
-        env:
-          GIT_SSH_COMMAND: "ssh -i $HOME/.ssh/aur -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          BASE="https://github.com/arthurr0/mTerminal/releases/download/v$VERSION"
-          RAW="https://raw.githubusercontent.com/arthurr0/mTerminal/v$VERSION"
-
-          APPIMAGE_SHA=$(curl -fsSL "$BASE/mTerminal_${VERSION}_amd64.AppImage" | sha256sum | awk '{print $1}')
-          DESKTOP_SHA=$(curl -fsSL "$RAW/packaging/mterminal.desktop" | sha256sum | awk '{print $1}')
-          ICON_SHA=$(curl -fsSL "$RAW/src-tauri/icons/icon.png" | sha256sum | awk '{print $1}')
-          LICENSE_SHA=$(curl -fsSL "$RAW/LICENSE" | sha256sum | awk '{print $1}')
-
-          rm -rf /tmp/aur-bin
-          git clone ssh://aur@aur.archlinux.org/mterminal-bin.git /tmp/aur-bin
-          cp packaging/PKGBUILD-bin /tmp/aur-bin/PKGBUILD
-          cd /tmp/aur-bin
-          sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
-          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
-          sed -i "s/^sha256sums=.*/sha256sums=('$APPIMAGE_SHA' '$DESKTOP_SHA' '$ICON_SHA' '$LICENSE_SHA')/" PKGBUILD
-          chown -R builder:builder .
-          sudo -u builder makepkg --printsrcinfo > .SRCINFO
-          if [ -n "$(git status --porcelain)" ]; then
-            git add PKGBUILD .SRCINFO
-            git commit -m "release $VERSION"
-            git push
-          else
-            echo "no PKGBUILD changes for mterminal-bin"
-          fi
+  publish-aur-bin:
+    needs: publish-github
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/publish-aur-bin.yml
+    secrets:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}

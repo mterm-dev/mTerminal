@@ -1,0 +1,31 @@
+name: Lint & type-check
+
+on:
+  workflow_call:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  lint:
+    name: Lint & type-check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/install-linux-deps
+
+      - uses: ./.github/actions/setup-build
+        with:
+          rust-components: clippy,rustfmt
+
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit -p tsconfig.json
+
+      - name: Cargo fmt
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings

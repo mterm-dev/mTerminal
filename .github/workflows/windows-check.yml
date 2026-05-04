@@ -1,0 +1,25 @@
+name: Windows cargo check
+
+on:
+  workflow_call:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  windows-check:
+    name: Windows cargo check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-build
+        with:
+          rust-targets: x86_64-pc-windows-msvc
+
+      - name: Frontend build
+        run: pnpm build
+
+      - name: Cargo check
+        working-directory: src-tauri
+        run: cargo check --all-targets

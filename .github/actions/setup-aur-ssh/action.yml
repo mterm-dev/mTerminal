@@ -1,0 +1,42 @@
+name: Setup AUR SSH
+description: Install AUR SSH key, known_hosts, and git identity for pushing to aur.archlinux.org.
+
+inputs:
+  ssh-private-key:
+    description: AUR SSH private key
+    required: true
+  git-email:
+    description: Git author email
+    required: true
+  git-name:
+    description: Git author name
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        AUR_SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+        GIT_EMAIL: ${{ inputs.git-email }}
+        GIT_NAME: ${{ inputs.git-name }}
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        printf '%s\n' "$AUR_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/aur
+        sed -i -e '$a\' ~/.ssh/aur
+        chmod 600 ~/.ssh/aur
+        if ! ssh-keygen -y -f ~/.ssh/aur > ~/.ssh/aur.pub 2> /tmp/keyerr; then
+          echo "::error::AUR_SSH_PRIVATE_KEY failed to parse:"
+          cat /tmp/keyerr
+          head -1 ~/.ssh/aur
+          tail -1 ~/.ssh/aur
+          wc -l ~/.ssh/aur
+          exit 1
+        fi
+        echo "key OK: $(cat ~/.ssh/aur.pub)"
+        ssh-keyscan -T 15 -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/tmp/keyscan.err || cat /tmp/keyscan.err
+        chmod 644 ~/.ssh/known_hosts
+        git config --global user.email "$GIT_EMAIL"
+        git config --global user.name "$GIT_NAME"
+        git config --global --add safe.directory '*'

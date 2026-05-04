@@ -1,0 +1,59 @@
+name: Publish mterminal-bin to AUR
+
+on:
+  workflow_call:
+    secrets:
+      AUR_SSH_PRIVATE_KEY:
+        required: true
+
+jobs:
+  publish:
+    name: Publish mterminal-bin
+    runs-on: ubuntu-22.04
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Pacman deps
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm git openssh base-devel sudo curl
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-aur-ssh
+        with:
+          ssh-private-key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          git-email: koeckiartur@gmail.com
+          git-name: arthurr0
+
+      - name: Push PKGBUILD-bin
+        env:
+          GIT_SSH_COMMAND: "ssh -i $HOME/.ssh/aur -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BASE="https://github.com/arthurr0/mTerminal/releases/download/v$VERSION"
+          RAW="https://raw.githubusercontent.com/arthurr0/mTerminal/v$VERSION"
+
+          APPIMAGE_SHA=$(curl -fsSL "$BASE/mTerminal_${VERSION}_amd64.AppImage" | sha256sum | awk '{print $1}')
+          DESKTOP_SHA=$(curl -fsSL "$RAW/packaging/mterminal.desktop" | sha256sum | awk '{print $1}')
+          ICON_SHA=$(curl -fsSL "$RAW/src-tauri/icons/icon.png" | sha256sum | awk '{print $1}')
+          LICENSE_SHA=$(curl -fsSL "$RAW/LICENSE" | sha256sum | awk '{print $1}')
+
+          rm -rf /tmp/aur-bin
+          git clone ssh://aur@aur.archlinux.org/mterminal-bin.git /tmp/aur-bin
+          cp packaging/PKGBUILD-bin /tmp/aur-bin/PKGBUILD
+          cd /tmp/aur-bin
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('$APPIMAGE_SHA' '$DESKTOP_SHA' '$ICON_SHA' '$LICENSE_SHA')/" PKGBUILD
+          chown -R builder:builder .
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          if [ -n "$(git status --porcelain)" ]; then
+            git add PKGBUILD .SRCINFO
+            git commit -m "release $VERSION"
+            git push
+          else
+            echo "no PKGBUILD changes for mterminal-bin"
+          fi

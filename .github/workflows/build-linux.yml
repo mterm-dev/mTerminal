@@ -1,0 +1,44 @@
+name: Build Linux bundles
+
+on:
+  workflow_call:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build:
+    name: Build Linux bundles
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/install-linux-deps
+
+      - uses: ./.github/actions/setup-build
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Build bundles
+        env:
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        run: pnpm tauri build --bundles deb,appimage
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p release-artifacts
+          cp src-tauri/target/release/bundle/appimage/*.AppImage release-artifacts/ || true
+          cp src-tauri/target/release/bundle/deb/*.deb release-artifacts/ || true
+          cp src-tauri/target/release/mterminal release-artifacts/mterminal-x86_64-linux || true
+          ls -la release-artifacts/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundles
+          path: release-artifacts/*
+          if-no-files-found: error

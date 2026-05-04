@@ -1,0 +1,45 @@
+name: Setup build toolchain
+description: Install Node, pnpm, Rust, and prime caches.
+
+inputs:
+  node-version:
+    description: Node.js version
+    default: "22"
+  pnpm-version:
+    description: pnpm version
+    default: "9"
+  rust-components:
+    description: Comma-separated rustup components
+    default: ""
+  rust-targets:
+    description: Comma-separated rustup targets
+    default: ""
+  install-js-deps:
+    description: Run pnpm install --frozen-lockfile
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.pnpm-version }}
+        run_install: false
+
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: ${{ inputs.rust-components }}
+        targets: ${{ inputs.rust-targets }}
+
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: src-tauri -> target
+
+    - name: Install JS deps
+      if: inputs.install-js-deps == 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile
