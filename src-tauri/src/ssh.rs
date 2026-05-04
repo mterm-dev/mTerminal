@@ -47,7 +47,11 @@ fn ssh_args(host: &hosts::HostMeta) -> Vec<String> {
     args
 }
 
-fn build_command(host: &hosts::HostMeta, password: Option<&str>, debug: &mut String) -> Result<CommandBuilder> {
+fn build_command(
+    host: &hosts::HostMeta,
+    password: Option<&str>,
+    debug: &mut String,
+) -> Result<CommandBuilder> {
     let args = ssh_args(host);
     let mut cmd;
     let mut display: Vec<String> = Vec::new();

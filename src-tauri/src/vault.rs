@@ -51,7 +51,11 @@ pub fn config_dir() -> Result<PathBuf> {
         .ok()
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
-        .or_else(|| std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".config")))
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .map(|h| PathBuf::from(h).join(".config"))
+        })
         .ok_or_else(|| anyhow!("cannot resolve config dir (no $XDG_CONFIG_HOME or $HOME)"))?;
     let dir = base.join("mterminal");
     std::fs::create_dir_all(&dir).with_context(|| format!("create {:?}", dir))?;
@@ -112,10 +116,7 @@ fn encrypt_payload(key: &[u8], payload: &VaultPayload) -> Result<(Vec<u8>, Vec<u
 fn decrypt_payload(key: &[u8], nonce: &[u8], ct: &[u8]) -> Result<VaultPayload> {
     let cipher = XChaCha20Poly1305::new(key.into());
     let pt = cipher
-        .decrypt(
-            XNonce::from_slice(nonce),
-            Payload { msg: ct, aad: AAD },
-        )
+        .decrypt(XNonce::from_slice(nonce), Payload { msg: ct, aad: AAD })
         .map_err(|_| anyhow!("decrypt failed — wrong master password or corrupted vault"))?;
     let payload: VaultPayload = serde_json::from_slice(&pt).context("parse vault payload")?;
     Ok(payload)

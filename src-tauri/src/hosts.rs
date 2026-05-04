@@ -179,10 +179,7 @@ pub fn host_group_save(group: HostGroup) -> Result<String, String> {
     if g.id.is_empty() {
         let mut buf = [0u8; 4];
         rand::thread_rng().fill_bytes(&mut buf);
-        g.id = format!(
-            "g_{:x}{:x}{:x}{:x}",
-            buf[0], buf[1], buf[2], buf[3]
-        );
+        g.id = format!("g_{:x}{:x}{:x}{:x}", buf[0], buf[1], buf[2], buf[3]);
     }
     let id = g.id.clone();
     if let Some(idx) = file.groups.iter().position(|x| x.id == id) {
