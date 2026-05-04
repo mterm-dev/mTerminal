@@ -125,12 +125,12 @@ jobs:
       - name: Setup SSH
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh
           echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
-          echo "$AUR_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh-keyscan -t rsa,ed25519 aur.archlinux.org > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
           cat > ~/.ssh/config <<EOF
           Host aur.archlinux.org
             User aur
