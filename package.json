@@ -19,9 +19,9 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron .",
-    "package": "electron-vite build && electron-builder",
-    "package:linux": "electron-vite build && electron-builder --linux",
-    "package:win": "electron-vite build && electron-builder --win",
+    "package": "electron-vite build && electron-builder --publish never",
+    "package:linux": "electron-vite build && electron-builder --linux --publish never",
+    "package:win": "electron-vite build && electron-builder --win --publish never",
     "rebuild": "electron-rebuild -f -w node-pty",
     "typecheck": "tsc -b",
     "preview": "electron-vite preview"
