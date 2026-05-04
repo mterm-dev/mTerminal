@@ -15,6 +15,13 @@ import { GROUP_ACCENTS, useWorkspace } from "./hooks/useWorkspace";
 import { useSystemInfo } from "./hooks/useSystemInfo";
 import { useMaximized } from "./hooks/useMaximized";
 import { useVault } from "./hooks/useVault";
+import { useClaudeCodeStatus } from "./hooks/useClaudeCodeStatus";
+import { useMcpServer } from "./hooks/useMcpServer";
+import { AICommandPalette } from "./components/AICommandPalette";
+import { ExplainPopover } from "./components/ExplainPopover";
+import { AIPanel } from "./components/AIPanel";
+import { invoke } from "@tauri-apps/api/core";
+import type { AiUsage } from "./hooks/useAI";
 import {
   useRemoteHosts,
   type HostGroup,
@@ -40,6 +47,21 @@ export default function App() {
   const [editingTabId, setEditingTabId] = useState<number | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
+  const [explainState, setExplainState] = useState<{
+    selection: string;
+    context?: string;
+    cwd?: string;
+  } | null>(null);
+  const [paletteRecentOutput, setPaletteRecentOutput] = useState<string | undefined>();
+  const [aiUsage, setAiUsage] = useState<AiUsage>({ inTokens: 0, outTokens: 0, costUsd: 0 });
+  const accumulateUsage = useCallback((u: AiUsage) => {
+    setAiUsage((cur) => ({
+      inTokens: cur.inTokens + u.inTokens,
+      outTokens: cur.outTokens + u.outTokens,
+      costUsd: cur.costUsd + u.costUsd,
+    }));
+  }, []);
   const [closeConfirm, setCloseConfirm] = useState<{ count: number } | null>(null);
   const [gridGroupId, setGridGroupId] = useState<string | null>(null);
   const [hostModal, setHostModal] = useState<{
@@ -50,7 +72,98 @@ export default function App() {
   const [vaultModal, setVaultModal] = useState<{ mode: MasterPasswordMode } | null>(null);
   const [pendingAfterUnlock, setPendingAfterUnlock] = useState<(() => void) | null>(null);
 
-  const vault = useVault(settings.remoteWorkspaceEnabled);
+  const vault = useVault(settings.remoteWorkspaceEnabled || settings.aiEnabled);
+
+  const [ptyMap, setPtyMap] = useState<Map<number, number>>(new Map());
+  const pendingCommandsRef = useRef<Map<number, string>>(new Map());
+  const handlePtyReady = useCallback((tabId: number, ptyId: number) => {
+    setPtyMap((m) => {
+      const n = new Map(m);
+      n.set(tabId, ptyId);
+      return n;
+    });
+  }, []);
+  const handlePtyClose = useCallback((tabId: number) => {
+    setPtyMap((m) => {
+      const n = new Map(m);
+      n.delete(tabId);
+      return n;
+    });
+    pendingCommandsRef.current.delete(tabId);
+  }, []);
+
+  const ccStatuses = useClaudeCodeStatus(ptyMap, ws.activeId, {
+    enabled: settings.claudeCodeDetectionEnabled,
+    notifyOnAwaitingInput: true,
+  });
+
+  const mcp = useMcpServer(settings.aiEnabled && settings.mcpServerEnabled);
+
+  const pasteToActive = useCallback(
+    async (text: string, run: boolean) => {
+      if (ws.activeId == null) return;
+      const ptyId = ptyMap.get(ws.activeId);
+      if (ptyId == null) return;
+      const data = run ? text + "\n" : text;
+      await invoke("pty_write", { id: ptyId, data }).catch(() => {});
+    },
+    [ws.activeId, ptyMap],
+  );
+
+  const openPalette = useCallback(async () => {
+    if (!settings.aiEnabled) {
+      setShowSettings(true);
+      return;
+    }
+    if (ws.activeId != null) {
+      const ptyId = ptyMap.get(ws.activeId);
+      if (ptyId != null) {
+        try {
+          const out = await invoke<string>("pty_recent_output", {
+            id: ptyId,
+            maxBytes: 4096,
+          });
+          setPaletteRecentOutput(out);
+        } catch {
+          setPaletteRecentOutput(undefined);
+        }
+      }
+    }
+    setShowPalette(true);
+  }, [settings.aiEnabled, ws.activeId, ptyMap]);
+
+  const openExplain = useCallback(
+    async (tabId: number, selection: string, _x: number, _y: number) => {
+      if (!settings.aiEnabled || !settings.aiExplainEnabled) return;
+      const ptyId = ptyMap.get(tabId);
+      let context: string | undefined;
+      if (ptyId != null) {
+        try {
+          context = await invoke<string>("pty_recent_output", {
+            id: ptyId,
+            maxBytes: 3000,
+          });
+        } catch {}
+      }
+      const tab = ws.tabs.find((t) => t.id === tabId);
+      setExplainState({ selection, context, cwd: tab?.cwd });
+    },
+    [settings.aiEnabled, settings.aiExplainEnabled, ptyMap, ws.tabs],
+  );
+
+  const aiProvider = settings.aiDefaultProvider;
+  const aiModel =
+    aiProvider === "anthropic"
+      ? settings.aiAnthropicModel
+      : aiProvider === "openai"
+        ? settings.aiOpenaiModel
+        : settings.aiOllamaModel;
+  const aiBaseUrl =
+    aiProvider === "openai"
+      ? settings.aiOpenaiBaseUrl
+      : aiProvider === "ollama"
+        ? settings.aiOllamaBaseUrl
+        : undefined;
   const remote = useRemoteHosts(
     settings.remoteWorkspaceEnabled,
     vault.status.unlocked,
@@ -332,6 +445,29 @@ export default function App() {
   const toggleSidebar = () =>
     update("sidebarCollapsed", !settings.sidebarCollapsed);
 
+  const shq = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+  const spawnClaudeTab = useCallback(() => {
+    const cur = ws.tabs.find((t) => t.id === ws.activeId);
+    const cwd = cur?.cwd;
+    const cmd = cwd ? `cd ${shq(cwd)} && claude\n` : `claude\n`;
+    setGridGroupId(null);
+    const id = ws.addTab();
+    pendingCommandsRef.current.set(id, cmd);
+  }, [ws]);
+  const spawnClaudeTabRef = useRef(spawnClaudeTab);
+  spawnClaudeTabRef.current = spawnClaudeTab;
+  const openPaletteRef = useRef(openPalette);
+  openPaletteRef.current = openPalette;
+  const toggleAIPanel = useCallback(() => {
+    if (!settings.aiEnabled) {
+      setShowSettings(true);
+      return;
+    }
+    update("aiPanelOpen", !settings.aiPanelOpen);
+  }, [settings.aiEnabled, settings.aiPanelOpen, update]);
+  const toggleAIPanelRef = useRef(toggleAIPanel);
+  toggleAIPanelRef.current = toggleAIPanel;
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
@@ -371,6 +507,18 @@ export default function App() {
       if (e.ctrlKey && e.shiftKey && (e.key === "G" || e.key === "g")) {
         e.preventDefault();
         w.addGroup();
+      }
+      if (e.ctrlKey && e.shiftKey && (e.key === "L" || e.key === "l")) {
+        e.preventDefault();
+        spawnClaudeTabRef.current();
+      }
+      if (e.ctrlKey && e.shiftKey && (e.key === "P" || e.key === "p")) {
+        e.preventDefault();
+        openPaletteRef.current();
+      }
+      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
+        e.preventDefault();
+        toggleAIPanelRef.current();
       }
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ",") {
         e.preventDefault();
@@ -478,6 +626,7 @@ export default function App() {
           onSelectGroup={selectGroup}
           width={settings.sidebarWidth}
           onResize={(w) => update("sidebarWidth", w)}
+          ccStatuses={ccStatuses}
           remoteSlot={
             settings.remoteWorkspaceEnabled ? (
               <RemoteWorkspace
@@ -538,6 +687,10 @@ export default function App() {
                   }
                   onExit={(id) => ws.closeTab(id)}
                   onInfo={ws.updateTabInfo}
+                  onPtyReady={handlePtyReady}
+                  onPtyClose={handlePtyClose}
+                  initialCommand={pendingCommandsRef.current.get(t.id) ?? null}
+                  onSelectionMenu={openExplain}
                   fontFamily={settings.fontFamily}
                   fontSize={settings.fontSize}
                   lineHeight={settings.lineHeight}
@@ -568,6 +721,7 @@ export default function App() {
             cmd={activeTab?.sub}
             tabCount={ws.tabs.length}
             groupCount={ws.groups.length}
+            aiUsage={settings.aiEnabled ? aiUsage : undefined}
           />
         </main>
       </div>
@@ -581,12 +735,60 @@ export default function App() {
         />
       )}
 
+      {showPalette && (
+        <AICommandPalette
+          defaultProvider={aiProvider}
+          defaultModel={aiModel}
+          baseUrl={aiBaseUrl}
+          cwd={activeTab?.cwd}
+          recentOutput={paletteRecentOutput}
+          onClose={() => setShowPalette(false)}
+          onPaste={(text, run) => {
+            pasteToActive(text, run).catch(() => {});
+          }}
+          onUsage={accumulateUsage}
+        />
+      )}
+
+      {settings.aiEnabled && settings.aiPanelOpen && (
+        <AIPanel
+          defaultProvider={aiProvider}
+          defaultModel={aiModel}
+          baseUrl={aiBaseUrl}
+          attachContext={settings.aiAttachContext}
+          activeTabId={ws.activeId}
+          activePtyId={ws.activeId != null ? ptyMap.get(ws.activeId) ?? null : null}
+          cwd={activeTab?.cwd}
+          onClose={() => update("aiPanelOpen", false)}
+          onUsage={accumulateUsage}
+        />
+      )}
+
+      {explainState && (
+        <ExplainPopover
+          selection={explainState.selection}
+          context={explainState.context}
+          cwd={explainState.cwd}
+          defaultProvider={aiProvider}
+          defaultModel={aiModel}
+          baseUrl={aiBaseUrl}
+          onClose={() => setExplainState(null)}
+          onUsage={accumulateUsage}
+        />
+      )}
+
       {showSettings && (
         <SettingsModal
           settings={settings}
           update={update}
           reset={reset}
           onClose={() => setShowSettings(false)}
+          vaultUnlocked={vault.status.unlocked}
+          vaultExists={vault.status.exists}
+          onRequestVault={() =>
+            requestVault(vault.status.exists ? "unlock" : "init")
+          }
+          mcpStatus={mcp.status}
         />
       )}
 

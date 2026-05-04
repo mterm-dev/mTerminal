@@ -1,17 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import { THEMES } from "./themes";
-import type { CursorStyle, Settings } from "./useSettings";
+import type { AiProviderId, CursorStyle, Settings } from "./useSettings";
+import { useAIKeys } from "../hooks/useAIKeys";
+import { listModels, type ModelInfo } from "../hooks/useAI";
 
 interface Props {
   settings: Settings;
   update: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
   reset: () => void;
   onClose: () => void;
+  vaultUnlocked: boolean;
+  vaultExists: boolean;
+  onRequestVault: () => void;
+  mcpStatus?: { running: boolean; socketPath: string | null };
 }
 
-type Section = "appearance" | "terminal" | "shell" | "behavior" | "remote" | "about";
+type Section =
+  | "appearance"
+  | "terminal"
+  | "shell"
+  | "behavior"
+  | "ai"
+  | "remote"
+  | "about";
 
-export function SettingsModal({ settings, update, reset, onClose }: Props) {
+export function SettingsModal({
+  settings,
+  update,
+  reset,
+  onClose,
+  vaultUnlocked,
+  vaultExists,
+  onRequestVault,
+  mcpStatus,
+}: Props) {
   const [section, setSection] = useState<Section>("appearance");
   const downOnOverlay = useRef(false);
 
@@ -43,6 +65,7 @@ export function SettingsModal({ settings, update, reset, onClose }: Props) {
               ["terminal", "Terminal"],
               ["shell", "Shell"],
               ["behavior", "Behavior"],
+              ["ai", "AI"],
               ["remote", "Remote"],
               ["about", "About"],
             ] as [Section, string][]
@@ -90,6 +113,16 @@ export function SettingsModal({ settings, update, reset, onClose }: Props) {
             {section === "behavior" && (
               <BehaviorPanel settings={settings} update={update} />
             )}
+            {section === "ai" && (
+              <AIPanel
+                settings={settings}
+                update={update}
+                vaultUnlocked={vaultUnlocked}
+                vaultExists={vaultExists}
+                onRequestVault={onRequestVault}
+                mcpStatus={mcpStatus}
+              />
+            )}
             {section === "remote" && (
               <RemotePanel settings={settings} update={update} />
             )}
@@ -107,6 +140,7 @@ function labelFor(s: Section): string {
     terminal: "Terminal",
     shell: "Shell",
     behavior: "Behavior",
+    ai: "AI",
     remote: "Remote",
     about: "About",
   }[s];
@@ -354,6 +388,340 @@ function RemotePanel({
         re-enabling restores everything. running remote sessions are not killed.
       </div>
     </>
+  );
+}
+
+function AIPanel({
+  settings,
+  update,
+  vaultUnlocked,
+  vaultExists,
+  onRequestVault,
+  mcpStatus,
+}: {
+  settings: Settings;
+  update: Props["update"];
+  vaultUnlocked: boolean;
+  vaultExists: boolean;
+  onRequestVault: () => void;
+  mcpStatus?: { running: boolean; socketPath: string | null };
+}) {
+  const { hasKey, setKey, clearKey } = useAIKeys(vaultUnlocked);
+  type KeyedProvider = "anthropic" | "openai";
+  const [keyDraft, setKeyDraft] = useState<{ provider: KeyedProvider | null }>({
+    provider: null,
+  });
+  const [draftValue, setDraftValue] = useState("");
+  const [models, setModels] = useState<Record<string, ModelInfo[] | "loading" | "error">>({});
+
+  const fetchModels = async (provider: AiProviderId) => {
+    setModels((m) => ({ ...m, [provider]: "loading" }));
+    try {
+      const baseUrl =
+        provider === "openai"
+          ? settings.aiOpenaiBaseUrl
+          : provider === "ollama"
+            ? settings.aiOllamaBaseUrl
+            : undefined;
+      const list = await listModels(provider, baseUrl);
+      setModels((m) => ({ ...m, [provider]: list }));
+    } catch {
+      setModels((m) => ({ ...m, [provider]: "error" }));
+    }
+  };
+
+  const submitKey = async () => {
+    if (!keyDraft.provider || !draftValue.trim()) return;
+    await setKey(keyDraft.provider, draftValue.trim());
+    setDraftValue("");
+    setKeyDraft({ provider: null });
+  };
+
+  const vaultBadge = !vaultExists
+    ? "vault not initialised — click to create"
+    : !vaultUnlocked
+      ? "vault locked — click to unlock"
+      : null;
+
+  return (
+    <>
+      <Field label="Enable AI" hint="Master switch for AI features">
+        <Toggle checked={settings.aiEnabled} onChange={(b) => update("aiEnabled", b)} />
+      </Field>
+
+      {settings.aiEnabled && (
+        <>
+          {vaultBadge && (
+            <div className="settings-note" style={{ cursor: "pointer" }} onClick={onRequestVault}>
+              {vaultBadge}. API keys are stored encrypted (Argon2id + XChaCha20-Poly1305) in the
+              same vault as remote-host passwords.
+            </div>
+          )}
+
+          <Field label="Default provider" hint="Used by command palette + chat panel by default">
+            <div className="seg-control">
+              {(["anthropic", "openai", "ollama"] as AiProviderId[]).map((p) => (
+                <button
+                  key={p}
+                  className={settings.aiDefaultProvider === p ? "active" : ""}
+                  onClick={() => update("aiDefaultProvider", p)}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <ProviderBlock
+            label="Anthropic"
+            provider="anthropic"
+            hasKey={!!hasKey.anthropic}
+            vaultUnlocked={vaultUnlocked}
+            modelValue={settings.aiAnthropicModel}
+            onModelChange={(v) => update("aiAnthropicModel", v)}
+            keyDraftActive={keyDraft.provider === "anthropic"}
+            onStartEdit={() => setKeyDraft({ provider: "anthropic" })}
+            onCancelEdit={() => setKeyDraft({ provider: null })}
+            draftValue={draftValue}
+            setDraftValue={setDraftValue}
+            onSubmitKey={submitKey}
+            onClearKey={() => clearKey("anthropic")}
+            modelsState={models.anthropic}
+            onFetchModels={() => fetchModels("anthropic")}
+          />
+
+          <ProviderBlock
+            label="OpenAI"
+            provider="openai"
+            hasKey={!!hasKey.openai}
+            vaultUnlocked={vaultUnlocked}
+            modelValue={settings.aiOpenaiModel}
+            onModelChange={(v) => update("aiOpenaiModel", v)}
+            baseUrlValue={settings.aiOpenaiBaseUrl}
+            onBaseUrlChange={(v) => update("aiOpenaiBaseUrl", v)}
+            keyDraftActive={keyDraft.provider === "openai"}
+            onStartEdit={() => setKeyDraft({ provider: "openai" })}
+            onCancelEdit={() => setKeyDraft({ provider: null })}
+            draftValue={draftValue}
+            setDraftValue={setDraftValue}
+            onSubmitKey={submitKey}
+            onClearKey={() => clearKey("openai")}
+            modelsState={models.openai}
+            onFetchModels={() => fetchModels("openai")}
+          />
+
+          <ProviderBlock
+            label="Ollama (local)"
+            provider="ollama"
+            hasKey={true}
+            vaultUnlocked={true}
+            modelValue={settings.aiOllamaModel}
+            onModelChange={(v) => update("aiOllamaModel", v)}
+            baseUrlValue={settings.aiOllamaBaseUrl}
+            onBaseUrlChange={(v) => update("aiOllamaBaseUrl", v)}
+            modelsState={models.ollama}
+            onFetchModels={() => fetchModels("ollama")}
+            noKeyNeeded
+          />
+
+          <Field
+            label="Attach context to chat"
+            hint="Inject recent terminal output as context when asking AI"
+          >
+            <Toggle
+              checked={settings.aiAttachContext}
+              onChange={(b) => update("aiAttachContext", b)}
+            />
+          </Field>
+
+          <Field
+            label="Right-click explain"
+            hint="Show 'explain' / 'ask AI' on text selection"
+          >
+            <Toggle
+              checked={settings.aiExplainEnabled}
+              onChange={(b) => update("aiExplainEnabled", b)}
+            />
+          </Field>
+
+          <Field
+            label="Detect Claude Code sessions"
+            hint="Show badge on tabs running `claude` and notify on idle"
+          >
+            <Toggle
+              checked={settings.claudeCodeDetectionEnabled}
+              onChange={(b) => update("claudeCodeDetectionEnabled", b)}
+            />
+          </Field>
+
+          <Field
+            label="MCP server"
+            hint="Expose mTerminal as a tool for external agents (Claude Code, Codex...)"
+          >
+            <Toggle
+              checked={settings.mcpServerEnabled}
+              onChange={(b) => update("mcpServerEnabled", b)}
+            />
+          </Field>
+          {settings.mcpServerEnabled && mcpStatus && (
+            <div className="settings-note">
+              {mcpStatus.running && mcpStatus.socketPath ? (
+                <>
+                  <div>
+                    socket: <code>{mcpStatus.socketPath}</code>
+                  </div>
+                  <div style={{ marginTop: 6 }}>
+                    add to claude code:
+                    <pre
+                      style={{
+                        background: "color-mix(in oklch, currentColor 6%, transparent)",
+                        padding: 6,
+                        borderRadius: 4,
+                        fontSize: 11,
+                        overflow: "auto",
+                        marginTop: 4,
+                      }}
+                    >
+{`claude mcp add mterminal --transport stdio "socat - UNIX-CONNECT:${mcpStatus.socketPath}"`}
+                    </pre>
+                  </div>
+                </>
+              ) : (
+                <span>starting MCP server...</span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function ProviderBlock({
+  label,
+  hasKey,
+  vaultUnlocked,
+  modelValue,
+  onModelChange,
+  baseUrlValue,
+  onBaseUrlChange,
+  keyDraftActive,
+  onStartEdit,
+  onCancelEdit,
+  draftValue,
+  setDraftValue,
+  onSubmitKey,
+  onClearKey,
+  modelsState,
+  onFetchModels,
+  noKeyNeeded,
+}: {
+  label: string;
+  provider: AiProviderId;
+  hasKey: boolean;
+  vaultUnlocked: boolean;
+  modelValue: string;
+  onModelChange: (v: string) => void;
+  baseUrlValue?: string;
+  onBaseUrlChange?: (v: string) => void;
+  keyDraftActive?: boolean;
+  onStartEdit?: () => void;
+  onCancelEdit?: () => void;
+  draftValue?: string;
+  setDraftValue?: (v: string) => void;
+  onSubmitKey?: () => void;
+  onClearKey?: () => void;
+  modelsState?: ModelInfo[] | "loading" | "error";
+  onFetchModels: () => void;
+  noKeyNeeded?: boolean;
+}) {
+  return (
+    <div className="settings-field" style={{ flexDirection: "column", alignItems: "stretch" }}>
+      <div className="settings-field-label">
+        <span style={{ fontWeight: 600 }}>{label}</span>
+        {!noKeyNeeded && (
+          <span className="settings-field-hint">
+            {hasKey ? "key saved ✓" : vaultUnlocked ? "no key" : "vault locked"}
+          </span>
+        )}
+      </div>
+
+      <div className="settings-field-control" style={{ flexDirection: "column", gap: 8 }}>
+        {!noKeyNeeded && !keyDraftActive && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="ghost-btn" onClick={onStartEdit} disabled={!vaultUnlocked}>
+              {hasKey ? "replace key" : "set key"}
+            </button>
+            {hasKey && (
+              <button className="ghost-btn" onClick={onClearKey} disabled={!vaultUnlocked}>
+                remove key
+              </button>
+            )}
+          </div>
+        )}
+
+        {!noKeyNeeded && keyDraftActive && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              type="password"
+              value={draftValue ?? ""}
+              onChange={(e) => setDraftValue?.(e.target.value)}
+              placeholder="paste API key"
+              autoFocus
+              style={{ flex: 1 }}
+            />
+            <button className="ghost-btn" onClick={onSubmitKey}>
+              save
+            </button>
+            <button className="ghost-btn" onClick={onCancelEdit}>
+              cancel
+            </button>
+          </div>
+        )}
+
+        {baseUrlValue !== undefined && (
+          <input
+            type="text"
+            value={baseUrlValue}
+            onChange={(e) => onBaseUrlChange?.(e.target.value)}
+            placeholder="base url"
+          />
+        )}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="text"
+            value={modelValue}
+            onChange={(e) => onModelChange(e.target.value)}
+            placeholder="model id"
+            style={{ flex: 1 }}
+          />
+          <button className="ghost-btn" onClick={onFetchModels}>
+            list models
+          </button>
+        </div>
+
+        {modelsState === "loading" && <div className="settings-note">loading...</div>}
+        {modelsState === "error" && (
+          <div className="settings-note">failed to fetch models</div>
+        )}
+        {Array.isArray(modelsState) && modelsState.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {modelsState.slice(0, 12).map((m) => (
+              <button
+                key={m.id}
+                className="ghost-btn"
+                onClick={() => onModelChange(m.id)}
+                title={m.name}
+                style={{ fontSize: 11 }}
+              >
+                {m.id}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

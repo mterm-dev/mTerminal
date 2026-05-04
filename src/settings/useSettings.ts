@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type CursorStyle = "block" | "bar" | "underline";
+export type AiProviderId = "anthropic" | "openai" | "ollama";
 
 export interface Settings {
   themeId: string;
@@ -20,6 +21,18 @@ export interface Settings {
   sidebarWidth: number;
   remoteWorkspaceEnabled: boolean;
   showGreeting: boolean;
+  aiEnabled: boolean;
+  aiDefaultProvider: AiProviderId;
+  aiAnthropicModel: string;
+  aiOpenaiModel: string;
+  aiOpenaiBaseUrl: string;
+  aiOllamaModel: string;
+  aiOllamaBaseUrl: string;
+  aiAttachContext: boolean;
+  aiPanelOpen: boolean;
+  aiExplainEnabled: boolean;
+  claudeCodeDetectionEnabled: boolean;
+  mcpServerEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,6 +53,18 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarWidth: 300,
   remoteWorkspaceEnabled: false,
   showGreeting: true,
+  aiEnabled: false,
+  aiDefaultProvider: "anthropic",
+  aiAnthropicModel: "claude-opus-4-7",
+  aiOpenaiModel: "gpt-5",
+  aiOpenaiBaseUrl: "https://api.openai.com/v1",
+  aiOllamaModel: "llama3.2",
+  aiOllamaBaseUrl: "http://localhost:11434/v1",
+  aiAttachContext: true,
+  aiPanelOpen: false,
+  aiExplainEnabled: true,
+  claudeCodeDetectionEnabled: true,
+  mcpServerEnabled: false,
 };
 
 const KEY = "mterminal:settings:v1";

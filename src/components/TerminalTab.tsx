@@ -14,6 +14,15 @@ interface Props {
   gridSlot?: number | null;
   onExit: (tabId: number) => void;
   onInfo?: (tabId: number, info: { cwd: string | null; cmd: string | null }) => void;
+  onPtyReady?: (tabId: number, ptyId: number) => void;
+  onPtyClose?: (tabId: number) => void;
+  initialCommand?: string | null;
+  onSelectionMenu?: (
+    tabId: number,
+    selection: string,
+    x: number,
+    y: number,
+  ) => void;
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
@@ -40,6 +49,10 @@ export function TerminalTab({
   gridSlot,
   onExit,
   onInfo,
+  onPtyReady,
+  onPtyClose,
+  initialCommand,
+  onSelectionMenu,
   fontFamily,
   fontSize,
   lineHeight,
@@ -63,8 +76,15 @@ export function TerminalTab({
   onExitRef.current = onExit;
   const onInfoRef = useRef(onInfo);
   onInfoRef.current = onInfo;
+  const onPtyReadyRef = useRef(onPtyReady);
+  onPtyReadyRef.current = onPtyReady;
+  const onPtyCloseRef = useRef(onPtyClose);
+  onPtyCloseRef.current = onPtyClose;
   const initialShellRef = useRef({ shell, shellArgs, showGreeting });
   const initialRemoteRef = useRef({ kind, remoteHostId, remoteBanner });
+  const initialCommandRef = useRef(initialCommand);
+  const onSelectionMenuRef = useRef(onSelectionMenu);
+  onSelectionMenuRef.current = onSelectionMenu;
   const mouseDownTargetRef = useRef<EventTarget | null>(null);
 
   useEffect(() => {
@@ -202,6 +222,15 @@ export function TerminalTab({
           return;
         }
         ptyIdRef.current = id;
+        onPtyReadyRef.current?.(tabId, id);
+
+        const initCmd = initialCommandRef.current;
+        if (initCmd) {
+          initialCommandRef.current = null;
+          setTimeout(() => {
+            invoke("pty_write", { id, data: initCmd }).catch(() => {});
+          }, 200);
+        }
 
         if (pendingResize) {
           invoke("pty_resize", {
@@ -243,6 +272,7 @@ export function TerminalTab({
       if (id != null) {
         invoke("pty_kill", { id }).catch(() => {});
       }
+      onPtyCloseRef.current?.(tabId);
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
@@ -328,6 +358,13 @@ export function TerminalTab({
           if (!sel) termRef.current?.focus();
         }
         mouseDownTargetRef.current = null;
+      }}
+      onContextMenu={(e) => {
+        const sel = termRef.current?.getSelection();
+        if (sel && sel.trim().length > 0 && onSelectionMenuRef.current) {
+          e.preventDefault();
+          onSelectionMenuRef.current(tabId, sel, e.clientX, e.clientY);
+        }
       }}
     />
   );

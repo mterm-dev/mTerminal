@@ -1,13 +1,17 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::thread;
+use std::time::Instant;
 
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tauri::ipc::Channel;
+
+const RING_CAPACITY: usize = 65536;
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind", content = "value")]
@@ -21,6 +25,8 @@ pub struct PtySession {
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
     pid: Option<u32>,
+    output_buffer: Arc<Mutex<VecDeque<u8>>>,
+    last_activity: Arc<Mutex<Instant>>,
 }
 
 static SESSIONS: Lazy<Mutex<HashMap<u32, PtySession>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -150,6 +156,9 @@ pub fn spawn_with_command(
 
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
 
+    let output_buffer = Arc::new(Mutex::new(VecDeque::with_capacity(RING_CAPACITY)));
+    let last_activity = Arc::new(Mutex::new(Instant::now()));
+
     SESSIONS.lock().insert(
         id,
         PtySession {
@@ -157,6 +166,8 @@ pub fn spawn_with_command(
             writer,
             child,
             pid,
+            output_buffer: output_buffer.clone(),
+            last_activity: last_activity.clone(),
         },
     );
 
@@ -166,6 +177,16 @@ pub fn spawn_with_command(
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
+                    {
+                        let mut rb = output_buffer.lock();
+                        for &b in &buf[..n] {
+                            if rb.len() == RING_CAPACITY {
+                                rb.pop_front();
+                            }
+                            rb.push_back(b);
+                        }
+                    }
+                    *last_activity.lock() = Instant::now();
                     let chunk = String::from_utf8_lossy(&buf[..n]).to_string();
                     if events.send(PtyEvent::Data(chunk)).is_err() {
                         break;
@@ -179,6 +200,56 @@ pub fn spawn_with_command(
     });
 
     Ok(id)
+}
+
+pub fn session_pid(id: u32) -> Option<u32> {
+    SESSIONS.lock().get(&id).and_then(|s| s.pid)
+}
+
+pub fn list_session_ids() -> Vec<u32> {
+    let mut ids: Vec<u32> = SESSIONS.lock().keys().copied().collect();
+    ids.sort();
+    ids
+}
+
+pub fn session_write(id: u32, data: &[u8]) -> std::io::Result<()> {
+    let mut sessions = SESSIONS.lock();
+    let s = sessions.get_mut(&id).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "no pty session")
+    })?;
+    s.writer.write_all(data)?;
+    s.writer.flush()?;
+    Ok(())
+}
+
+pub fn session_output(id: u32, max_bytes: usize) -> Option<String> {
+    let sessions = SESSIONS.lock();
+    let s = sessions.get(&id)?;
+    let rb = s.output_buffer.lock();
+    let take = max_bytes.min(rb.len());
+    let start = rb.len() - take;
+    let bytes: Vec<u8> = rb.iter().skip(start).copied().collect();
+    Some(String::from_utf8_lossy(&bytes).to_string())
+}
+
+pub fn session_last_activity_ms(id: u32) -> Option<u128> {
+    let sessions = SESSIONS.lock();
+    let s = sessions.get(&id)?;
+    let ms = s.last_activity.lock().elapsed().as_millis();
+    Some(ms)
+}
+
+#[tauri::command]
+pub fn pty_recent_output(id: u32, max_bytes: Option<usize>) -> Result<String, String> {
+    let sessions = SESSIONS.lock();
+    let s = sessions
+        .get(&id)
+        .ok_or_else(|| format!("no pty session {}", id))?;
+    let rb = s.output_buffer.lock();
+    let max = max_bytes.unwrap_or(rb.len()).min(rb.len());
+    let start = rb.len() - max;
+    let bytes: Vec<u8> = rb.iter().skip(start).copied().collect();
+    Ok(String::from_utf8_lossy(&bytes).to_string())
 }
 
 #[tauri::command]

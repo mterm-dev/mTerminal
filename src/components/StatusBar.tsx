@@ -6,6 +6,7 @@ interface Props {
   cmd?: string;
   tabCount: number;
   groupCount: number;
+  aiUsage?: { inTokens: number; outTokens: number; costUsd: number };
 }
 
 export function StatusBar({
@@ -14,6 +15,7 @@ export function StatusBar({
   cmd,
   tabCount,
   groupCount,
+  aiUsage,
 }: Props) {
   return (
     <div className="term-status">
@@ -32,6 +34,14 @@ export function StatusBar({
         {tabCount} tab{tabCount === 1 ? "" : "s"} · {groupCount} group
         {groupCount === 1 ? "" : "s"}
       </div>
+      {aiUsage && (aiUsage.inTokens > 0 || aiUsage.outTokens > 0) && (
+        <div
+          className="ai-usage"
+          title={`in: ${aiUsage.inTokens} · out: ${aiUsage.outTokens} · $${aiUsage.costUsd.toFixed(4)}`}
+        >
+          ai <strong>${aiUsage.costUsd.toFixed(3)}</strong>
+        </div>
+      )}
       <div className="clock-seg">
         <Clock />
       </div>

@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode, useRef, useState } from "react";
 import type { Group, Tab } from "../hooks/useWorkspace";
+import type { CcStatus } from "../hooks/useClaudeCodeStatus";
 import { InlineEdit } from "./InlineEdit";
 
 interface Props {
@@ -30,6 +31,7 @@ interface Props {
   remoteSlot?: ReactNode;
   width: number;
   onResize: (w: number) => void;
+  ccStatuses?: Map<number, CcStatus>;
 }
 
 type DropMark =
@@ -61,6 +63,7 @@ export function Sidebar(props: Props) {
     remoteSlot,
     width,
     onResize,
+    ccStatuses,
   } = props;
 
   const onResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -262,6 +265,26 @@ export function Sidebar(props: Props) {
               </span>
             )}
           </span>
+          {(() => {
+            const cc = ccStatuses?.get(t.id);
+            if (!cc?.running) return null;
+            const glyph =
+              cc.state === "thinking"
+                ? "◐"
+                : cc.state === "awaitingInput"
+                  ? "!"
+                  : "✓";
+            const title = `claude code: ${cc.state}`;
+            return (
+              <span
+                className={`cc-badge cc-${cc.state}`}
+                title={title}
+                aria-label={title}
+              >
+                {glyph}
+              </span>
+            );
+          })()}
           <span className="num" aria-hidden="true">
             {idx + 1}
           </span>

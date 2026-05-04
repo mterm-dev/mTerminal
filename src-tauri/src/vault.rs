@@ -39,6 +39,8 @@ struct VaultFile {
 pub struct VaultPayload {
     #[serde(default)]
     pub passwords: HashMap<String, String>,
+    #[serde(default)]
+    pub ai_keys: HashMap<String, String>,
 }
 
 struct VaultState {

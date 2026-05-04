@@ -17,6 +17,10 @@
     "os:default",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "notification:default",
+    "notification:allow-notify",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission"
   ]
 }
