@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# mTerminal install script — builds Electron AppImage and installs for current user.
+# mTerminal install script — builds Electron app and installs for current user.
+# Installs the unpacked Electron tree (no FUSE / AppImage needed at runtime).
 # Usage:
 #   ./install.sh                  # install to ~/.local
 #   ./install.sh --system         # install to /usr/local (requires sudo)
@@ -35,6 +36,7 @@ else
 fi
 
 BIN_DIR="$PREFIX/bin"
+LIB_DIR="$PREFIX/lib/$APP_NAME"
 APP_DIR="$PREFIX/share/applications"
 ICON_ROOT="$PREFIX/share/icons/hicolor"
 LICENSE_DIR="$PREFIX/share/licenses/$APP_NAME"
@@ -43,6 +45,7 @@ ICON_SIZES=(512)
 if [[ "$ACTION" == "uninstall" ]]; then
   echo "→ removing $APP_DISPLAY from $PREFIX"
   $SUDO rm -f "$BIN_DIR/$APP_NAME"
+  $SUDO rm -rf "$LIB_DIR"
   $SUDO rm -f "$APP_DIR/$APP_NAME.desktop"
   for s in "${ICON_SIZES[@]}"; do
     $SUDO rm -f "$ICON_ROOT/${s}x${s}/apps/$APP_NAME.png"
@@ -75,13 +78,12 @@ pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 echo "→ rebuilding native modules (node-pty against Electron ABI)"
 pnpm exec electron-rebuild -f -w node-pty
 
-echo "→ building AppImage (this can take a few minutes)"
+echo "→ building Electron app"
 pnpm package:linux
 
-# Locate produced AppImage. electron-builder writes to release/.
-APPIMAGE_SRC="$(find "$REPO_ROOT/release" -maxdepth 2 -type f -name '*.AppImage' -print -quit 2>/dev/null || true)"
-if [[ -z "${APPIMAGE_SRC:-}" || ! -f "$APPIMAGE_SRC" ]]; then
-  echo "build failed: no AppImage found under $REPO_ROOT/release" >&2
+UNPACKED_SRC="$REPO_ROOT/release/linux-unpacked"
+if [[ ! -d "$UNPACKED_SRC" ]]; then
+  echo "build failed: $UNPACKED_SRC not found" >&2
   exit 1
 fi
 
@@ -90,7 +92,28 @@ DESKTOP_SRC="$REPO_ROOT/packaging/$APP_NAME.desktop"
 
 # ── install ──────────────────────────────────────────────────────
 echo "→ installing to $PREFIX"
-$SUDO install -Dm755 "$APPIMAGE_SRC" "$BIN_DIR/$APP_NAME"
+$SUDO install -dm755 "$LIB_DIR"
+$SUDO cp -a "$UNPACKED_SRC"/. "$LIB_DIR/"
+
+# Wrapper script in PATH.
+WRAPPER="$BIN_DIR/$APP_NAME"
+$SUDO install -dm755 "$BIN_DIR"
+if [[ "$MODE" == "system" ]]; then
+  # Chromium sandbox helper requires SUID root for system install.
+  $SUDO chown root:root "$LIB_DIR/chrome-sandbox" || true
+  $SUDO chmod 4755 "$LIB_DIR/chrome-sandbox" || true
+  WRAPPER_BODY="#!/bin/sh
+exec \"$LIB_DIR/$APP_NAME\" \"\$@\"
+"
+else
+  # User install can't SUID without sudo. Disable sandbox in that case
+  # (Electron requires either SUID chrome-sandbox or --no-sandbox).
+  WRAPPER_BODY="#!/bin/sh
+exec \"$LIB_DIR/$APP_NAME\" --no-sandbox \"\$@\"
+"
+fi
+echo "$WRAPPER_BODY" | $SUDO tee "$WRAPPER" >/dev/null
+$SUDO chmod 755 "$WRAPPER"
 
 if [[ -f "$DESKTOP_SRC" ]]; then
   $SUDO install -Dm644 "$DESKTOP_SRC" "$APP_DIR/$APP_NAME.desktop"
@@ -110,8 +133,10 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 echo
-echo "✓ installed $APP_DISPLAY to $BIN_DIR/$APP_NAME"
-echo "  desktop entry: $APP_DIR/$APP_NAME.desktop"
+echo "✓ installed $APP_DISPLAY"
+echo "  binary tree: $LIB_DIR"
+echo "  launcher:    $WRAPPER"
+echo "  desktop:     $APP_DIR/$APP_NAME.desktop"
 if [[ "$MODE" == "user" ]]; then
   case ":$PATH:" in
     *":$BIN_DIR:"*) ;;

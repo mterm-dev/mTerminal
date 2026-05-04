@@ -73,7 +73,7 @@ Grab the latest from the [Releases page](https://github.com/arthurr0/mTerminal/r
 
 | Artifact | Use case |
 |---|---|
-| `mTerminal_<version>_amd64.AppImage` | Portable. `chmod +x` and run. |
+| `mTerminal_<version>_amd64.AppImage` | Portable. `chmod +x` and run. Needs `fuse2` installed (`sudo pacman -S fuse2` on Arch); otherwise run with `--appimage-extract-and-run`. |
 | `mterminal_<version>_amd64.deb` | Debian / Ubuntu / Mint. `sudo dpkg -i mterminal_*.deb` |
 
 ### Arch / CachyOS (AUR)

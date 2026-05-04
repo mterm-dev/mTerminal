@@ -3,7 +3,7 @@ Type=Application
 Name=mTerminal
 GenericName=Terminal Emulator
 Comment=Custom terminal emulator with grouped tabs
-Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 mterminal
+Exec=mterminal %U
 Icon=mterminal
 Terminal=false
 Categories=System;TerminalEmulator;Utility;
