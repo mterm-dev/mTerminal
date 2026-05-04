@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-linux:
     name: Build Linux bundles
@@ -34,7 +37,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -144,7 +147,20 @@ jobs:
           git config --global user.name "arthurr0"
           git config --global --add safe.directory '*'
 
+      - name: SSH debug
+        continue-on-error: true
+        run: |
+          echo "HOME=$HOME"
+          echo "whoami=$(whoami)"
+          ls -la ~/.ssh
+          echo "--- known_hosts ---"
+          cat ~/.ssh/known_hosts || true
+          echo "--- ssh test ---"
+          ssh -vv -o BatchMode=yes -i ~/.ssh/aur -o StrictHostKeyChecking=accept-new aur@aur.archlinux.org 2>&1 | head -120 || true
+
       - name: Publish mterminal-git
+        env:
+          GIT_SSH_COMMAND: "ssh -i $HOME/.ssh/aur -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           rm -rf /tmp/aur-git
@@ -162,6 +178,8 @@ jobs:
           fi
 
       - name: Publish mterminal-bin
+        env:
+          GIT_SSH_COMMAND: "ssh -i $HOME/.ssh/aur -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           BASE="https://github.com/arthurr0/mTerminal/releases/download/v$VERSION"
