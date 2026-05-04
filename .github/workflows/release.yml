@@ -130,19 +130,24 @@ jobs:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 700 ~/.ssh
+          # strip CRLF, ensure trailing newline
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/aur
+          # collapse possible double-blank end
+          sed -i -e '$a\' ~/.ssh/aur
           chmod 600 ~/.ssh/aur
+          # validate key parses
+          if ! ssh-keygen -y -f ~/.ssh/aur > ~/.ssh/aur.pub 2> /tmp/keyerr; then
+            echo "::error::AUR_SSH_PRIVATE_KEY failed to parse:"
+            cat /tmp/keyerr
+            head -1 ~/.ssh/aur
+            tail -1 ~/.ssh/aur
+            wc -l ~/.ssh/aur
+            exit 1
+          fi
+          echo "key OK: $(cat ~/.ssh/aur.pub)"
           ssh-keyscan -T 15 -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/tmp/keyscan.err || cat /tmp/keyscan.err
           chmod 644 ~/.ssh/known_hosts
-          test -s ~/.ssh/known_hosts && echo "known_hosts populated" || echo "known_hosts empty — accept-new will populate"
-          cat > ~/.ssh/config <<EOF
-          Host aur.archlinux.org
-            User aur
-            IdentityFile ~/.ssh/aur
-            StrictHostKeyChecking accept-new
-            UserKnownHostsFile ~/.ssh/known_hosts
-          EOF
-          chmod 600 ~/.ssh/config
           git config --global user.email "koeckiartur@gmail.com"
           git config --global user.name "arthurr0"
           git config --global --add safe.directory '*'
