@@ -547,6 +547,7 @@ export default function App() {
                   theme={theme.xterm}
                   shell={settings.shellOverride}
                   shellArgs={shellArgs}
+                  showGreeting={settings.showGreeting}
                   copyOnSelect={settings.copyOnSelect}
                   kind={t.kind}
                   remoteHostId={t.remoteHostId}

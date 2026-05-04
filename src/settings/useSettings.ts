@@ -19,6 +19,7 @@ export interface Settings {
   sidebarCollapsed: boolean;
   sidebarWidth: number;
   remoteWorkspaceEnabled: boolean;
+  showGreeting: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -38,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarCollapsed: false,
   sidebarWidth: 300,
   remoteWorkspaceEnabled: false,
+  showGreeting: true,
 };
 
 const KEY = "mterminal:settings:v1";

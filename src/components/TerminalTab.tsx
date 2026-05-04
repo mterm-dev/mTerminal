@@ -23,6 +23,7 @@ interface Props {
   theme: ITheme;
   shell: string;
   shellArgs: string[];
+  showGreeting: boolean;
   copyOnSelect: boolean;
   kind?: TabKind;
   remoteHostId?: string;
@@ -48,6 +49,7 @@ export function TerminalTab({
   theme,
   shell,
   shellArgs,
+  showGreeting,
   copyOnSelect,
   kind = "local",
   remoteHostId,
@@ -61,7 +63,7 @@ export function TerminalTab({
   onExitRef.current = onExit;
   const onInfoRef = useRef(onInfo);
   onInfoRef.current = onInfo;
-  const initialShellRef = useRef({ shell, shellArgs });
+  const initialShellRef = useRef({ shell, shellArgs, showGreeting });
   const initialRemoteRef = useRef({ kind, remoteHostId, remoteBanner });
   const mouseDownTargetRef = useRef<EventTarget | null>(null);
 
@@ -192,6 +194,7 @@ export function TerminalTab({
             cols: term.cols,
             shell: init.shell || null,
             args: init.shellArgs.length ? init.shellArgs : null,
+            env: init.showGreeting ? { MT_GREETING: "1" } : null,
           });
         }
         if (disposed) {

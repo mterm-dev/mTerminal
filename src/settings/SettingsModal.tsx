@@ -314,6 +314,15 @@ function BehaviorPanel({
           onChange={(b) => update("copyOnSelect", b)}
         />
       </Field>
+      <Field
+        label="mTerminal greeting"
+        hint="Show themed banner on shell startup (fish only)"
+      >
+        <Toggle
+          checked={settings.showGreeting}
+          onChange={(b) => update("showGreeting", b)}
+        />
+      </Field>
     </>
   );
 }
