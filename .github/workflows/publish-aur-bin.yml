@@ -38,7 +38,7 @@ jobs:
 
           APPIMAGE_SHA=$(curl -fsSL "$BASE/mTerminal_${VERSION}_amd64.AppImage" | sha256sum | awk '{print $1}')
           DESKTOP_SHA=$(curl -fsSL "$RAW/packaging/mterminal.desktop" | sha256sum | awk '{print $1}')
-          ICON_SHA=$(curl -fsSL "$RAW/src-tauri/icons/icon.png" | sha256sum | awk '{print $1}')
+          ICON_SHA=$(curl -fsSL "$RAW/build/icon.png" | sha256sum | awk '{print $1}')
           LICENSE_SHA=$(curl -fsSL "$RAW/LICENSE" | sha256sum | awk '{print $1}')
 
           rm -rf /tmp/aur-bin

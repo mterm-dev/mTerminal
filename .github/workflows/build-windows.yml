@@ -14,21 +14,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-build
-        with:
-          rust-targets: x86_64-pc-windows-msvc
 
-      - name: Build NSIS installer + portable exe
-        run: pnpm tauri build --bundles nsis
+      - name: Rebuild node-pty for Electron
+        run: pnpm exec electron-rebuild -f -w node-pty
+
+      - name: Build NSIS installer
+        run: pnpm package:win
 
       - name: Collect artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release-artifacts | Out-Null
-          Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter *-setup.exe -ErrorAction SilentlyContinue |
+          Get-ChildItem -Path release -Filter *-setup.exe -ErrorAction SilentlyContinue |
             ForEach-Object { Copy-Item $_.FullName release-artifacts/ }
-          if (Test-Path src-tauri/target/release/mTerminal.exe) {
-            Copy-Item src-tauri/target/release/mTerminal.exe release-artifacts/mTerminal-x86_64-windows.exe
-          }
           Get-ChildItem release-artifacts
 
       - name: Upload artifacts

@@ -1,4 +1,4 @@
-name: Windows cargo check
+name: Windows type-check
 
 on:
   workflow_call:
@@ -8,18 +8,15 @@ env:
 
 jobs:
   windows-check:
-    name: Windows cargo check
+    name: Windows type-check
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-build
-        with:
-          rust-targets: x86_64-pc-windows-msvc
+
+      - name: TypeScript
+        run: pnpm typecheck
 
       - name: Frontend build
         run: pnpm build
-
-      - name: Cargo check
-        working-directory: src-tauri
-        run: cargo check --all-targets

@@ -35,6 +35,4 @@ jobs:
           files: |
             release-artifacts/*.AppImage
             release-artifacts/*.deb
-            release-artifacts/mterminal-x86_64-linux
             release-artifacts/*-setup.exe
-            release-artifacts/mTerminal-x86_64-windows.exe
