@@ -219,7 +219,7 @@ Issues and PRs welcome at <https://github.com/arthurr0/mTerminal>. There is no t
 
 ## Credits
 
-- [Electron](https://www.electronjs.org) + [electron-vite](https://electron-vite.org) — desktop runtime and dev tooling
-- [xterm.js](https://xtermjs.org) — terminal rendering
-- [node-pty](https://github.com/microsoft/node-pty) — cross-platform PTY bindings
-- [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) + [@noble/hashes](https://github.com/paulmillr/noble-hashes) — vault crypto (XChaCha20-Poly1305 + Argon2id)
+[Electron](https://www.electronjs.org) + [electron-vite](https://electron-vite.org) — desktop runtime and dev tooling
+[xterm.js](https://xtermjs.org) — terminal rendering
+[node-pty](https://github.com/microsoft/node-pty) — cross-platform PTY bindings
+* [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) + [@noble/hashes](https://github.com/paulmillr/noble-hashes) — vault crypto (XChaCha20-Poly1305 + Argon2id)
