@@ -8,16 +8,19 @@ arch=('x86_64')
 url="https://github.com/arthurr0/mTerminal"
 license=('MIT')
 depends=(
-  'webkit2gtk-4.1'
   'gtk3'
-  'libayatana-appindicator'
+  'nss'
+  'libnotify'
+  'libxss'
+  'libxtst'
+  'alsa-lib'
 )
 provides=("$_pkgname")
 conflicts=("$_pkgname" "mterminal-git")
 source=(
   "$_pkgname-$pkgver.AppImage::https://github.com/arthurr0/mTerminal/releases/download/v$pkgver/mTerminal_${pkgver}_amd64.AppImage"
   "https://raw.githubusercontent.com/arthurr0/mTerminal/v$pkgver/packaging/$_pkgname.desktop"
-  "https://raw.githubusercontent.com/arthurr0/mTerminal/v$pkgver/src-tauri/icons/icon.png"
+  "https://raw.githubusercontent.com/arthurr0/mTerminal/v$pkgver/build/icon.png"
   "https://raw.githubusercontent.com/arthurr0/mTerminal/v$pkgver/LICENSE"
 )
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')

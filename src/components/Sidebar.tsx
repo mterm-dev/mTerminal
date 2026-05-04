@@ -399,12 +399,26 @@ export function Sidebar(props: Props) {
                 }}
               >
                 <button
-                  className="chevron"
+                  className={`chevron ${g.collapsed ? "collapsed" : ""}`}
                   aria-label={g.collapsed ? "expand group" : "collapse group"}
                   onClick={() => onToggleGroup(g.id)}
                   title={g.collapsed ? "expand" : "collapse"}
                 >
-                  {g.collapsed ? "▸" : "▾"}
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 10 10"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M2.5 3.5 L5 6 L7.5 3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </button>
                 <span
                   className="term-group-name"

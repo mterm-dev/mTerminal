@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# mTerminal install script — builds release binary and installs system-wide for current user.
+# mTerminal install script — builds Electron AppImage and installs for current user.
 # Usage:
 #   ./install.sh                  # install to ~/.local
 #   ./install.sh --system         # install to /usr/local (requires sudo)
@@ -38,7 +38,7 @@ BIN_DIR="$PREFIX/bin"
 APP_DIR="$PREFIX/share/applications"
 ICON_ROOT="$PREFIX/share/icons/hicolor"
 LICENSE_DIR="$PREFIX/share/licenses/$APP_NAME"
-ICON_SIZES=(32 128 256 512)
+ICON_SIZES=(512)
 
 if [[ "$ACTION" == "uninstall" ]]; then
   echo "→ removing $APP_DISPLAY from $PREFIX"
@@ -63,9 +63,8 @@ fi
 need() {
   command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; }
 }
-need cargo
 need pnpm
-need rustc
+need node
 
 cd "$REPO_ROOT"
 
@@ -73,32 +72,34 @@ cd "$REPO_ROOT"
 echo "→ installing JS deps"
 pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
-echo "→ building release bundle (this can take a few minutes)"
-WEBKIT_DISABLE_DMABUF_RENDERER=1 pnpm tauri build --no-bundle
+echo "→ rebuilding native modules (node-pty against Electron ABI)"
+pnpm exec electron-rebuild -f -w node-pty
 
-BIN_SRC="$REPO_ROOT/src-tauri/target/release/$APP_NAME"
-if [[ ! -x "$BIN_SRC" ]]; then
-  echo "build failed: $BIN_SRC not found" >&2
+echo "→ building AppImage (this can take a few minutes)"
+pnpm package:linux
+
+# Locate produced AppImage. electron-builder writes to release/.
+APPIMAGE_SRC="$(find "$REPO_ROOT/release" -maxdepth 2 -type f -name '*.AppImage' -print -quit 2>/dev/null || true)"
+if [[ -z "${APPIMAGE_SRC:-}" || ! -f "$APPIMAGE_SRC" ]]; then
+  echo "build failed: no AppImage found under $REPO_ROOT/release" >&2
   exit 1
 fi
 
-ICON_DIR_SRC="$REPO_ROOT/src-tauri/icons"
+ICON_DIR_SRC="$REPO_ROOT/build"
 DESKTOP_SRC="$REPO_ROOT/packaging/$APP_NAME.desktop"
 
 # ── install ──────────────────────────────────────────────────────
 echo "→ installing to $PREFIX"
-$SUDO install -Dm755 "$BIN_SRC"     "$BIN_DIR/$APP_NAME"
-$SUDO install -Dm644 "$DESKTOP_SRC" "$APP_DIR/$APP_NAME.desktop"
-for s in "${ICON_SIZES[@]}"; do
-  case "$s" in
-    32)  SRC="$ICON_DIR_SRC/32x32.png" ;;
-    128) SRC="$ICON_DIR_SRC/128x128.png" ;;
-    256) SRC="$ICON_DIR_SRC/128x128@2x.png" ;;
-    512) SRC="$ICON_DIR_SRC/512x512.png" ;;
-  esac
-  $SUDO install -Dm644 "$SRC" "$ICON_ROOT/${s}x${s}/apps/$APP_NAME.png"
-done
-$SUDO install -Dm644 "$ICON_DIR_SRC/icon.svg" "$ICON_ROOT/scalable/apps/$APP_NAME.svg"
+$SUDO install -Dm755 "$APPIMAGE_SRC" "$BIN_DIR/$APP_NAME"
+
+if [[ -f "$DESKTOP_SRC" ]]; then
+  $SUDO install -Dm644 "$DESKTOP_SRC" "$APP_DIR/$APP_NAME.desktop"
+fi
+
+if [[ -d "$ICON_DIR_SRC" ]]; then
+  [[ -f "$ICON_DIR_SRC/icon.png" ]] && $SUDO install -Dm644 "$ICON_DIR_SRC/icon.png" "$ICON_ROOT/512x512/apps/$APP_NAME.png" || true
+  [[ -f "$ICON_DIR_SRC/icon.svg" ]] && $SUDO install -Dm644 "$ICON_DIR_SRC/icon.svg" "$ICON_ROOT/scalable/apps/$APP_NAME.svg" || true
+fi
 $SUDO install -Dm644 "$REPO_ROOT/LICENSE" "$LICENSE_DIR/LICENSE"
 
 if command -v update-desktop-database >/dev/null 2>&1; then

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "./lib/tauri-shim";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
@@ -20,7 +20,7 @@ import { useMcpServer } from "./hooks/useMcpServer";
 import { AICommandPalette } from "./components/AICommandPalette";
 import { ExplainPopover } from "./components/ExplainPopover";
 import { AIPanel } from "./components/AIPanel";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./lib/tauri-shim";
 import type { AiUsage } from "./hooks/useAI";
 import {
   useRemoteHosts,

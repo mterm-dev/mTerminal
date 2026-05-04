@@ -1,14 +1,13 @@
 <#
 .SYNOPSIS
-  mTerminal Windows installer — builds NSIS bundle and runs it silently.
+  mTerminal Windows installer — builds Electron NSIS bundle and runs it.
 
 .PARAMETER Mode
   PerUser (default) installs to %LocalAppData%\Programs\mTerminal.
   System installs to Program Files (requires elevation).
 
 .PARAMETER SkipBuild
-  Skip the build step and use an existing NSIS installer in
-  src-tauri\target\release\bundle\nsis\.
+  Skip the build step and use an existing NSIS installer in release\.
 
 .PARAMETER Uninstall
   Run the registered uninstaller.
@@ -73,8 +72,7 @@ function Need($name) {
 
 if (-not $SkipBuild) {
     Need 'pnpm'
-    Need 'cargo'
-    Need 'rustc'
+    Need 'node'
 }
 
 Set-Location $RepoRoot
@@ -85,13 +83,17 @@ if (-not $SkipBuild) {
     & pnpm install
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    Write-Host '→ building release bundle (this can take a few minutes)'
-    & pnpm tauri build --bundles nsis
+    Write-Host '→ rebuilding native modules (node-pty)'
+    & pnpm rebuild
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    Write-Host '→ building NSIS bundle (this can take a few minutes)'
+    & pnpm package:win
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-$bundleDir = Join-Path $RepoRoot 'src-tauri\target\release\bundle\nsis'
-$installer = Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -ErrorAction SilentlyContinue |
+$bundleDir = Join-Path $RepoRoot 'release'
+$installer = Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -Recurse -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 
@@ -101,9 +103,8 @@ if (-not $installer) {
 }
 
 # ── install ──────────────────────────────────────────────────────
-# NSIS installer is configured for currentUser (per tauri.conf.json).
-# /S = silent. -Mode System is best-effort: requires the bundle to be built
-# with installMode: perMachine; otherwise the installer ignores it.
+# /S = silent. -Mode System requests elevation; the NSIS bundle is configured
+# perMachine: false so per-user installs don't prompt.
 Write-Host "→ running installer: $($installer.FullName)"
 $nsisArgs = @('/S')
 $verb = if ($Mode -eq 'System') { 'RunAs' } else { 'Open' }

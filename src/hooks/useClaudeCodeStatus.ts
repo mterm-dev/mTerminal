@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
+  invoke,
   isPermissionGranted,
   requestPermission,
   sendNotification,
-} from "@tauri-apps/plugin-notification";
+} from "../lib/tauri-shim";
 
 export type CcState = "none" | "idle" | "thinking" | "awaitingInput";
 
@@ -84,9 +84,7 @@ export function useClaudeCodeStatus(
           if (s.state !== "awaitingInput") {
             lastNotifiedRef.current.delete(tabId);
           }
-        } catch {
-          // session may have ended
-        }
+        } catch {}
       }
       if (!cancelled) setStatuses(next);
     };

@@ -1,4 +1,4 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "../lib/tauri-shim";
 import { useMaximized } from "../hooks/useMaximized";
 
 interface Props {

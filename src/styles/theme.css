@@ -28,7 +28,7 @@
 
   /* shell window background — opacity-aware */
   --window-opacity: 1;
-  --bg-shell: color-mix(in srgb, var(--bg-base) calc(var(--window-opacity) * 100%), transparent);
+  --bg-shell: var(--bg-base);
 
   /* text */
   --fg:         var(--n-900);
@@ -121,6 +121,21 @@ html, body {
 }
 
 /* ── titlebar ────────────────────────────────────────────── */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+button,
+input,
+select,
+textarea,
+a,
+[role="button"],
+[contenteditable="true"] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
 .term-titlebar {
   height: 38px;
   display: flex;
@@ -398,17 +413,20 @@ body.resizing-sidebar * {
 .term-group-h .chevron {
   background: transparent;
   border: 0;
-  color: var(--fg-dim);
+  color: var(--fg-muted);
   cursor: pointer;
-  font-size: 10px;
-  padding: 2px;
-  width: 16px;
+  padding: 0;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: var(--r-sm);
+  transition: color 0.12s, background 0.12s, transform 0.15s ease;
 }
-.term-group-h .chevron:hover { color: var(--fg); }
+.term-group-h .chevron.collapsed { transform: rotate(-90deg); }
+.term-group-h .chevron:hover { color: var(--fg); background: var(--bg-hover); }
 .term-group-name {
   flex: 1;
   min-width: 0;

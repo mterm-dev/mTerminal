@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/tauri-shim";
 
 const PROVIDERS = ["anthropic", "openai"] as const;
 type ProviderId = (typeof PROVIDERS)[number];

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "../lib/tauri-shim";
 
 export function useMaximized(): boolean {
   const [maximized, setMaximized] = useState(false);

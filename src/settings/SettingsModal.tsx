@@ -732,7 +732,7 @@ function About() {
       <div className="settings-about-ver">v0.1.0</div>
       <p>Custom terminal emulator with grouped tabs.</p>
       <p className="dim">
-        Built with Tauri 2 · React · xterm.js · portable-pty.
+        Built with Electron · React 19 · xterm.js · node-pty.
       </p>
       <p className="dim">
         <a

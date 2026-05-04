@@ -2,8 +2,7 @@ import { useEffect, useRef } from "react";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { Channel, invoke } from "@tauri-apps/api/core";
-import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { Channel, invoke, readText, writeText } from "../lib/tauri-shim";
 import type { CursorStyle } from "../settings/useSettings";
 
 type TabKind = "local" | "remote";

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "../lib/tauri-shim";
 
 export interface AiMessage {
   role: "user" | "assistant" | "system";

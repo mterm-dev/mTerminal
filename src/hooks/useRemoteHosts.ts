@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/tauri-shim";
 import { GROUP_ACCENTS, type GroupAccent } from "./useWorkspace";
 
 export interface HostMeta {

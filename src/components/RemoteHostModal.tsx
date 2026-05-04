@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "../lib/tauri-shim";
 import {
   type HostMeta,
   type SshKey,

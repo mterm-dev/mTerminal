@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Migrated runtime from Tauri 2 / Rust to Electron + electron-vite + TypeScript.** All backend logic ported to the Node main process under `electron/main/`; `src-tauri/` removed.
+  - PTY: `portable-pty` (Rust) → `node-pty`. Rebuild via `pnpm exec electron-rebuild -f -w node-pty`.
+  - Vault: file format unchanged (XChaCha20-Poly1305 + Argon2id) — existing `vault.bin` unlocks against the new build. Crypto via `@noble/ciphers` + `@noble/hashes`.
+  - IPC: Tauri `invoke` / `Channel` → Electron `ipcMain.handle` / `webContents.send`. Preload exposes a typed `window.mt` namespace; renderer uses a `tauri-shim` compatibility layer so existing components work unchanged.
+  - Bundling: `tauri build` → `electron-builder`. Linux outputs AppImage + deb under `release/`; Windows outputs an NSIS installer. WebView2 is no longer needed — Electron ships its own Chromium.
+- Build commands changed: `pnpm tauri:dev` → `pnpm dev`, `pnpm tauri:build` → `pnpm package` (or `package:linux` / `package:win`).
+
 ## [0.2.0] - 2026-05-04
 
 ### Added

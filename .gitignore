@@ -1,7 +1,9 @@
 node_modules
+node_modules/.cache
 dist
-src-tauri/target
-src-tauri/gen
+out/
+release/
+*.tsbuildinfo
 .DS_Store
 *.log
 
@@ -29,4 +31,3 @@ packaging/*.deb
 # but ignore the original .napkin sources
 terminal/project/scraps/*.napkin
 terminal/project/scraps/*.thumbnail.png
-/tsconfig.tsbuildinfo
