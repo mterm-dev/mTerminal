@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, type ReactNode, useRef, useState } from "react";
 import type { Group, Tab } from "../hooks/useWorkspace";
 import { InlineEdit } from "./InlineEdit";
 
@@ -27,6 +27,9 @@ interface Props {
   onOpenSettings: () => void;
   activeGroupId: string | null;
   onSelectGroup: (id: string) => void;
+  remoteSlot?: ReactNode;
+  width: number;
+  onResize: (w: number) => void;
 }
 
 type DropMark =
@@ -55,7 +58,36 @@ export function Sidebar(props: Props) {
     onOpenSettings,
     activeGroupId,
     onSelectGroup,
+    remoteSlot,
+    width,
+    onResize,
   } = props;
+
+  const onResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = width;
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const next = Math.max(200, Math.min(600, startW + (ev.clientX - startX)));
+      onResize(next);
+    };
+    const up = (ev: PointerEvent) => {
+      try {
+        target.releasePointerCapture(ev.pointerId);
+      } catch {}
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing-sidebar");
+    };
+    document.body.classList.add("resizing-sidebar");
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+  };
+
+  const localTabs = tabs.filter((t) => t.kind !== "remote");
+  const remoteTabs = tabs.filter((t) => t.kind === "remote");
 
   const [dragTabId, setDragTabId] = useState<number | null>(null);
   const [dropMark, setDropMark] = useState<DropMark | null>(null);
@@ -66,7 +98,7 @@ export function Sidebar(props: Props) {
   const tabIndexMap = new Map<number, number>();
   tabs.forEach((t, i) => tabIndexMap.set(t.id, i));
 
-  const ungroupedTabs = tabs.filter((t) => t.groupId === null);
+  const ungroupedTabs = localTabs.filter((t) => t.groupId === null);
 
   const focusTabByOffset = (currentId: number, offset: number) => {
     const idx = tabs.findIndex((t) => t.id === currentId);
@@ -251,7 +283,7 @@ export function Sidebar(props: Props) {
       </div>
 
       <div className="term-side-section term-side-section-row">
-        <span>Workspace</span>
+        <span>local workspace</span>
         <div className="term-side-actions">
           <button
             className="ghost-btn"
@@ -404,7 +436,28 @@ export function Sidebar(props: Props) {
             tip — click <span className="kbd">+ group</span> to organize tabs
           </div>
         )}
+
+        {remoteSlot}
+
+        {remoteTabs.length > 0 && (
+          <div className="term-remote-tabs">
+            <div className="term-side-section term-side-section-row term-side-subsection">
+              <span>remote sessions</span>
+            </div>
+            {remoteTabs.map((t) => renderTab(t, remoteTabs))}
+          </div>
+        )}
       </div>
+
+      <div
+        className="term-side-resize"
+        role="separator"
+        aria-label="resize sidebar"
+        aria-orientation="vertical"
+        onPointerDown={onResizeStart}
+        onDoubleClick={() => onResize(300)}
+        title="drag to resize · double-click to reset"
+      />
 
       <div className="term-side-foot">
         <button className="settings-btn" onClick={onOpenSettings}>

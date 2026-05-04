@@ -74,7 +74,7 @@
   --t-lg: 14px;
 
   /* layout */
-  --side-w: 248px;
+  --side-w: 300px;
 }
 
 * { box-sizing: border-box; }
@@ -219,6 +219,31 @@ html, body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
+}
+
+.term-side-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background 120ms ease;
+}
+.term-side-resize:hover,
+body.resizing-sidebar .term-side-resize {
+  background: var(--accent);
+  opacity: 0.35;
+}
+body.resizing-sidebar {
+  cursor: ew-resize;
+  user-select: none;
+}
+body.resizing-sidebar * {
+  user-select: none;
 }
 .term-shell.sidebar-collapsed .term-side {
   display: none;
@@ -1068,9 +1093,6 @@ html, body {
 .settings-about a:hover { text-decoration: underline; }
 
 /* ── responsive ──────────────────────────────────────────── */
-@media (max-width: 900px) {
-  :root { --side-w: 220px; }
-}
 @media (max-width: 760px) {
   .term-shell:not(.sidebar-collapsed) .term-side {
     position: absolute;
@@ -1155,6 +1177,208 @@ html, body {
 .confirm-btn-primary:hover {
   filter: brightness(1.08);
   background: var(--accent);
+}
+
+/* Remote workspace + vault modals */
+
+.term-side-subsection {
+  opacity: 0.7;
+  font-size: 0.85em;
+  margin-top: 8px;
+}
+
+.remote-workspace {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 4px;
+}
+
+.remote-host-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 4px 8px;
+}
+
+.remote-host {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  border: 1px solid transparent;
+}
+
+.remote-host:hover {
+  background: var(--bg-hover);
+}
+
+.remote-host:focus-visible {
+  border-color: var(--accent);
+}
+
+.remote-host-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.vault-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+}
+
+.remote-host-label {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.remote-host-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.remote-host-sub {
+  font-size: 0.78em;
+  opacity: 0.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.term-remote-tabs {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+/* Vault + host dialogs */
+
+.vault-dialog,
+.host-dialog {
+  flex-direction: column;
+  width: min(520px, 92vw);
+  max-height: 84vh;
+  display: flex;
+}
+
+.host-dialog {
+  width: min(560px, 92vw);
+}
+
+.vault-body,
+.host-body {
+  padding: 16px 18px 18px 18px;
+  overflow-y: auto;
+}
+
+.settings-title {
+  font-weight: 600;
+}
+
+.settings-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 1.4em;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 6px;
+  opacity: 0.7;
+}
+.settings-close:hover {
+  opacity: 1;
+}
+
+.settings-input {
+  width: 100%;
+  background: var(--bg-input, var(--bg-elev));
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+}
+.settings-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.settings-field-row {
+  display: flex;
+  gap: 10px;
+}
+.settings-field-row > .settings-field {
+  flex: 1 1 auto;
+}
+
+.settings-field-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.auth-radio {
+  display: flex;
+  gap: 8px;
+}
+.auth-opt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  text-transform: lowercase;
+}
+.auth-opt input {
+  appearance: none;
+  margin: 0;
+}
+.auth-opt.active {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.key-picker {
+  display: flex;
+  gap: 8px;
+}
+.key-picker .settings-input {
+  flex: 1 1 auto;
+}
+
+.vault-error {
+  background: rgba(220, 80, 80, 0.12);
+  border: 1px solid rgba(220, 80, 80, 0.4);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 10px 0 4px 0;
+  font-size: 0.9em;
+  color: var(--c-red, #e06b6b);
+}
+
+.vault-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 @media (prefers-reduced-motion: reduce) {

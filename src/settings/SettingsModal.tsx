@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Section = "appearance" | "terminal" | "shell" | "behavior" | "about";
+type Section = "appearance" | "terminal" | "shell" | "behavior" | "remote" | "about";
 
 export function SettingsModal({ settings, update, reset, onClose }: Props) {
   const [section, setSection] = useState<Section>("appearance");
@@ -43,6 +43,7 @@ export function SettingsModal({ settings, update, reset, onClose }: Props) {
               ["terminal", "Terminal"],
               ["shell", "Shell"],
               ["behavior", "Behavior"],
+              ["remote", "Remote"],
               ["about", "About"],
             ] as [Section, string][]
           ).map(([k, label]) => (
@@ -89,6 +90,9 @@ export function SettingsModal({ settings, update, reset, onClose }: Props) {
             {section === "behavior" && (
               <BehaviorPanel settings={settings} update={update} />
             )}
+            {section === "remote" && (
+              <RemotePanel settings={settings} update={update} />
+            )}
             {section === "about" && <About />}
           </div>
         </main>
@@ -103,6 +107,7 @@ function labelFor(s: Section): string {
     terminal: "Terminal",
     shell: "Shell",
     behavior: "Behavior",
+    remote: "Remote",
     about: "About",
   }[s];
 }
@@ -309,6 +314,36 @@ function BehaviorPanel({
           onChange={(b) => update("copyOnSelect", b)}
         />
       </Field>
+    </>
+  );
+}
+
+function RemotePanel({
+  settings,
+  update,
+}: {
+  settings: Settings;
+  update: Props["update"];
+}) {
+  return (
+    <>
+      <Field
+        label="Remote workspace"
+        hint="adds an SSH workspace to the sidebar with saved hosts, key picker, and master-password protected vault for saved passwords"
+      >
+        <Toggle
+          checked={settings.remoteWorkspaceEnabled}
+          onChange={(b) => update("remoteWorkspaceEnabled", b)}
+        />
+      </Field>
+      <div className="settings-note">
+        when enabled, hosts are stored in <code>$XDG_CONFIG_HOME/mterminal/hosts.json</code>.
+        saved passwords are encrypted with your master password
+        (<code>vault.bin</code>) using Argon2id + XChaCha20-Poly1305.
+        password auth requires <code>sshpass</code>; key auth and ssh-agent work without it.
+        disabling this hides the sidebar section but does NOT delete saved data —
+        re-enabling restores everything. running remote sessions are not killed.
+      </div>
     </>
   );
 }

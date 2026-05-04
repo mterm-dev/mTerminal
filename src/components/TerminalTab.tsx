@@ -2,10 +2,11 @@ import { useEffect, useRef } from "react";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { CanvasAddon } from "@xterm/addon-canvas";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { CursorStyle } from "../settings/useSettings";
+
+type TabKind = "local" | "remote";
 
 interface Props {
   tabId: number;
@@ -23,6 +24,9 @@ interface Props {
   shell: string;
   shellArgs: string[];
   copyOnSelect: boolean;
+  kind?: TabKind;
+  remoteHostId?: string;
+  remoteBanner?: string;
 }
 
 type PtyEvent =
@@ -45,6 +49,9 @@ export function TerminalTab({
   shell,
   shellArgs,
   copyOnSelect,
+  kind = "local",
+  remoteHostId,
+  remoteBanner,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -55,6 +62,7 @@ export function TerminalTab({
   const onInfoRef = useRef(onInfo);
   onInfoRef.current = onInfo;
   const initialShellRef = useRef({ shell, shellArgs });
+  const initialRemoteRef = useRef({ kind, remoteHostId, remoteBanner });
   const mouseDownTargetRef = useRef<EventTarget | null>(null);
 
   useEffect(() => {
@@ -79,9 +87,6 @@ export function TerminalTab({
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon());
     term.open(host);
-    try {
-      term.loadAddon(new CanvasAddon());
-    } catch {}
 
     let disposed = false;
     const pendingInput: string[] = [];
@@ -168,13 +173,27 @@ export function TerminalTab({
     const start = async () => {
       try {
         const init = initialShellRef.current;
-        const id = await invoke<number>("pty_spawn", {
-          events,
-          rows: term.rows,
-          cols: term.cols,
-          shell: init.shell || null,
-          args: init.shellArgs.length ? init.shellArgs : null,
-        });
+        const remote = initialRemoteRef.current;
+        let id: number;
+        if (remote.kind === "remote" && remote.remoteHostId) {
+          if (remote.remoteBanner) {
+            term.write(`\x1b[2m${remote.remoteBanner}\x1b[0m\r\n`);
+          }
+          id = await invoke<number>("ssh_spawn", {
+            events,
+            rows: term.rows,
+            cols: term.cols,
+            hostId: remote.remoteHostId,
+          });
+        } else {
+          id = await invoke<number>("pty_spawn", {
+            events,
+            rows: term.rows,
+            cols: term.cols,
+            shell: init.shell || null,
+            args: init.shellArgs.length ? init.shellArgs : null,
+          });
+        }
         if (disposed) {
           await invoke("pty_kill", { id }).catch(() => {});
           return;
@@ -241,6 +260,7 @@ export function TerminalTab({
 
   useEffect(() => {
     if (!active) return;
+    if (initialRemoteRef.current.kind === "remote") return;
     let cancelled = false;
     const pollInfo = async () => {
       const id = ptyIdRef.current;

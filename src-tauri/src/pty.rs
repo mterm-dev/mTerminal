@@ -77,15 +77,15 @@ pub fn pty_spawn(
     shell: Option<String>,
     args: Option<Vec<String>>,
 ) -> Result<u32, String> {
-    spawn_internal(events, rows, cols, shell, args.unwrap_or_default()).map_err(|e| e.to_string())
+    let cmd = shell_command(shell.as_deref(), &args.unwrap_or_default());
+    spawn_with_command(events, rows, cols, cmd).map_err(|e| e.to_string())
 }
 
-fn spawn_internal(
+pub fn spawn_with_command(
     events: Channel<PtyEvent>,
     rows: u16,
     cols: u16,
-    shell_override: Option<String>,
-    args: Vec<String>,
+    cmd: CommandBuilder,
 ) -> Result<u32> {
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(PtySize {
@@ -95,7 +95,6 @@ fn spawn_internal(
         pixel_height: 0,
     })?;
 
-    let cmd = shell_command(shell_override.as_deref(), &args);
     let child = pair.slave.spawn_command(cmd)?;
     drop(pair.slave);
 

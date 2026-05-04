@@ -1,13 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TerminalTab } from "./components/TerminalTab";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
+import { RemoteWorkspace } from "./components/RemoteWorkspace";
+import {
+  MasterPasswordModal,
+  type MasterPasswordMode,
+} from "./components/MasterPasswordModal";
+import { RemoteHostModal } from "./components/RemoteHostModal";
 import { GROUP_ACCENTS, useWorkspace } from "./hooks/useWorkspace";
 import { useSystemInfo } from "./hooks/useSystemInfo";
 import { useMaximized } from "./hooks/useMaximized";
+import { useVault } from "./hooks/useVault";
+import {
+  useRemoteHosts,
+  type HostGroup,
+  type HostMeta,
+} from "./hooks/useRemoteHosts";
 import { useSettings } from "./settings/useSettings";
 import { findTheme } from "./settings/themes";
 import { SettingsModal } from "./settings/SettingsModal";
@@ -30,6 +42,19 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [closeConfirm, setCloseConfirm] = useState<{ count: number } | null>(null);
   const [gridGroupId, setGridGroupId] = useState<string | null>(null);
+  const [hostModal, setHostModal] = useState<{
+    initial: HostMeta | null;
+    presetGroupId?: string | null;
+  } | null>(null);
+  const [editingHostGroupId, setEditingHostGroupId] = useState<string | null>(null);
+  const [vaultModal, setVaultModal] = useState<{ mode: MasterPasswordMode } | null>(null);
+  const [pendingAfterUnlock, setPendingAfterUnlock] = useState<(() => void) | null>(null);
+
+  const vault = useVault(settings.remoteWorkspaceEnabled);
+  const remote = useRemoteHosts(
+    settings.remoteWorkspaceEnabled,
+    vault.status.unlocked,
+  );
 
   const tabsRef = useRef(ws.tabs);
   tabsRef.current = ws.tabs;
@@ -59,6 +84,11 @@ export default function App() {
       String(settings.windowOpacity),
     );
   }, [settings.windowOpacity]);
+
+  useEffect(() => {
+    const w = Math.max(200, Math.min(600, settings.sidebarWidth || 300));
+    document.documentElement.style.setProperty("--side-w", `${w}px`);
+  }, [settings.sidebarWidth]);
 
   useEffect(() => {
     const apply = () => {
@@ -143,6 +173,148 @@ export default function App() {
     setGridGroupId(null);
     ws.setActive(id);
   };
+
+  const requestVault = useCallback(
+    (mode: MasterPasswordMode, after?: () => void) => {
+      if (after) setPendingAfterUnlock(() => after);
+      setVaultModal({ mode });
+    },
+    [],
+  );
+
+  const ensureVaultUnlocked = useCallback(
+    (after: () => void) => {
+      if (!vault.status.exists) {
+        requestVault("init", after);
+        return false;
+      }
+      if (!vault.status.unlocked) {
+        requestVault("unlock", after);
+        return false;
+      }
+      return true;
+    },
+    [vault.status, requestVault],
+  );
+
+  const connectToHost = useCallback(
+    (host: HostMeta) => {
+      const needsVault = host.auth === "password" && host.savePassword;
+      const doConnect = () => {
+        const label = host.name?.trim() || `${host.user}@${host.host}`;
+        ws.addRemoteTab(host.id, label);
+        setGridGroupId(null);
+      };
+      if (needsVault && !ensureVaultUnlocked(doConnect)) return;
+      doConnect();
+    },
+    [ws, ensureVaultUnlocked],
+  );
+
+  const openAddHost = (groupId?: string | null) => {
+    if (!vault.status.exists) {
+      requestVault("init", () =>
+        setHostModal({ initial: null, presetGroupId: groupId ?? null }),
+      );
+      return;
+    }
+    setHostModal({ initial: null, presetGroupId: groupId ?? null });
+  };
+
+  const openEditHost = (host: HostMeta) =>
+    setHostModal({ initial: host, presetGroupId: host.groupId ?? null });
+
+  const handleHostSubmit = useCallback(
+    async (host: HostMeta, password?: string) => {
+      const willSavePw = host.auth === "password" && host.savePassword;
+      if (willSavePw && !vault.status.unlocked) {
+        requestVault("unlock", () => {
+          remote.save(host, password).catch(() => {});
+        });
+        throw new Error("vault locked — unlocking...");
+      }
+      await remote.save(host, password);
+    },
+    [remote, vault.status.unlocked, requestVault],
+  );
+
+  const handleHostDelete = useCallback(
+    async (host: HostMeta) => {
+      await remote.remove(host.id);
+    },
+    [remote],
+  );
+
+  const openHostMenu = (host: HostMeta, x: number, y: number) => {
+    const otherGroups = remote.groups.filter((g) => g.id !== host.groupId);
+    const moveItems: MenuItem[] = [];
+    if (host.groupId) {
+      moveItems.push({
+        label: "move to → ungrouped",
+        onSelect: () =>
+          remote.setHostGroup(host.id, null).catch(() => {}),
+      });
+    }
+    for (const g of otherGroups) {
+      moveItems.push({
+        label: `move to → ${g.name}`,
+        onSelect: () =>
+          remote.setHostGroup(host.id, g.id).catch(() => {}),
+      });
+    }
+    const items: MenuItem[] = [
+      { label: "connect", onSelect: () => connectToHost(host) },
+      { label: "edit", onSelect: () => openEditHost(host) },
+      ...(moveItems.length
+        ? [
+            { label: "", onSelect: () => {}, separator: true } as MenuItem,
+            ...moveItems,
+          ]
+        : []),
+      { label: "", onSelect: () => {}, separator: true },
+      {
+        label: "delete",
+        onSelect: () => handleHostDelete(host).catch(() => {}),
+        danger: true,
+      },
+    ];
+    setCtx({ x, y, items });
+  };
+
+  const openHostGroupMenu = (group: HostGroup, x: number, y: number) => {
+    const items: MenuItem[] = [
+      { label: "rename group", onSelect: () => setEditingHostGroupId(group.id) },
+      { label: "new host here", onSelect: () => openAddHost(group.id) },
+      {
+        label: "toggle collapse",
+        onSelect: () => remote.toggleGroup(group.id).catch(() => {}),
+      },
+      { label: "", onSelect: () => {}, separator: true },
+      ...GROUP_ACCENTS.map<MenuItem>((c) => ({
+        label: `accent: ${c}`,
+        onSelect: () => remote.setGroupAccent(group.id, c).catch(() => {}),
+      })),
+      { label: "", onSelect: () => {}, separator: true },
+      {
+        label: "delete group",
+        onSelect: () => remote.deleteGroup(group.id).catch(() => {}),
+        danger: true,
+      },
+    ];
+    setCtx({ x, y, items });
+  };
+
+  const onLockClick = useCallback(() => {
+    if (!vault.status.exists) {
+      requestVault("init");
+      return;
+    }
+    if (vault.status.unlocked) {
+      vault.lock().catch(() => {});
+    } else {
+      requestVault("unlock");
+    }
+  }, [vault, requestVault]);
 
   const selectGroup = (id: string) => {
     const tabsInGroup = ws.tabs.filter((t) => t.groupId === id);
@@ -304,6 +476,32 @@ export default function App() {
           onOpenSettings={() => setShowSettings(true)}
           activeGroupId={gridGroupId}
           onSelectGroup={selectGroup}
+          width={settings.sidebarWidth}
+          onResize={(w) => update("sidebarWidth", w)}
+          remoteSlot={
+            settings.remoteWorkspaceEnabled ? (
+              <RemoteWorkspace
+                hosts={remote.hosts}
+                groups={remote.groups}
+                vault={vault.status}
+                onAddHost={openAddHost}
+                onConnect={connectToHost}
+                onLockClick={onLockClick}
+                onHostContextMenu={openHostMenu}
+                onGroupContextMenu={openHostGroupMenu}
+                onAddGroup={() => remote.addGroup().catch(() => {})}
+                onToggleGroup={(id) => remote.toggleGroup(id).catch(() => {})}
+                onRenameGroup={(id, name) =>
+                  remote.renameGroup(id, name).catch(() => {})
+                }
+                onSetHostGroup={(hid, gid) =>
+                  remote.setHostGroup(hid, gid).catch(() => {})
+                }
+                editingGroupId={editingHostGroupId}
+                setEditingGroupId={setEditingHostGroupId}
+              />
+            ) : null
+          }
         />
 
         <main className="term-main">
@@ -318,30 +516,44 @@ export default function App() {
                 : undefined
             }
           >
-            {ws.tabs.map((t) => (
-              <TerminalTab
-                key={t.id}
-                tabId={t.id}
-                active={visibleTabIds.has(t.id)}
-                gridSlot={
-                  gridDims && t.groupId === gridGroupId
-                    ? gridTabs.findIndex((x) => x.id === t.id)
-                    : null
-                }
-                onExit={(id) => ws.closeTab(id)}
-                onInfo={ws.updateTabInfo}
-                fontFamily={settings.fontFamily}
-                fontSize={settings.fontSize}
-                lineHeight={settings.lineHeight}
-                cursorStyle={settings.cursorStyle}
-                cursorBlink={settings.cursorBlink}
-                scrollback={settings.scrollback}
-                theme={theme.xterm}
-                shell={settings.shellOverride}
-                shellArgs={shellArgs}
-                copyOnSelect={settings.copyOnSelect}
-              />
-            ))}
+            {ws.tabs.map((t) => {
+              const remoteHost =
+                t.kind === "remote" && t.remoteHostId
+                  ? remote.hosts.find((h) => h.id === t.remoteHostId)
+                  : undefined;
+              const banner = remoteHost
+                ? `connecting to ${remoteHost.user}@${remoteHost.host}:${remoteHost.port}...`
+                : t.kind === "remote"
+                  ? "connecting to remote host..."
+                  : undefined;
+              return (
+                <TerminalTab
+                  key={t.id}
+                  tabId={t.id}
+                  active={visibleTabIds.has(t.id)}
+                  gridSlot={
+                    gridDims && t.groupId === gridGroupId
+                      ? gridTabs.findIndex((x) => x.id === t.id)
+                      : null
+                  }
+                  onExit={(id) => ws.closeTab(id)}
+                  onInfo={ws.updateTabInfo}
+                  fontFamily={settings.fontFamily}
+                  fontSize={settings.fontSize}
+                  lineHeight={settings.lineHeight}
+                  cursorStyle={settings.cursorStyle}
+                  cursorBlink={settings.cursorBlink}
+                  scrollback={settings.scrollback}
+                  theme={theme.xterm}
+                  shell={settings.shellOverride}
+                  shellArgs={shellArgs}
+                  copyOnSelect={settings.copyOnSelect}
+                  kind={t.kind}
+                  remoteHostId={t.remoteHostId}
+                  remoteBanner={banner}
+                />
+              );
+            })}
             {ws.tabs.length === 0 && (
               <div className="empty-state">
                 no sessions — <span className="kbd-inline">Ctrl+T</span> to
@@ -384,6 +596,51 @@ export default function App() {
           cancelLabel="cancel"
           onConfirm={confirmQuit}
           onCancel={() => setCloseConfirm(null)}
+        />
+      )}
+
+      {hostModal && (
+        <RemoteHostModal
+          initial={
+            hostModal.initial ??
+            (hostModal.presetGroupId
+              ? ({
+                  id: "",
+                  name: "",
+                  host: "",
+                  port: 22,
+                  user: "",
+                  auth: "key",
+                  identityPath: "",
+                  savePassword: true,
+                  groupId: hostModal.presetGroupId,
+                } as HostMeta)
+              : null)
+          }
+          vaultUnlocked={vault.status.unlocked}
+          onClose={() => setHostModal(null)}
+          onSubmit={handleHostSubmit}
+          onRequestUnlock={() => requestVault(vault.status.exists ? "unlock" : "init")}
+        />
+      )}
+
+      {vaultModal && (
+        <MasterPasswordModal
+          mode={vaultModal.mode}
+          onClose={() => setVaultModal(null)}
+          onInit={async (pw) => {
+            await vault.init(pw);
+            const after = pendingAfterUnlock;
+            setPendingAfterUnlock(null);
+            if (after) after();
+          }}
+          onUnlock={async (pw) => {
+            await vault.unlock(pw);
+            const after = pendingAfterUnlock;
+            setPendingAfterUnlock(null);
+            if (after) after();
+          }}
+          onChange={(oldPw, newPw) => vault.changePassword(oldPw, newPw)}
         />
       )}
     </div>

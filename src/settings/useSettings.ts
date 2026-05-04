@@ -17,6 +17,8 @@ export interface Settings {
   confirmCloseMultipleTabs: boolean;
   copyOnSelect: boolean;
   sidebarCollapsed: boolean;
+  sidebarWidth: number;
+  remoteWorkspaceEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,6 +36,8 @@ export const DEFAULT_SETTINGS: Settings = {
   confirmCloseMultipleTabs: true,
   copyOnSelect: false,
   sidebarCollapsed: false,
+  sidebarWidth: 300,
+  remoteWorkspaceEnabled: false,
 };
 
 const KEY = "mterminal:settings:v1";

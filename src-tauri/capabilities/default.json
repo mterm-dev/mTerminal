@@ -16,6 +16,7 @@
     "core:event:default",
     "os:default",
     "clipboard-manager:allow-write-text",
-    "clipboard-manager:allow-read-text"
+    "clipboard-manager:allow-read-text",
+    "dialog:allow-open"
   ]
 }

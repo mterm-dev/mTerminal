@@ -10,6 +10,8 @@ function basename(p: string): string {
   return parts[parts.length - 1] || "/";
 }
 
+export type TabKind = "local" | "remote";
+
 export interface Tab {
   id: number;
   label: string;
@@ -17,6 +19,8 @@ export interface Tab {
   cwd?: string;
   groupId: string | null;
   autoLabel: boolean;
+  kind: TabKind;
+  remoteHostId?: string;
 }
 
 export const GROUP_ACCENTS = [
@@ -48,12 +52,20 @@ export interface WorkspaceState {
   nextTabId: number;
 }
 
-const STORAGE_KEY = "mterminal:workspace:v1";
+const STORAGE_KEY = "mterminal:workspace:v2";
+const LEGACY_STORAGE_KEY = "mterminal:workspace:v1";
 
 function loadInitial(): WorkspaceState {
   if (typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      let raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacy) {
+          raw = legacy;
+          window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+        }
+      }
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<WorkspaceState>;
         if (
@@ -72,10 +84,13 @@ function loadInitial(): WorkspaceState {
           }));
           const groupIds = new Set(groups.map((g) => g.id));
           const tabs: Tab[] = parsed.tabs.map((t) => {
+            const kind: TabKind = t.kind === "remote" ? "remote" : "local";
             const gid =
-              typeof t.groupId === "string" && groupIds.has(t.groupId)
-                ? t.groupId
-                : null;
+              kind === "remote"
+                ? null
+                : typeof t.groupId === "string" && groupIds.has(t.groupId)
+                  ? t.groupId
+                  : null;
             return {
               id: t.id!,
               label: t.label || "shell",
@@ -83,6 +98,8 @@ function loadInitial(): WorkspaceState {
               cwd: t.cwd,
               groupId: gid,
               autoLabel: t.autoLabel ?? true,
+              kind,
+              remoteHostId: kind === "remote" ? t.remoteHostId : undefined,
             };
           });
           return {
@@ -106,6 +123,7 @@ function loadInitial(): WorkspaceState {
         label: "shell",
         groupId: null,
         autoLabel: true,
+        kind: "local",
       },
     ],
     groups: [],
@@ -135,10 +153,9 @@ export function useWorkspace() {
   const addTab = useCallback((groupId?: string | null): number => {
     let createdId = -1;
     setState((s) => {
-      const targetGroup =
-        groupId === undefined
-          ? s.tabs.find((t) => t.id === s.activeId)?.groupId ?? null
-          : groupId;
+      const active = s.tabs.find((t) => t.id === s.activeId);
+      const activeGroup = active && active.kind === "local" ? active.groupId : null;
+      const targetGroup = groupId === undefined ? activeGroup ?? null : groupId;
       const id = s.nextTabId;
       createdId = id;
       const tab: Tab = {
@@ -146,6 +163,7 @@ export function useWorkspace() {
         label: "shell",
         groupId: targetGroup,
         autoLabel: true,
+        kind: "local",
       };
       return {
         ...s,
@@ -156,6 +174,33 @@ export function useWorkspace() {
     });
     return createdId;
   }, []);
+
+  const addRemoteTab = useCallback(
+    (remoteHostId: string, label: string): number => {
+      let createdId = -1;
+      setState((s) => {
+        const id = s.nextTabId;
+        createdId = id;
+        const tab: Tab = {
+          id,
+          label,
+          groupId: null,
+          autoLabel: false,
+          kind: "remote",
+          remoteHostId,
+          sub: "remote",
+        };
+        return {
+          ...s,
+          tabs: [...s.tabs, tab],
+          activeId: id,
+          nextTabId: id + 1,
+        };
+      });
+      return createdId;
+    },
+    [],
+  );
 
   const closeTab = useCallback((id: number) => {
     setState((s) => {
@@ -191,6 +236,7 @@ export function useWorkspace() {
       setState((s) => {
         const t = s.tabs.find((x) => x.id === id);
         if (!t) return s;
+        if (t.kind === "remote") return s;
         const cwd = info.cwd ?? undefined;
         const cmd = info.cmd ?? undefined;
         const baseFromCwd = info.cwd ? basename(info.cwd) : undefined;
@@ -225,7 +271,9 @@ export function useWorkspace() {
   const moveTab = useCallback((id: number, groupId: string | null) => {
     setState((s) => ({
       ...s,
-      tabs: s.tabs.map((t) => (t.id === id ? { ...t, groupId } : t)),
+      tabs: s.tabs.map((t) =>
+        t.id === id && t.kind === "local" ? { ...t, groupId } : t,
+      ),
     }));
   }, []);
 
@@ -234,8 +282,9 @@ export function useWorkspace() {
       setState((s) => {
         const tab = s.tabs.find((t) => t.id === id);
         if (!tab) return s;
+        if (tab.kind === "remote" && groupId !== null) return s;
         const without = s.tabs.filter((t) => t.id !== id);
-        const updated: Tab = { ...tab, groupId };
+        const updated: Tab = { ...tab, groupId: tab.kind === "remote" ? null : groupId };
         let insertAt: number;
         if (beforeId == null) {
           let lastIdx = -1;
@@ -331,6 +380,7 @@ export function useWorkspace() {
     ...state,
     setActive,
     addTab,
+    addRemoteTab,
     closeTab,
     renameTab,
     updateTabInfo,
