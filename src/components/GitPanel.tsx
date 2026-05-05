@@ -287,6 +287,18 @@ export function GitPanel({
   const files = status?.files ?? [];
 
   useEffect(() => {
+    if (!actionInfo) return;
+    const t = setTimeout(() => setActionInfo(null), 3000);
+    return () => clearTimeout(t);
+  }, [actionInfo]);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 6000);
+    return () => clearTimeout(t);
+  }, [actionError]);
+
+  useEffect(() => {
     setChecked((prev) => {
       const next = new Set<string>();
       const present = new Set(files.map((f) => f.path));
