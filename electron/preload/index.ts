@@ -260,6 +260,18 @@ const api = {
     save: (json: string): Promise<void> =>
       ipcRenderer.invoke('settings:save', json),
   },
+  voice: {
+    transcribe: (args: {
+      engine: 'whisper-cpp' | 'openai'
+      wav: Uint8Array
+      language?: string
+      openaiModel?: string
+      openaiBaseUrl?: string
+      whisperBinPath?: string
+      whisperModelPath?: string
+    }): Promise<{ text: string }> =>
+      ipcRenderer.invoke('voice:transcribe', args),
+  },
 }
 
 contextBridge.exposeInMainWorld('mt', api)

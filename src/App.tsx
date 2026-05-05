@@ -31,6 +31,9 @@ import {
 import { useSettings } from "./settings/useSettings";
 import { findTheme } from "./settings/themes";
 import { SettingsModal } from "./settings/SettingsModal";
+import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
+import { insertDictation } from "./lib/insertDictation";
+import { matchHotkey } from "./lib/hotkey";
 
 interface CtxState {
   x: number;
@@ -265,6 +268,46 @@ export default function App() {
     () => ws.tabs.find((t) => t.id === ws.activeId) ?? null,
     [ws.tabs, ws.activeId],
   );
+
+  const ptyMapRef = useRef(ptyMap);
+  ptyMapRef.current = ptyMap;
+  const activeIdRef = useRef(ws.activeId);
+  activeIdRef.current = ws.activeId;
+
+  const voiceConfig = useMemo(
+    () => ({
+      enabled: settings.voiceEnabled,
+      engine: settings.voiceEngine,
+      language: settings.voiceLanguage,
+      whisperBinPath: settings.voiceWhisperCppBinPath,
+      whisperModelPath: settings.voiceWhisperCppModelPath,
+      openaiModel: settings.voiceOpenaiModel,
+      openaiBaseUrl: settings.voiceOpenaiBaseUrl,
+    }),
+    [
+      settings.voiceEnabled,
+      settings.voiceEngine,
+      settings.voiceLanguage,
+      settings.voiceWhisperCppBinPath,
+      settings.voiceWhisperCppModelPath,
+      settings.voiceOpenaiModel,
+      settings.voiceOpenaiBaseUrl,
+    ],
+  );
+
+  const voice = useVoiceRecognition({
+    config: voiceConfig,
+    onText: (text) => {
+      const aid = activeIdRef.current;
+      const ptyId = aid != null ? ptyMapRef.current.get(aid) : undefined;
+      void insertDictation(text, {
+        activeTabPtyId: ptyId,
+        autoSpace: settingsRef.current.voiceAutoSpace,
+      });
+    },
+  });
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
 
   const gridTabs = useMemo(
     () =>
@@ -535,6 +578,15 @@ export default function App() {
         e.preventDefault();
         setShowSettings(true);
       }
+      const s = settingsRef.current;
+      if (
+        s.voiceEnabled &&
+        s.voiceHotkey &&
+        matchHotkey(e, s.voiceHotkey)
+      ) {
+        e.preventDefault();
+        voiceRef.current.toggle();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -785,6 +837,18 @@ export default function App() {
             tabCount={ws.tabs.length}
             groupCount={ws.groups.length}
             aiUsage={settings.aiEnabled ? aiUsage : undefined}
+            voice={
+              settings.voiceEnabled && settings.voiceShowMicButton
+                ? {
+                    visible: true,
+                    state: voice.state,
+                    onToggle: voice.toggle,
+                    tooltip: voice.error
+                      ? `voice error: ${voice.error}`
+                      : undefined,
+                  }
+                : undefined
+            }
           />
         </main>
       </div>

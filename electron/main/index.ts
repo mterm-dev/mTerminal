@@ -20,6 +20,7 @@ import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
 import { registerWorkspaceHandlers } from './workspace'
 import { registerSettingsHandlers } from './settings-store'
 import { registerGitHandlers } from './git'
+import { registerVoiceHandlers } from './voice'
 
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('disable-features', 'WaylandWpColorManagerV1')
@@ -90,6 +91,7 @@ app
     registerWorkspaceHandlers()
     registerSettingsHandlers()
     registerGitHandlers()
+    registerVoiceHandlers()
     app.on('before-quit', () => {
       void stopMcpServer()
     })

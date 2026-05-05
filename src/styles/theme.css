@@ -1584,6 +1584,58 @@ body.resizing-git-panel * {
   white-space: nowrap;
 }
 
+.term-status .mic-btn {
+  height: 100%;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border-subtle);
+  color: var(--fg-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color 0.12s ease,
+    background-color 0.12s ease;
+}
+.term-status .mic-btn:hover {
+  color: var(--fg);
+  background: var(--bg-elev);
+}
+.term-status .mic-btn.mic-recording {
+  color: var(--p-red, #e06c75);
+  animation: mt-mic-pulse 1.2s ease-in-out infinite;
+}
+.term-status .mic-btn.mic-transcribing {
+  color: var(--accent);
+}
+.term-status .mic-btn.mic-error {
+  color: var(--p-red, #e06c75);
+}
+.term-status .mic-btn .mic-spinner {
+  animation: mt-mic-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+@keyframes mt-mic-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes mt-mic-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── pane host ───────────────────────────────────────────── */
 .term-pane {
   flex: 1;

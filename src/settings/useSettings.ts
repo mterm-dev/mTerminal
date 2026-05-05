@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type CursorStyle = "block" | "bar" | "underline";
 export type AiProviderId = "anthropic" | "openai" | "ollama";
+export type VoiceEngineId = "whisper-cpp" | "openai";
 
 export interface Settings {
   themeId: string;
@@ -44,6 +45,16 @@ export interface Settings {
   gitCommitOllamaModel: string;
   gitCommitOllamaBaseUrl: string;
   gitCommitSystemPrompt: string;
+  voiceEnabled: boolean;
+  voiceEngine: VoiceEngineId;
+  voiceLanguage: string;
+  voiceShowMicButton: boolean;
+  voiceAutoSpace: boolean;
+  voiceHotkey: string;
+  voiceWhisperCppBinPath: string;
+  voiceWhisperCppModelPath: string;
+  voiceOpenaiModel: string;
+  voiceOpenaiBaseUrl: string;
 }
 
 export const DEFAULT_COMMIT_PROMPT = `You are an expert engineer writing a git commit message.
@@ -94,6 +105,16 @@ export const DEFAULT_SETTINGS: Settings = {
   gitCommitOllamaModel: "",
   gitCommitOllamaBaseUrl: "http://localhost:11434/v1",
   gitCommitSystemPrompt: DEFAULT_COMMIT_PROMPT,
+  voiceEnabled: false,
+  voiceEngine: "whisper-cpp",
+  voiceLanguage: "auto",
+  voiceShowMicButton: true,
+  voiceAutoSpace: true,
+  voiceHotkey: "Ctrl+Shift+M",
+  voiceWhisperCppBinPath: "",
+  voiceWhisperCppModelPath: "",
+  voiceOpenaiModel: "whisper-1",
+  voiceOpenaiBaseUrl: "https://api.openai.com/v1",
 };
 
 const KEY = "mterminal:settings:v1";

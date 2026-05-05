@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { Channel, invoke, readText, writeText } from "../lib/tauri-shim";
+import { Channel, invoke, writeText } from "../lib/tauri-shim";
 import type { CursorStyle } from "../settings/useSettings";
 
 type TabKind = "local" | "remote";
@@ -116,41 +116,15 @@ export function TerminalTab({
     const pendingInput: string[] = [];
     let pendingResize: { rows: number; cols: number } | null = null;
 
-    const copySelection = () => {
-      const sel = term.getSelection();
-      if (!sel) return false;
-      writeText(sel).catch(() => {});
-      return true;
-    };
-    const pasteFromClipboard = () => {
-      readText()
-        .then((text) => {
-          if (!text) return;
-          const id = ptyIdRef.current;
-          if (id == null) {
-            pendingInput.push(text);
-            return;
-          }
-          invoke("pty_write", { id, data: text }).catch(() => {});
-        })
-        .catch(() => {});
-    };
-
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown") return true;
-      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
-        const k = e.key.toLowerCase();
-        if (k === "c") {
-          if (copySelection()) {
-            term.clearSelection();
-            return false;
-          }
-        } else if (k === "v") {
-          pasteFromClipboard();
-          return false;
-        }
-      }
-      return true;
+      if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return true;
+      if (e.key.toLowerCase() !== "c") return true;
+      const sel = term.getSelection();
+      if (!sel) return true;
+      writeText(sel).catch(() => {});
+      term.clearSelection();
+      return false;
     });
 
     if (copyOnSelect) {
