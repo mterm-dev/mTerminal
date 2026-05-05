@@ -11,7 +11,8 @@ import {
   type MasterPasswordMode,
 } from "./components/MasterPasswordModal";
 import { RemoteHostModal } from "./components/RemoteHostModal";
-import { GROUP_ACCENTS, useWorkspace } from "./hooks/useWorkspace";
+import { useWorkspace } from "./hooks/useWorkspace";
+import { ColorPicker } from "./components/ColorPicker";
 import { useSystemInfo } from "./hooks/useSystemInfo";
 import { useMaximized } from "./hooks/useMaximized";
 import { useVault } from "./hooks/useVault";
@@ -457,10 +458,17 @@ export default function App() {
         onSelect: () => remote.toggleGroup(group.id).catch(() => {}),
       },
       { label: "", onSelect: () => {}, separator: true },
-      ...GROUP_ACCENTS.map<MenuItem>((c) => ({
-        label: `accent: ${c}`,
-        onSelect: () => remote.setGroupAccent(group.id, c).catch(() => {}),
-      })),
+      {
+        label: "change color",
+        submenu: (
+          <ColorPicker
+            value={group.accent}
+            onChange={(hex) =>
+              remote.setGroupAccent(group.id, hex).catch(() => {})
+            }
+          />
+        ),
+      },
       { label: "", onSelect: () => {}, separator: true },
       {
         label: "delete group",
@@ -665,10 +673,15 @@ export default function App() {
           ]
         : []),
       { label: "", onSelect: () => {}, separator: true },
-      ...GROUP_ACCENTS.map<MenuItem>((c) => ({
-        label: `accent: ${c}`,
-        onSelect: () => ws.setGroupAccent(id, c),
-      })),
+      {
+        label: "change color",
+        submenu: (
+          <ColorPicker
+            value={group?.accent ?? ""}
+            onChange={(hex) => ws.setGroupAccent(id, hex)}
+          />
+        ),
+      },
       { label: "", onSelect: () => {}, separator: true },
       {
         label: "delete group",

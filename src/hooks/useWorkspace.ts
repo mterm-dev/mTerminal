@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { normalizeAccent, pickDefaultAccent } from "../utils/accent";
 
 export function basename(p: string): string {
   if (!p) return "";
@@ -23,26 +24,11 @@ export interface Tab {
   remoteHostId?: string;
 }
 
-export const GROUP_ACCENTS = [
-  "orange",
-  "blue",
-  "violet",
-  "cyan",
-  "emerald",
-  "purple",
-  "sky",
-  "amber",
-  "pink",
-  "red",
-] as const;
-
-export type GroupAccent = (typeof GROUP_ACCENTS)[number];
-
 export interface Group {
   id: string;
   name: string;
   collapsed: boolean;
-  accent: GroupAccent;
+  accent: string;
   defaultCwd?: string;
 }
 
@@ -124,9 +110,7 @@ function loadInitial(): WorkspaceState {
           id: g.id!,
           name: g.name || "group",
           collapsed: !!g.collapsed,
-          accent: (GROUP_ACCENTS.includes(g.accent as GroupAccent)
-            ? (g.accent as GroupAccent)
-            : GROUP_ACCENTS[i % GROUP_ACCENTS.length]) as GroupAccent,
+          accent: normalizeAccent(g.accent, i),
           defaultCwd:
             typeof g.defaultCwd === "string" && g.defaultCwd.length > 0
               ? g.defaultCwd
@@ -384,14 +368,14 @@ export function useWorkspace() {
           id,
           name: name || `group ${s.groups.length + 1}`,
           collapsed: false,
-          accent: GROUP_ACCENTS[s.groups.length % GROUP_ACCENTS.length],
+          accent: pickDefaultAccent(s.groups.length),
         },
       ],
     }));
     return id;
   }, []);
 
-  const setGroupAccent = useCallback((id: string, accent: GroupAccent) => {
+  const setGroupAccent = useCallback((id: string, accent: string) => {
     setState((s) => ({
       ...s,
       groups: s.groups.map((g) => (g.id === id ? { ...g, accent } : g)),

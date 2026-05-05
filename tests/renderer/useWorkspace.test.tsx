@@ -2,7 +2,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useWorkspace, GROUP_ACCENTS } from "../../src/hooks/useWorkspace";
+import { useWorkspace } from "../../src/hooks/useWorkspace";
+import { DEFAULT_ACCENTS } from "../../src/utils/accent";
 
 const STORAGE_KEY = "mterminal:workspace:v2";
 const LEGACY_STORAGE_KEY = "mterminal:workspace:v1";
@@ -484,9 +485,9 @@ describe("useWorkspace - groups", () => {
     expect(g3.startsWith("g_")).toBe(true);
     const groups = result.current.groups;
     expect(groups.map((g) => g.name)).toEqual(["group 1", "group 2", "group 3"]);
-    expect(groups[0].accent).toBe(GROUP_ACCENTS[0]);
-    expect(groups[1].accent).toBe(GROUP_ACCENTS[1]);
-    expect(groups[2].accent).toBe(GROUP_ACCENTS[2]);
+    expect(groups[0].accent).toBe(DEFAULT_ACCENTS[0]);
+    expect(groups[1].accent).toBe(DEFAULT_ACCENTS[1]);
+    expect(groups[2].accent).toBe(DEFAULT_ACCENTS[2]);
     expect(new Set([g1, g2, g3]).size).toBe(3);
   });
 
@@ -548,9 +549,9 @@ describe("useWorkspace - groups", () => {
       gid = result.current.addGroup("g");
     });
     act(() => {
-      result.current.setGroupAccent(gid, "pink");
+      result.current.setGroupAccent(gid, "#a35cff");
     });
-    expect(result.current.groups.find((g) => g.id === gid)!.accent).toBe("pink");
+    expect(result.current.groups.find((g) => g.id === gid)!.accent).toBe("#a35cff");
   });
 
   it("31. toggleGroup flips collapsed", () => {

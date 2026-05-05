@@ -1,6 +1,5 @@
 import { Fragment, useRef, useState } from "react";
 import type { HostGroup, HostMeta } from "../hooks/useRemoteHosts";
-import { GROUP_ACCENTS } from "../hooks/useWorkspace";
 import { InlineEdit } from "./InlineEdit";
 
 interface VaultStatus {
@@ -256,7 +255,7 @@ export function RemoteWorkspace({
           <Fragment key={g.id}>
             <div
               className={`term-group ${isDropTarget ? "drop-target" : ""}`}
-              style={{ ["--group-accent" as never]: `var(--c-${g.accent})` }}
+              style={{ ["--group-accent" as never]: g.accent }}
             >
               <div
                 className="term-group-h"
@@ -321,9 +320,6 @@ export function RemoteWorkspace({
         );
       })}
 
-      <span className="remote-accents-list" hidden>
-        {GROUP_ACCENTS.join(" ")}
-      </span>
     </div>
   );
 }

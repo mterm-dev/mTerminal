@@ -454,7 +454,7 @@ export function Sidebar(props: Props) {
                 <div
                   className="drop-line group-drop-line"
                   style={{
-                    ["--group-accent" as never]: `var(--c-${g.accent})`,
+                    ["--group-accent" as never]: g.accent,
                   }}
                 />
               )}
@@ -463,7 +463,7 @@ export function Sidebar(props: Props) {
                 className={`term-group ${isDropTarget ? "drop-target" : ""} ${isActiveGroup ? "active" : ""} ${
                   isDraggingGroup ? "dragging" : ""
                 }`}
-                style={{ ["--group-accent" as never]: `var(--c-${g.accent})` }}
+                style={{ ["--group-accent" as never]: g.accent }}
                 onDragOver={(e) => handleGroupDragOver(e, g)}
                 onDrop={commitDrop}
               >

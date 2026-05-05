@@ -195,11 +195,11 @@ describe("Sidebar - render", () => {
   });
 
   it("5. group accent dot reflects accent prop via --group-accent CSS var", () => {
-    const groups = [makeGroup({ id: "g1", name: "x", accent: "violet" })];
+    const groups = [makeGroup({ id: "g1", name: "x", accent: "#bb9af7" })];
     const { container } = renderSidebar({ groups });
     const group = container.querySelector(".term-group") as HTMLElement;
-    
-    expect(group.style.getPropertyValue("--group-accent")).toBe("var(--c-violet)");
+
+    expect(group.style.getPropertyValue("--group-accent")).toBe("#bb9af7");
   });
 });
 

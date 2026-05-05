@@ -173,11 +173,11 @@ describe("RemoteWorkspace - groups", () => {
   it("6. group accent CSS var is applied", () => {
     renderWorkspace({
       hosts: [],
-      groups: [mkGroup({ accent: "pink" })],
+      groups: [mkGroup({ accent: "#d4b3f7" })],
     });
     const gEl = document.querySelector(".term-group") as HTMLElement;
     expect(gEl.getAttribute("style")).toContain("--group-accent");
-    expect(gEl.getAttribute("style")).toContain("--c-pink");
+    expect(gEl.getAttribute("style")).toContain("#d4b3f7");
   });
 });
 

@@ -15,7 +15,7 @@ import {
   type HostMeta,
   type HostGroup,
 } from "../../src/hooks/useRemoteHosts";
-import { GROUP_ACCENTS } from "../../src/hooks/useWorkspace";
+import { DEFAULT_ACCENTS } from "../../src/utils/accent";
 
 const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
 
@@ -37,7 +37,7 @@ function makeGroup(over: Partial<HostGroup> = {}): HostGroup {
     id: "g1",
     name: "g1",
     collapsed: false,
-    accent: "orange",
+    accent: DEFAULT_ACCENTS[0],
     ...over,
   };
 }
@@ -99,7 +99,7 @@ describe("useRemoteHosts - enabled flag gating", () => {
 });
 
 describe("useRemoteHosts - accent normalization", () => {
-  it("4. unknown accent string is coerced to 'blue'", async () => {
+  it("4. unknown accent string is coerced to a default hex", async () => {
     mockInvoke.mockResolvedValueOnce({
       hosts: [],
       groups: [makeGroup({ accent: "neon-pink" as never })],
@@ -108,19 +108,19 @@ describe("useRemoteHosts - accent normalization", () => {
     await waitFor(() => {
       expect(result.current.groups).toHaveLength(1);
     });
-    expect(result.current.groups[0].accent).toBe("blue");
+    expect(result.current.groups[0].accent).toBe(DEFAULT_ACCENTS[0]);
   });
 
-  it("5. valid accent passes through", async () => {
+  it("5. valid hex accent passes through", async () => {
     mockInvoke.mockResolvedValueOnce({
       hosts: [],
-      groups: [makeGroup({ accent: "violet" })],
+      groups: [makeGroup({ accent: "#bb9af7" })],
     });
     const { result } = renderHook(() => useRemoteHosts(true, true));
     await waitFor(() => {
       expect(result.current.groups).toHaveLength(1);
     });
-    expect(result.current.groups[0].accent).toBe("violet");
+    expect(result.current.groups[0].accent).toBe("#bb9af7");
   });
 });
 
@@ -220,7 +220,7 @@ describe("useRemoteHosts - addGroup / renameGroup / toggle / accent", () => {
     await act(async () => {
       await result.current.addGroup();
     });
-    const expectedAccent = GROUP_ACCENTS[2 % GROUP_ACCENTS.length];
+    const expectedAccent = DEFAULT_ACCENTS[2 % DEFAULT_ACCENTS.length];
     expect(mockInvoke).toHaveBeenCalledWith("host_group_save", {
       group: {
         id: "",
@@ -245,7 +245,7 @@ describe("useRemoteHosts - addGroup / renameGroup / toggle / accent", () => {
         id: "",
         name: "custom",
         collapsed: false,
-        accent: GROUP_ACCENTS[0],
+        accent: DEFAULT_ACCENTS[0],
       },
     });
   });
@@ -262,7 +262,7 @@ describe("useRemoteHosts - addGroup / renameGroup / toggle / accent", () => {
   });
 
   it("15. renameGroup with existing group calls host_group_save with merged name", async () => {
-    const g = makeGroup({ id: "gX", name: "old", accent: "violet" });
+    const g = makeGroup({ id: "gX", name: "old", accent: "#bb9af7" });
     mockInvoke.mockResolvedValueOnce({ hosts: [], groups: [g] });
     const { result } = renderHook(() => useRemoteHosts(true, true));
     await waitFor(() => expect(result.current.groups).toHaveLength(1));
@@ -297,21 +297,21 @@ describe("useRemoteHosts - addGroup / renameGroup / toggle / accent", () => {
   });
 
   it("17. setGroupAccent updates accent; no-op when missing", async () => {
-    const g = makeGroup({ id: "gX", accent: "blue" });
+    const g = makeGroup({ id: "gX", accent: "#6ea8e8" });
     mockInvoke.mockResolvedValueOnce({ hosts: [], groups: [g] });
     const { result } = renderHook(() => useRemoteHosts(true, true));
     await waitFor(() => expect(result.current.groups).toHaveLength(1));
     mockInvoke.mockResolvedValueOnce("gX");
     mockInvoke.mockResolvedValueOnce({ hosts: [], groups: [] });
     await act(async () => {
-      await result.current.setGroupAccent("gX", "pink");
+      await result.current.setGroupAccent("gX", "#d4b3f7");
     });
     expect(mockInvoke).toHaveBeenCalledWith("host_group_save", {
-      group: { ...g, accent: "pink" },
+      group: { ...g, accent: "#d4b3f7" },
     });
     mockInvoke.mockClear();
     await act(async () => {
-      await result.current.setGroupAccent("ghost", "red");
+      await result.current.setGroupAccent("ghost", "#e8615a");
     });
     expect(mockInvoke).not.toHaveBeenCalled();
   });

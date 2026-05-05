@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "../lib/tauri-shim";
-import { GROUP_ACCENTS, type GroupAccent } from "./useWorkspace";
+import { normalizeAccent, pickDefaultAccent } from "../utils/accent";
 
 export interface HostMeta {
   id: string;
@@ -19,7 +19,7 @@ export interface HostGroup {
   id: string;
   name: string;
   collapsed: boolean;
-  accent: GroupAccent;
+  accent: string;
 }
 
 interface HostListResult {
@@ -35,12 +35,6 @@ export interface SshKey {
 
 export interface ToolAvailability {
   sshpass: boolean;
-}
-
-function normalizeAccent(a: string | undefined): GroupAccent {
-  return (GROUP_ACCENTS as readonly string[]).includes(a ?? "")
-    ? (a as GroupAccent)
-    : "blue";
 }
 
 export function useRemoteHosts(enabled: boolean, vaultUnlocked: boolean) {
@@ -59,9 +53,9 @@ export function useRemoteHosts(enabled: boolean, vaultUnlocked: boolean) {
       const r = await invoke<HostListResult>("host_list");
       setHosts(r.hosts);
       setGroups(
-        (r.groups ?? []).map((g) => ({
+        (r.groups ?? []).map((g, i) => ({
           ...g,
-          accent: normalizeAccent(g.accent as string),
+          accent: normalizeAccent(g.accent, i),
         })),
       );
     } catch {
@@ -123,7 +117,7 @@ export function useRemoteHosts(enabled: boolean, vaultUnlocked: boolean) {
 
   const addGroup = useCallback(
     async (name?: string) => {
-      const accent = GROUP_ACCENTS[groups.length % GROUP_ACCENTS.length];
+      const accent = pickDefaultAccent(groups.length);
       return saveGroup({
         id: "",
         name: name || `group ${groups.length + 1}`,
@@ -153,7 +147,7 @@ export function useRemoteHosts(enabled: boolean, vaultUnlocked: boolean) {
   );
 
   const setGroupAccent = useCallback(
-    async (id: string, accent: GroupAccent) => {
+    async (id: string, accent: string) => {
       const g = groups.find((x) => x.id === id);
       if (!g) return;
       await saveGroup({ ...g, accent });
