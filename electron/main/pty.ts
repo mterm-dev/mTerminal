@@ -100,6 +100,19 @@ interface SpawnArgs {
   shell?: string
   args?: string[]
   env?: Record<string, string>
+  cwd?: string
+}
+
+export function resolveSpawnCwd(requested?: string | null): string {
+  const home =
+    process.env.HOME || process.env.USERPROFILE || os.homedir() || process.cwd()
+  if (requested && requested.length > 0) {
+    try {
+      const st = fs.statSync(requested)
+      if (st.isDirectory()) return requested
+    } catch {}
+  }
+  return home
 }
 
 export function buildEnv(
@@ -126,9 +139,9 @@ export function spawnSession(opts: {
   shell: string
   args: string[]
   env: Record<string, string>
+  cwd?: string
 }): number {
-  const cwd =
-    process.env.HOME || process.env.USERPROFILE || os.homedir() || process.cwd()
+  const cwd = resolveSpawnCwd(opts.cwd)
   const ptyProc = nodePty.spawn(opts.shell, opts.args, {
     name: 'xterm-256color',
     cols: Math.max(1, opts.cols | 0),
@@ -354,6 +367,7 @@ export function registerPtyHandlers(): void {
       shell,
       args: passedArgs,
       env,
+      cwd: args.cwd,
     })
   })
 

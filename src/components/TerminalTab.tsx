@@ -36,6 +36,7 @@ interface Props {
   kind?: TabKind;
   remoteHostId?: string;
   remoteBanner?: string;
+  initialCwd?: string;
 }
 
 type PtyEvent =
@@ -66,6 +67,7 @@ export function TerminalTab({
   kind = "local",
   remoteHostId,
   remoteBanner,
+  initialCwd,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -81,6 +83,7 @@ export function TerminalTab({
   onPtyCloseRef.current = onPtyClose;
   const initialShellRef = useRef({ shell, shellArgs, showGreeting });
   const initialRemoteRef = useRef({ kind, remoteHostId, remoteBanner });
+  const initialCwdRef = useRef(initialCwd);
   const initialCommandRef = useRef(initialCommand);
   const onSelectionMenuRef = useRef(onSelectionMenu);
   onSelectionMenuRef.current = onSelectionMenu;
@@ -214,6 +217,7 @@ export function TerminalTab({
             shell: init.shell || null,
             args: init.shellArgs.length ? init.shellArgs : null,
             env: init.showGreeting ? { MT_GREETING: "1" } : null,
+            cwd: initialCwdRef.current || null,
           });
         }
         if (disposed) {

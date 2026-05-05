@@ -7,6 +7,7 @@ import {
   pickNewestLeaf,
   buildEnv,
   readProcInfo,
+  resolveSpawnCwd,
   type NodeInfo,
 } from '../../electron/main/pty'
 
@@ -210,4 +211,38 @@ describe('readProcInfo', () => {
       expect(info.cmd).toBeNull()
     }
   )
+})
+
+describe('resolveSpawnCwd', () => {
+  const home = process.env.HOME || process.env.USERPROFILE || os.homedir()
+
+  it('returns home when no cwd is requested', () => {
+    expect(resolveSpawnCwd(undefined)).toBe(home)
+    expect(resolveSpawnCwd(null)).toBe(home)
+    expect(resolveSpawnCwd('')).toBe(home)
+  })
+
+  it('returns the requested cwd when it is an existing directory', () => {
+    const tmp = mkTmpDir()
+    try {
+      expect(resolveSpawnCwd(tmp)).toBe(tmp)
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to home when the requested cwd does not exist', () => {
+    expect(resolveSpawnCwd('/nope/this/path/does/not/exist/mterminal')).toBe(home)
+  })
+
+  it('falls back to home when the requested cwd is a file, not a directory', () => {
+    const tmp = mkTmpDir()
+    try {
+      const filePath = path.join(tmp, 'a-file.txt')
+      fs.writeFileSync(filePath, 'x')
+      expect(resolveSpawnCwd(filePath)).toBe(home)
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
 })

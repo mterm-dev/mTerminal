@@ -55,63 +55,107 @@ export interface WorkspaceState {
 const STORAGE_KEY = "mterminal:workspace:v2";
 const LEGACY_STORAGE_KEY = "mterminal:workspace:v1";
 
-function loadInitial(): WorkspaceState {
+interface WorkspaceMtApi {
+  loadSync?: () => string | null;
+  save?: (json: string) => Promise<void> | void;
+}
+
+function workspaceMtApi(): WorkspaceMtApi | null {
+  if (typeof window === "undefined") return null;
+  const mt = (window as unknown as { mt?: { workspace?: WorkspaceMtApi } }).mt;
+  return mt?.workspace ?? null;
+}
+
+function readRawState(): string | null {
+  const api = workspaceMtApi();
+  if (api?.loadSync) {
+    try {
+      const v = api.loadSync();
+      if (typeof v === "string" && v.length > 0) return v;
+    } catch {}
+  }
   if (typeof window !== "undefined") {
     try {
-      let raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
-        if (legacy) {
-          raw = legacy;
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) return raw;
+      const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy) {
+        try {
           window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-        }
+        } catch {}
+        return legacy;
       }
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<WorkspaceState>;
-        if (
-          parsed &&
-          Array.isArray(parsed.groups) &&
-          Array.isArray(parsed.tabs) &&
-          typeof parsed.nextTabId === "number"
-        ) {
-          const groups: Group[] = parsed.groups.map((g, i) => ({
-            id: g.id!,
-            name: g.name || "group",
-            collapsed: !!g.collapsed,
-            accent: (GROUP_ACCENTS.includes(g.accent as GroupAccent)
-              ? (g.accent as GroupAccent)
-              : GROUP_ACCENTS[i % GROUP_ACCENTS.length]) as GroupAccent,
-          }));
-          const groupIds = new Set(groups.map((g) => g.id));
-          const tabs: Tab[] = parsed.tabs.map((t) => {
-            const kind: TabKind = t.kind === "remote" ? "remote" : "local";
-            const gid =
-              kind === "remote"
-                ? null
-                : typeof t.groupId === "string" && groupIds.has(t.groupId)
-                  ? t.groupId
-                  : null;
-            return {
-              id: t.id!,
-              label: t.label || "shell",
-              sub: t.sub,
-              cwd: t.cwd,
-              groupId: gid,
-              autoLabel: t.autoLabel ?? true,
-              kind,
-              remoteHostId: kind === "remote" ? t.remoteHostId : undefined,
-            };
-          });
+    } catch {}
+  }
+  return null;
+}
+
+function persistRawState(json: string): void {
+  const api = workspaceMtApi();
+  if (api?.save) {
+    try {
+      const r = api.save(json);
+      if (r && typeof (r as Promise<void>).catch === "function") {
+        (r as Promise<void>).catch(() => {});
+      }
+      return;
+    } catch {}
+  }
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, json);
+    } catch {}
+  }
+}
+
+function loadInitial(): WorkspaceState {
+  const raw = readRawState();
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Partial<WorkspaceState>;
+      if (
+        parsed &&
+        Array.isArray(parsed.groups) &&
+        Array.isArray(parsed.tabs) &&
+        typeof parsed.nextTabId === "number"
+      ) {
+        const groups: Group[] = parsed.groups.map((g, i) => ({
+          id: g.id!,
+          name: g.name || "group",
+          collapsed: !!g.collapsed,
+          accent: (GROUP_ACCENTS.includes(g.accent as GroupAccent)
+            ? (g.accent as GroupAccent)
+            : GROUP_ACCENTS[i % GROUP_ACCENTS.length]) as GroupAccent,
+        }));
+        const groupIds = new Set(groups.map((g) => g.id));
+        const tabs: Tab[] = parsed.tabs.map((t) => {
+          const kind: TabKind = t.kind === "remote" ? "remote" : "local";
+          const gid =
+            kind === "remote"
+              ? null
+              : typeof t.groupId === "string" && groupIds.has(t.groupId)
+                ? t.groupId
+                : null;
           return {
-            tabs,
-            groups,
-            activeId: parsed.activeId ?? tabs[0]?.id ?? null,
-            nextTabId: Math.max(
-              parsed.nextTabId,
-              tabs.reduce((m, t) => Math.max(m, t.id + 1), 1),
-            ),
+            id: t.id!,
+            label: t.label || "shell",
+            sub: t.sub,
+            cwd: t.cwd,
+            groupId: gid,
+            autoLabel: t.autoLabel ?? true,
+            kind,
+            remoteHostId: kind === "remote" ? t.remoteHostId : undefined,
           };
-        }
+        });
+        return {
+          tabs,
+          groups,
+          activeId: parsed.activeId ?? tabs[0]?.id ?? null,
+          nextTabId: Math.max(
+            parsed.nextTabId,
+            tabs.reduce((m, t) => Math.max(m, t.id + 1), 1),
+          ),
+        };
       }
     } catch {}
   }
@@ -140,11 +184,25 @@ export function useWorkspace() {
   useEffect(() => {
     const id = window.setTimeout(() => {
       try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        persistRawState(JSON.stringify(state));
       } catch {}
     }, 200);
     return () => window.clearTimeout(id);
   }, [state]);
+
+  useEffect(() => {
+    const flush = (): void => {
+      try {
+        persistRawState(JSON.stringify(stateRef.current));
+      } catch {}
+    };
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
+    };
+  }, []);
 
   const setActive = useCallback((id: number | null) => {
     setState((s) => ({ ...s, activeId: id }));

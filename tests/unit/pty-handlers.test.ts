@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import os from 'node:os'
+import fs from 'node:fs'
+import path from 'node:path'
 
 
 
@@ -141,6 +144,40 @@ describe('pty IPC handlers', () => {
       fake.onData!('hello world')
       const out = (await invoke('pty:recent-output', { id })) as string
       expect(out).toBe('hello world')
+    })
+
+    it('uses requested cwd when it is an existing directory', async () => {
+      const { spawnArgsLast } = await loadModules()
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mt-cwd-'))
+      try {
+        await invoke('pty:spawn', { rows: 24, cols: 80, cwd: tmp })
+        const sa = spawnArgsLast()!
+        expect(sa.opts.cwd).toBe(tmp)
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true })
+      }
+    })
+
+    it('falls back to home when requested cwd does not exist', async () => {
+      const { spawnArgsLast } = await loadModules()
+      const home =
+        process.env.HOME || process.env.USERPROFILE || os.homedir()
+      await invoke('pty:spawn', {
+        rows: 24,
+        cols: 80,
+        cwd: '/this/path/should/not/exist/mterminal-test',
+      })
+      const sa = spawnArgsLast()!
+      expect(sa.opts.cwd).toBe(home)
+    })
+
+    it('falls back to home when no cwd is supplied', async () => {
+      const { spawnArgsLast } = await loadModules()
+      const home =
+        process.env.HOME || process.env.USERPROFILE || os.homedir()
+      await invoke('pty:spawn', { rows: 24, cols: 80 })
+      const sa = spawnArgsLast()!
+      expect(sa.opts.cwd).toBe(home)
     })
 
     it('onExit callback removes the session from SESSIONS', async () => {

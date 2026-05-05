@@ -115,7 +115,7 @@ async function writeFileLocked(file: HostsFile): Promise<void> {
   const p = hostsPath()
   const tmp = p + '.tmp'
   const bytes = Buffer.from(JSON.stringify(file, null, 2), 'utf8')
-  const fd = await fsp.open(tmp, 'w')
+  const fd = await fsp.open(tmp, 'w', 0o600)
   try {
     await fd.writeFile(bytes)
     await fd.sync()
@@ -123,6 +123,9 @@ async function writeFileLocked(file: HostsFile): Promise<void> {
     await fd.close()
   }
   await fsp.rename(tmp, p)
+  try {
+    await fsp.chmod(p, 0o600)
+  } catch {}
 }
 
 let ioChain: Promise<unknown> = Promise.resolve()

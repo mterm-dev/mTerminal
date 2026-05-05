@@ -17,6 +17,8 @@ import { registerHostsHandlers } from './hosts'
 import { registerAiHandlers } from './ai'
 import { registerClaudeCodeHandlers } from './claude-code'
 import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
+import { registerWorkspaceHandlers } from './workspace'
+import { registerSettingsHandlers } from './settings-store'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -80,6 +82,8 @@ app
     registerAiHandlers()
     registerClaudeCodeHandlers()
     registerMcpHandlers()
+    registerWorkspaceHandlers()
+    registerSettingsHandlers()
     app.on('before-quit', () => {
       void stopMcpServer()
     })

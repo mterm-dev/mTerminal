@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type CursorStyle = "block" | "bar" | "underline";
 export type AiProviderId = "anthropic" | "openai" | "ollama";
@@ -69,10 +69,56 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const KEY = "mterminal:settings:v1";
 
+interface SettingsMtApi {
+  loadSync?: () => string | null;
+  save?: (json: string) => Promise<void> | void;
+}
+
+function settingsMtApi(): SettingsMtApi | null {
+  if (typeof window === "undefined") return null;
+  const mt = (window as unknown as { mt?: { settings?: SettingsMtApi } }).mt;
+  return mt?.settings ?? null;
+}
+
+function readRawSettings(): string | null {
+  const api = settingsMtApi();
+  if (api?.loadSync) {
+    try {
+      const v = api.loadSync();
+      if (typeof v === "string" && v.length > 0) return v;
+    } catch {}
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(KEY);
+      if (raw) return raw;
+    } catch {}
+  }
+  return null;
+}
+
+function persistRawSettings(json: string): void {
+  const api = settingsMtApi();
+  if (api?.save) {
+    try {
+      const r = api.save(json);
+      if (r && typeof (r as Promise<void>).catch === "function") {
+        (r as Promise<void>).catch(() => {});
+      }
+      return;
+    } catch {}
+  }
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(KEY, json);
+    } catch {}
+  }
+}
+
 function loadInitial(): Settings {
+  const raw = readRawSettings();
+  if (!raw) return DEFAULT_SETTINGS;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
@@ -82,12 +128,28 @@ function loadInitial(): Settings {
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings>(loadInitial);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(KEY, JSON.stringify(settings));
+      persistRawSettings(JSON.stringify(settings));
     } catch {}
   }, [settings]);
+
+  useEffect(() => {
+    const flush = (): void => {
+      try {
+        persistRawSettings(JSON.stringify(settingsRef.current));
+      } catch {}
+    };
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
+    };
+  }, []);
 
   const update = useCallback(<K extends keyof Settings>(key: K, value: Settings[K]) => {
     setSettings((s) => ({ ...s, [key]: value }));

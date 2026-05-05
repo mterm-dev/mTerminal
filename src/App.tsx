@@ -716,6 +716,7 @@ export default function App() {
                   kind={t.kind}
                   remoteHostId={t.remoteHostId}
                   remoteBanner={banner}
+                  initialCwd={t.cwd}
                 />
               );
             })}

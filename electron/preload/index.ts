@@ -8,6 +8,7 @@ const api = {
       shell?: string
       args?: string[]
       env?: Record<string, string>
+      cwd?: string
     }): Promise<number> => ipcRenderer.invoke('pty:spawn', args),
     write: (id: number, data: string): Promise<void> =>
       ipcRenderer.invoke('pty:write', { id, data }),
@@ -195,6 +196,22 @@ const api = {
       ipcRenderer.invoke('notification:send', opts),
     requestPermission: (): Promise<'granted' | 'denied' | 'default'> =>
       ipcRenderer.invoke('notification:permission'),
+  },
+  workspace: {
+    loadSync: (): string | null => {
+      const v = ipcRenderer.sendSync('workspace:load:sync')
+      return typeof v === 'string' ? v : null
+    },
+    save: (json: string): Promise<void> =>
+      ipcRenderer.invoke('workspace:save', json),
+  },
+  settings: {
+    loadSync: (): string | null => {
+      const v = ipcRenderer.sendSync('settings:load:sync')
+      return typeof v === 'string' ? v : null
+    },
+    save: (json: string): Promise<void> =>
+      ipcRenderer.invoke('settings:save', json),
   },
 }
 

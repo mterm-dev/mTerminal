@@ -112,7 +112,7 @@ function writeVaultFile(file: VaultFile): void {
   const p = vaultPath()
   const tmp = p + '.tmp'
   const bytes = Buffer.from(JSON.stringify(file), 'utf8')
-  const fd = fs.openSync(tmp, 'w')
+  const fd = fs.openSync(tmp, 'w', 0o600)
   try {
     fs.writeSync(fd, bytes)
     fs.fsyncSync(fd)
@@ -120,6 +120,9 @@ function writeVaultFile(file: VaultFile): void {
     fs.closeSync(fd)
   }
   fs.renameSync(tmp, p)
+  try {
+    fs.chmodSync(p, 0o600)
+  } catch {}
 }
 
 function fileFromKey(

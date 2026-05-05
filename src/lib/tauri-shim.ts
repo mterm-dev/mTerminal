@@ -35,6 +35,7 @@ export async function invoke<T = unknown>(
         shell: (a.shell as string | null | undefined) ?? undefined,
         args: (a.args as string[] | null | undefined) ?? undefined,
         env: (a.env as Record<string, string> | null | undefined) ?? undefined,
+        cwd: (a.cwd as string | null | undefined) ?? undefined,
       })
       if (events) {
         const off = api.pty.onEvent(id, (ev) => events.onmessage?.(ev as unknown))
