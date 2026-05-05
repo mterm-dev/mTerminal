@@ -338,6 +338,9 @@ body.resizing-sidebar * {
 .term-group.active > .term-group-h {
   background: color-mix(in oklch, var(--group-accent) 14%, transparent);
 }
+.term-group.dragging {
+  opacity: 0.5;
+}
 .term-group-h {
   cursor: pointer;
 }
@@ -367,6 +370,9 @@ body.resizing-sidebar * {
   background: var(--group-accent, var(--c-orange));
   border-radius: 1px;
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--group-accent) 30%, transparent);
+}
+.group-drop-line {
+  margin: 3px 20px;
 }
 .drop-hint {
   margin: 4px 12px;

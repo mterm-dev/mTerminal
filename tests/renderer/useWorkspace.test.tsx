@@ -499,6 +499,32 @@ describe("useWorkspace - groups", () => {
     expect(result.current.groups.find((g) => g.id === gid)!.name).toBe("custom");
   });
 
+  it("28b. reorderGroup moves a group before a sibling or to the end", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let g1 = "";
+    let g2 = "";
+    let g3 = "";
+    act(() => {
+      g1 = result.current.addGroup("one");
+    });
+    act(() => {
+      g2 = result.current.addGroup("two");
+    });
+    act(() => {
+      g3 = result.current.addGroup("three");
+    });
+
+    act(() => {
+      result.current.reorderGroup(g3, g1);
+    });
+    expect(result.current.groups.map((g) => g.id)).toEqual([g3, g1, g2]);
+
+    act(() => {
+      result.current.reorderGroup(g3, null);
+    });
+    expect(result.current.groups.map((g) => g.id)).toEqual([g1, g2, g3]);
+  });
+
   it("29. renameGroup applies trim; whitespace keeps old name", () => {
     const { result } = renderHook(() => useWorkspace());
     let gid = "";

@@ -45,6 +45,7 @@ interface Handlers {
   onTabContextMenu: ReturnType<typeof vi.fn>;
   onGroupContextMenu: ReturnType<typeof vi.fn>;
   onReorderTab: ReturnType<typeof vi.fn>;
+  onReorderGroup: ReturnType<typeof vi.fn>;
   onOpenSettings: ReturnType<typeof vi.fn>;
   onSelectGroup: ReturnType<typeof vi.fn>;
   onResize: ReturnType<typeof vi.fn>;
@@ -63,6 +64,7 @@ function makeHandlers(): Handlers {
     onTabContextMenu: vi.fn(),
     onGroupContextMenu: vi.fn(),
     onReorderTab: vi.fn(),
+    onReorderGroup: vi.fn(),
     onOpenSettings: vi.fn(),
     onSelectGroup: vi.fn(),
     onResize: vi.fn(),
@@ -99,6 +101,7 @@ function renderSidebar(opts: {
       onTabContextMenu={handlers.onTabContextMenu}
       onGroupContextMenu={handlers.onGroupContextMenu}
       onReorderTab={handlers.onReorderTab}
+      onReorderGroup={handlers.onReorderGroup}
       onOpenSettings={handlers.onOpenSettings}
       activeGroupId={opts.activeGroupId ?? null}
       onSelectGroup={handlers.onSelectGroup}
@@ -369,6 +372,86 @@ describe("Sidebar - drag and drop", () => {
     fireEvent.drop(ungrouped, { dataTransfer: dt });
 
     expect(handlers.onReorderTab).toHaveBeenCalledWith(5, null, null);
+  });
+
+  it("17b. drag a group and drop on upper half of a sibling calls onReorderGroup(id, beforeId)", () => {
+    const groups = [
+      makeGroup({ id: "g1", name: "one" }),
+      makeGroup({ id: "g2", name: "two" }),
+      makeGroup({ id: "g3", name: "three" }),
+    ];
+    const { container, handlers } = renderSidebar({ groups });
+    const source = container.querySelector(
+      '[data-group-id="g3"] .term-group-h',
+    ) as HTMLElement;
+    const target = container.querySelector(
+      '[data-group-id="g1"]',
+    ) as HTMLElement;
+    const dt = makeDataTransfer();
+
+    Object.defineProperty(target, "getBoundingClientRect", {
+      configurable: true,
+      value: () =>
+        ({
+          top: 0,
+          height: 40,
+          bottom: 40,
+          left: 0,
+          right: 0,
+          width: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect,
+    });
+
+    fireEvent.dragStart(source, { dataTransfer: dt });
+    const overEvt = createEvent.dragOver(target, { dataTransfer: dt });
+    Object.defineProperty(overEvt, "clientY", { value: 5 });
+    fireEvent(target, overEvt);
+    fireEvent.drop(target, { dataTransfer: dt });
+
+    expect(handlers.onReorderGroup).toHaveBeenCalledWith("g3", "g1");
+  });
+
+  it("17c. drag a group over lower half of the last group moves it to the end", () => {
+    const groups = [
+      makeGroup({ id: "g1", name: "one" }),
+      makeGroup({ id: "g2", name: "two" }),
+      makeGroup({ id: "g3", name: "three" }),
+    ];
+    const { container, handlers } = renderSidebar({ groups });
+    const source = container.querySelector(
+      '[data-group-id="g1"] .term-group-h',
+    ) as HTMLElement;
+    const target = container.querySelector(
+      '[data-group-id="g3"]',
+    ) as HTMLElement;
+    const dt = makeDataTransfer();
+
+    Object.defineProperty(target, "getBoundingClientRect", {
+      configurable: true,
+      value: () =>
+        ({
+          top: 0,
+          height: 40,
+          bottom: 40,
+          left: 0,
+          right: 0,
+          width: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect,
+    });
+
+    fireEvent.dragStart(source, { dataTransfer: dt });
+    const overEvt = createEvent.dragOver(target, { dataTransfer: dt });
+    Object.defineProperty(overEvt, "clientY", { value: 35 });
+    fireEvent(target, overEvt);
+    fireEvent.drop(target, { dataTransfer: dt });
+
+    expect(handlers.onReorderGroup).toHaveBeenCalledWith("g1", null);
   });
 });
 

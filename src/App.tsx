@@ -631,6 +631,7 @@ export default function App() {
           onTabContextMenu={openTabMenu}
           onGroupContextMenu={openGroupMenu}
           onReorderTab={ws.reorderTab}
+          onReorderGroup={ws.reorderGroup}
           onOpenSettings={() => setShowSettings(true)}
           activeGroupId={gridGroupId}
           onSelectGroup={selectGroup}

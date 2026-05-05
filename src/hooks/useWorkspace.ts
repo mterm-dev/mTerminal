@@ -349,6 +349,28 @@ export function useWorkspace() {
     }));
   }, []);
 
+  const reorderGroup = useCallback((id: string, beforeId: string | null) => {
+    setState((s) => {
+      const group = s.groups.find((g) => g.id === id);
+      if (!group || beforeId === id) return s;
+
+      const without = s.groups.filter((g) => g.id !== id);
+      let insertAt =
+        beforeId == null
+          ? without.length
+          : without.findIndex((g) => g.id === beforeId);
+      if (insertAt < 0) insertAt = without.length;
+
+      const groups = [
+        ...without.slice(0, insertAt),
+        group,
+        ...without.slice(insertAt),
+      ];
+      const unchanged = groups.every((g, i) => g.id === s.groups[i]?.id);
+      return unchanged ? s : { ...s, groups };
+    });
+  }, []);
+
   const deleteGroup = useCallback((id: string) => {
     setState((s) => ({
       ...s,
@@ -390,6 +412,7 @@ export function useWorkspace() {
     renameGroup,
     setGroupAccent,
     toggleGroup,
+    reorderGroup,
     deleteGroup,
     selectIndex,
   };
