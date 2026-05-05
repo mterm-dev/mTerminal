@@ -684,6 +684,8 @@ export default function App() {
                 treeView={settings.gitPanelTreeView}
                 onToggleTreeView={(b) => update("gitPanelTreeView", b)}
                 settings={settings}
+                height={settings.gitPanelHeight}
+                onResizeHeight={(h) => update("gitPanelHeight", h)}
               />
             ) : undefined
           }

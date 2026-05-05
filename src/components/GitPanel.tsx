@@ -20,6 +20,8 @@ interface Props {
   treeView: boolean;
   onToggleTreeView: (b: boolean) => void;
   settings: Settings;
+  height: number;
+  onResizeHeight: (h: number) => void;
 }
 
 interface DiffTarget {
@@ -269,6 +271,8 @@ export function GitPanel({
   treeView,
   onToggleTreeView,
   settings,
+  height,
+  onResizeHeight,
 }: Props) {
   const enabled = !!cwd;
   const { status, error, refresh, runMutation, api } = useGitStatus(cwd, enabled);
@@ -568,6 +572,33 @@ export function GitPanel({
     }
   };
 
+  const onResizeHeightStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = height;
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const max = Math.max(160, Math.floor(window.innerHeight * 0.85));
+      const next = Math.max(120, Math.min(max, startH + (startY - ev.clientY)));
+      onResizeHeight(next);
+    };
+    const up = (ev: PointerEvent) => {
+      try {
+        target.releasePointerCapture(ev.pointerId);
+      } catch {}
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing-git-panel");
+    };
+    document.body.classList.add("resizing-git-panel");
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+  };
+
+  const showResize = !collapsed;
+  const panelStyle = !collapsed ? { height } : undefined;
+
   if (!cwd) {
     return (
       <div className="term-side-git">
@@ -596,7 +627,18 @@ export function GitPanel({
   const showBody = !collapsed && isRepo;
 
   return (
-    <div className="term-side-git">
+    <div className="term-side-git" style={panelStyle}>
+      {showResize && (
+        <div
+          className="term-side-git-resize"
+          role="separator"
+          aria-label="resize git panel"
+          aria-orientation="horizontal"
+          onPointerDown={onResizeHeightStart}
+          onDoubleClick={() => onResizeHeight(340)}
+          title="drag to resize · double-click to reset"
+        />
+      )}
       <div
         className="term-side-git-h"
         onClick={(e) => {

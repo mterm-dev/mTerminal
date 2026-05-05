@@ -845,16 +845,39 @@ body.resizing-sidebar * {
 
 /* ── git panel ───────────────────────────────────────────── */
 .term-side-git {
+  position: relative;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border-subtle);
   padding: 8px 12px;
   gap: 8px;
-  max-height: 45vh;
   min-height: 0;
   flex-shrink: 0;
   background: transparent;
   font-family: var(--font-sans);
+}
+.term-side-git-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background 120ms ease;
+}
+.term-side-git-resize:hover,
+body.resizing-git-panel .term-side-git-resize {
+  background: var(--accent);
+  opacity: 0.35;
+}
+body.resizing-git-panel {
+  cursor: ns-resize;
+  user-select: none;
+}
+body.resizing-git-panel * {
+  user-select: none;
 }
 .term-side-git-h {
   display: flex;
@@ -969,7 +992,9 @@ body.resizing-sidebar * {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 .term-side-git-selectall {
   display: flex;
@@ -990,7 +1015,8 @@ body.resizing-sidebar * {
 .term-side-git-selectall-label { line-height: 1.4; }
 .term-side-git-files {
   overflow: auto;
-  max-height: 28vh;
+  flex: 0 1 auto;
+  min-height: 0;
   padding-right: 2px;
   display: flex;
   flex-direction: column;
@@ -1138,6 +1164,8 @@ body.resizing-sidebar * {
 
 .term-side-git-msg {
   position: relative;
+  margin-top: auto;
+  flex-shrink: 0;
 }
 .term-side-git-msg textarea {
   width: 100%;
@@ -1222,6 +1250,7 @@ body.resizing-sidebar * {
 .term-side-git-actions {
   display: flex;
   gap: 6px;
+  flex-shrink: 0;
 }
 .git-btn {
   flex: 1;
