@@ -15,6 +15,14 @@ jobs:
 
       - uses: ./.github/actions/setup-build
 
+      - name: Sync version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Setting package.json version to $VERSION"
+          npm version --no-git-tag-version --allow-same-version "$VERSION"
+
       - name: Rebuild node-pty for Electron
         run: pnpm exec electron-rebuild -f -w node-pty
 
