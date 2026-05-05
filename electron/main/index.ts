@@ -20,6 +20,10 @@ import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
 import { registerWorkspaceHandlers } from './workspace'
 import { registerSettingsHandlers } from './settings-store'
 
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('disable-features', 'WaylandWpColorManagerV1')
+}
+
 let mainWindow: BrowserWindow | null = null
 
 const appIconPath = path.join(app.getAppPath(), 'build/icon.png')
