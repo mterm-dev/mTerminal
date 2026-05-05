@@ -95,6 +95,9 @@ echo "→ installing to $PREFIX"
 $SUDO install -dm755 "$LIB_DIR"
 $SUDO cp -a "$UNPACKED_SRC"/. "$LIB_DIR/"
 
+$SUDO chmod -R u=rwX,go=rX "$LIB_DIR"
+$SUDO chmod 0755 "$LIB_DIR/$APP_NAME"
+
 # Wrapper script in PATH.
 WRAPPER="$BIN_DIR/$APP_NAME"
 $SUDO install -dm755 "$BIN_DIR"

@@ -1,7 +1,7 @@
 # Maintainer: arthurr0 <koeckiartur@gmail.com>
 pkgname=mterminal-bin
 _pkgname=mterminal
-pkgver=0.3.1
+pkgver=0.3.5
 pkgrel=1
 pkgdesc="Custom terminal emulator with grouped tabs and warm dark UI (binary release)"
 arch=('x86_64')
@@ -45,6 +45,9 @@ package() {
         "$pkgdir/opt/$_pkgname"/*.desktop \
         "$pkgdir/opt/$_pkgname"/*.png \
         "$pkgdir/opt/$_pkgname"/*.svg 2>/dev/null || true
+
+  chmod -R u=rwX,go=rX "$pkgdir/opt/$_pkgname"
+  chmod 0755 "$pkgdir/opt/$_pkgname/$_pkgname"
 
   # Chromium sandbox helper requires SUID root.
   if [[ -f "$pkgdir/opt/$_pkgname/chrome-sandbox" ]]; then

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-05-05
+
+### Fixed
+- AUR `mterminal-bin` install left `/opt/mterminal/mterminal` without world-execute on systems where the AppImage runtime extracted files under a restrictive umask, so the wrapper failed with `Permission denied` for non-root users. `packaging/PKGBUILD-bin`, `packaging/PKGBUILD`, and `install.sh` now normalize permissions (`u=rwX,go=rX`, `0755` on the main binary) after copying the unpacked tree.
+
 ## [0.3.0] - 2026-05-04
 
 ### Added
@@ -85,7 +90,8 @@ Initial release.
 - Login shell detection from `/etc/passwd` (avoids inherited `$SHELL` env)
 - xterm.js theme aligned with mTerminal palette
 
-[Unreleased]: https://github.com/arthurr0/mTerminal/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/arthurr0/mTerminal/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/arthurr0/mTerminal/compare/v0.3.0...v0.3.5
 [0.3.0]: https://github.com/arthurr0/mTerminal/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arthurr0/mTerminal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arthurr0/mTerminal/releases/tag/v0.1.0
