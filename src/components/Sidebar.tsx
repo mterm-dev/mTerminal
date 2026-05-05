@@ -30,6 +30,7 @@ interface Props {
   activeGroupId: string | null;
   onSelectGroup: (id: string) => void;
   remoteSlot?: ReactNode;
+  gitSlot?: ReactNode;
   width: number;
   onResize: (w: number) => void;
   ccStatuses?: Map<number, CcStatus>;
@@ -102,6 +103,7 @@ export function Sidebar(props: Props) {
     activeGroupId,
     onSelectGroup,
     remoteSlot,
+    gitSlot,
     width,
     onResize,
     ccStatuses,
@@ -631,6 +633,8 @@ export function Sidebar(props: Props) {
         title="drag to resize · double-click to reset"
       />
 
+      {gitSlot}
+
       <div className="term-side-foot">
         <button className="settings-btn" onClick={onOpenSettings}>
           <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
@@ -648,13 +652,6 @@ export function Sidebar(props: Props) {
             Ctrl+,
           </span>
         </button>
-        <div className="term-side-foot-keys">
-          <div><span className="kbd">1-9</span> switch</div>
-          <div><span className="kbd">Ctrl+T</span> new tab</div>
-          <div><span className="kbd">Ctrl+W</span> close</div>
-          <div><span className="kbd">Ctrl+B</span> sidebar</div>
-          <div><span className="kbd">Ctrl+Shift+G</span> new group</div>
-        </div>
       </div>
     </aside>
   );

@@ -19,6 +19,7 @@ import { registerClaudeCodeHandlers } from './claude-code'
 import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
 import { registerWorkspaceHandlers } from './workspace'
 import { registerSettingsHandlers } from './settings-store'
+import { registerGitHandlers } from './git'
 
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('disable-features', 'WaylandWpColorManagerV1')
@@ -88,6 +89,7 @@ app
     registerMcpHandlers()
     registerWorkspaceHandlers()
     registerSettingsHandlers()
+    registerGitHandlers()
     app.on('before-quit', () => {
       void stopMcpServer()
     })

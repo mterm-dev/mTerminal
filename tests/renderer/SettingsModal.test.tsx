@@ -662,6 +662,144 @@ describe("SettingsModal — MCP server status", () => {
   });
 });
 
+describe("SettingsModal — Git Panel section", () => {
+  it("renders Git Panel nav button", () => {
+    render(<SettingsModal {...makeProps()} />);
+    expect(
+      screen.getAllByRole("button", { name: /^Git Panel$/ }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("Behavior section no longer contains the 'Git panel' toggle (moved to Git Panel tab)", () => {
+    render(<SettingsModal {...makeProps()} />);
+    gotoSection(/^Behavior$/);
+    expect(screen.queryByText(/^Git panel$/)).toBeNull();
+  });
+
+  it("Git Panel section shows enable toggle and segmented provider", () => {
+    render(<SettingsModal {...makeProps()} />);
+    gotoSection(/^Git Panel$/);
+    expect(screen.getByText(/^Git panel$/)).toBeTruthy();
+    expect(screen.getByText(/^Provider$/)).toBeTruthy();
+    for (const p of ["anthropic", "openai", "ollama"]) {
+      expect(screen.getByRole("button", { name: p })).toBeTruthy();
+    }
+  });
+
+  it("changing provider emits update('gitCommitProvider', ...)", () => {
+    const props = makeProps();
+    render(<SettingsModal {...props} />);
+    gotoSection(/^Git Panel$/);
+    fireEvent.click(screen.getByRole("button", { name: "openai" }));
+    expect(props.update).toHaveBeenCalledWith("gitCommitProvider", "openai");
+  });
+
+  it("base url input visible for openai/ollama, hidden for anthropic", () => {
+    const propsAnthropic = makeProps({
+      settings: { ...DEFAULT_SETTINGS, gitCommitProvider: "anthropic" },
+    });
+    const { unmount } = render(<SettingsModal {...propsAnthropic} />);
+    gotoSection(/^Git Panel$/);
+    expect(screen.queryByText(/^Base URL$/)).toBeNull();
+    unmount();
+
+    const propsOpenai = makeProps({
+      settings: { ...DEFAULT_SETTINGS, gitCommitProvider: "openai" },
+    });
+    render(<SettingsModal {...propsOpenai} />);
+    gotoSection(/^Git Panel$/);
+    expect(screen.getByText(/^Base URL$/)).toBeTruthy();
+  });
+
+  it("api key field hidden for ollama, visible for anthropic/openai", () => {
+    const propsOllama = makeProps({
+      settings: { ...DEFAULT_SETTINGS, gitCommitProvider: "ollama" },
+    });
+    const { unmount } = render(<SettingsModal {...propsOllama} />);
+    gotoSection(/^Git Panel$/);
+    expect(screen.queryByText(/^API key$/)).toBeNull();
+    unmount();
+
+    const propsAnthropic = makeProps({
+      settings: { ...DEFAULT_SETTINGS, gitCommitProvider: "anthropic" },
+    });
+    render(<SettingsModal {...propsAnthropic} />);
+    gotoSection(/^Git Panel$/);
+    expect(screen.getByText(/^API key$/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^set key$/i })).toBeTruthy();
+  });
+
+  it("'set key' opens password input; 'save' calls setKey with the trimmed value", async () => {
+    const propsAnthropic = makeProps({
+      settings: { ...DEFAULT_SETTINGS, gitCommitProvider: "anthropic" },
+    });
+    render(<SettingsModal {...propsAnthropic} />);
+    gotoSection(/^Git Panel$/);
+    fireEvent.click(screen.getByRole("button", { name: /^set key$/i }));
+    const input = screen
+      .getAllByPlaceholderText(/sk-ant/i)[0] as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "  sk-ant-test  " } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    });
+    expect(setKeyMock).toHaveBeenCalledWith("anthropic", "sk-ant-test");
+  });
+
+  it("auto-fetches models on mount and renders model buttons", async () => {
+    listModelsMock.mockResolvedValueOnce([
+      { id: "claude-opus-4-7", name: "Opus" },
+      { id: "claude-sonnet-4-6", name: "Sonnet" },
+    ]);
+    const props = makeProps({
+      settings: { ...DEFAULT_SETTINGS, gitCommitProvider: "anthropic" },
+    });
+    render(<SettingsModal {...props} />);
+    gotoSection(/^Git Panel$/);
+    await waitFor(() => {
+      expect(listModelsMock).toHaveBeenCalledWith("anthropic", undefined);
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "claude-opus-4-7" }),
+      ).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "claude-sonnet-4-6" }));
+    expect(props.update).toHaveBeenCalledWith(
+      "gitCommitAnthropicModel",
+      "claude-sonnet-4-6",
+    );
+  });
+
+  it("system prompt textarea reflects setting and emits update on change", () => {
+    const props = makeProps({
+      settings: { ...DEFAULT_SETTINGS, gitCommitSystemPrompt: "MY PROMPT" },
+    });
+    render(<SettingsModal {...props} />);
+    gotoSection(/^Git Panel$/);
+    const ta = document.querySelector(".settings-textarea") as HTMLTextAreaElement;
+    expect(ta).toBeTruthy();
+    expect(ta.value).toBe("MY PROMPT");
+    fireEvent.change(ta, { target: { value: "NEW PROMPT" } });
+    expect(props.update).toHaveBeenCalledWith(
+      "gitCommitSystemPrompt",
+      "NEW PROMPT",
+    );
+  });
+
+  it("'reset to default' restores DEFAULT_COMMIT_PROMPT", () => {
+    const props = makeProps({
+      settings: { ...DEFAULT_SETTINGS, gitCommitSystemPrompt: "edited" },
+    });
+    render(<SettingsModal {...props} />);
+    gotoSection(/^Git Panel$/);
+    fireEvent.click(screen.getByRole("button", { name: /reset to default/i }));
+    expect(props.update).toHaveBeenCalledWith(
+      "gitCommitSystemPrompt",
+      expect.stringContaining("conventional-commits"),
+    );
+  });
+});
+
 describe("SettingsModal — reset & close", () => {
   it("'reset all' button calls reset", () => {
     const props = makeProps();

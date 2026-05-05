@@ -205,6 +205,53 @@ const api = {
     save: (json: string): Promise<void> =>
       ipcRenderer.invoke('workspace:save', json),
   },
+  git: {
+    status: (
+      cwd: string
+    ): Promise<{
+      isRepo: boolean
+      branch: string | null
+      upstream: string | null
+      ahead: number
+      behind: number
+      files: Array<{
+        path: string
+        oldPath?: string
+        indexStatus: string
+        worktreeStatus: string
+        staged: boolean
+        unstaged: boolean
+        untracked: boolean
+      }>
+      error?: string
+    }> => ipcRenderer.invoke('git:status', { cwd }),
+    diff: (
+      cwd: string,
+      path: string,
+      staged: boolean,
+      context?: number
+    ): Promise<{ text: string; truncated: boolean }> =>
+      ipcRenderer.invoke('git:diff', { cwd, path, staged, context }),
+    stage: (cwd: string, paths: string[]): Promise<void> =>
+      ipcRenderer.invoke('git:stage', { cwd, paths }),
+    unstage: (cwd: string, paths: string[]): Promise<void> =>
+      ipcRenderer.invoke('git:unstage', { cwd, paths }),
+    commit: (
+      cwd: string,
+      message: string,
+      paths?: string[]
+    ): Promise<{ commit: string }> =>
+      ipcRenderer.invoke('git:commit', { cwd, message, paths }),
+    push: (
+      cwd: string,
+      setUpstream?: boolean
+    ): Promise<{ stdout: string; stderr: string }> =>
+      ipcRenderer.invoke('git:push', { cwd, setUpstream }),
+    pull: (cwd: string): Promise<{ stdout: string; stderr: string }> =>
+      ipcRenderer.invoke('git:pull', { cwd }),
+    fetch: (cwd: string): Promise<{ stdout: string; stderr: string }> =>
+      ipcRenderer.invoke('git:fetch', { cwd }),
+  },
   settings: {
     loadSync: (): string | null => {
       const v = ipcRenderer.sendSync('settings:load:sync')

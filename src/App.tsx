@@ -20,6 +20,7 @@ import { useMcpServer } from "./hooks/useMcpServer";
 import { AICommandPalette } from "./components/AICommandPalette";
 import { ExplainPopover } from "./components/ExplainPopover";
 import { AIPanel } from "./components/AIPanel";
+import { GitPanel } from "./components/GitPanel";
 import { invoke, open as openDialog } from "./lib/tauri-shim";
 import type { AiUsage } from "./hooks/useAI";
 import {
@@ -674,6 +675,18 @@ export default function App() {
           width={settings.sidebarWidth}
           onResize={(w) => update("sidebarWidth", w)}
           ccStatuses={ccStatuses}
+          gitSlot={
+            settings.gitPanelEnabled ? (
+              <GitPanel
+                cwd={activeTab?.cwd}
+                collapsed={settings.gitPanelCollapsed}
+                onToggleCollapsed={(b) => update("gitPanelCollapsed", b)}
+                treeView={settings.gitPanelTreeView}
+                onToggleTreeView={(b) => update("gitPanelTreeView", b)}
+                settings={settings}
+              />
+            ) : undefined
+          }
           remoteSlot={
             settings.remoteWorkspaceEnabled ? (
               <RemoteWorkspace

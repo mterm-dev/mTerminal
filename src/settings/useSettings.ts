@@ -33,7 +33,24 @@ export interface Settings {
   aiExplainEnabled: boolean;
   claudeCodeDetectionEnabled: boolean;
   mcpServerEnabled: boolean;
+  gitPanelEnabled: boolean;
+  gitPanelCollapsed: boolean;
+  gitPanelTreeView: boolean;
+  gitCommitProvider: AiProviderId;
+  gitCommitAnthropicModel: string;
+  gitCommitOpenaiModel: string;
+  gitCommitOpenaiBaseUrl: string;
+  gitCommitOllamaModel: string;
+  gitCommitOllamaBaseUrl: string;
+  gitCommitSystemPrompt: string;
 }
+
+export const DEFAULT_COMMIT_PROMPT = `You are an expert engineer writing a git commit message.
+Given the staged diff, produce a single concise commit message in conventional-commits style (feat:, fix:, refactor:, docs:, test:, chore:).
+Rules:
+- Subject line: imperative, lowercase after the type, <=72 chars, no trailing period.
+- Optionally one blank line + a short body (wrap at ~80 chars) explaining WHY, not WHAT.
+- Never include code fences, quotes, or commentary. Output ONLY the commit message text.`;
 
 export const DEFAULT_SETTINGS: Settings = {
   themeId: "mterminal",
@@ -65,6 +82,16 @@ export const DEFAULT_SETTINGS: Settings = {
   aiExplainEnabled: true,
   claudeCodeDetectionEnabled: true,
   mcpServerEnabled: false,
+  gitPanelEnabled: false,
+  gitPanelCollapsed: false,
+  gitPanelTreeView: true,
+  gitCommitProvider: "anthropic",
+  gitCommitAnthropicModel: "",
+  gitCommitOpenaiModel: "",
+  gitCommitOpenaiBaseUrl: "https://api.openai.com/v1",
+  gitCommitOllamaModel: "",
+  gitCommitOllamaBaseUrl: "http://localhost:11434/v1",
+  gitCommitSystemPrompt: DEFAULT_COMMIT_PROMPT,
 };
 
 const KEY = "mterminal:settings:v1";
