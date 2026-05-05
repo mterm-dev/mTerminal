@@ -43,6 +43,16 @@ export default function App() {
   const maximized = useMaximized();
   const { settings, update, reset } = useSettings();
   const theme = useMemo(() => findTheme(settings.themeId), [settings.themeId]);
+  const xtermTheme = useMemo(
+    () => ({
+      ...theme.xterm,
+      background:
+        settings.windowOpacity < 1
+          ? "rgba(0, 0, 0, 0)"
+          : theme.xterm.background,
+    }),
+    [theme, settings.windowOpacity],
+  );
   const [ctx, setCtx] = useState<CtxState | null>(null);
   const [editingTabId, setEditingTabId] = useState<number | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -697,7 +707,7 @@ export default function App() {
                   cursorStyle={settings.cursorStyle}
                   cursorBlink={settings.cursorBlink}
                   scrollback={settings.scrollback}
-                  theme={theme.xterm}
+                  theme={xtermTheme}
                   shell={settings.shellOverride}
                   shellArgs={shellArgs}
                   showGreeting={settings.showGreeting}

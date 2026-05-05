@@ -98,7 +98,7 @@ export function TerminalTab({
       cursorBlink,
       cursorStyle,
       cursorWidth: cursorStyle === "bar" ? 2 : 1,
-      allowTransparency: false,
+      allowTransparency: true,
       scrollback,
       theme,
       smoothScrollDuration: 80,

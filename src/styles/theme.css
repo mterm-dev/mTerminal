@@ -28,7 +28,7 @@
 
   /* shell window background — opacity-aware */
   --window-opacity: 1;
-  --bg-shell: var(--bg-base);
+  --bg-shell: color-mix(in srgb, var(--bg-base) calc(var(--window-opacity) * 100%), transparent);
 
   /* text */
   --fg:         var(--n-900);
@@ -931,6 +931,7 @@ body.resizing-sidebar * {
 .term-pane.grid .term-pane-host.in-grid.hidden { display: none; }
 
 .term-pane-host .xterm-viewport {
+  background-color: transparent !important;
   overflow-y: scroll !important;
   overflow-x: hidden !important;
   scrollbar-gutter: stable;

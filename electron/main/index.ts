@@ -31,8 +31,9 @@ const createWindow = (): BrowserWindow => {
     minHeight: 420,
     frame: false,
     transparent: true,
-    backgroundColor: '#0c0c0c',
+    backgroundColor: '#00000000',
     hasShadow: true,
+    show: false,
     icon: appIcon.isEmpty() ? undefined : appIcon,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -44,6 +45,7 @@ const createWindow = (): BrowserWindow => {
 
   mainWindow = win
 
+  win.once('ready-to-show', () => win.show())
   win.on('maximize', () => win.webContents.send('window:maximized-changed', true))
   win.on('unmaximize', () => win.webContents.send('window:maximized-changed', false))
   win.on('closed', () => {
