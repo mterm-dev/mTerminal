@@ -943,6 +943,28 @@ body.resizing-sidebar * {
   line-height: 1;
 }
 
+.git-icon-btn {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.git-icon-btn svg {
+  display: block;
+}
+
+@keyframes git-spin-kf {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.git-spin {
+  animation: git-spin-kf 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
 .term-side-git-body {
   display: flex;
   flex-direction: column;
@@ -993,6 +1015,9 @@ body.resizing-sidebar * {
   line-height: 1.4;
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
+}
+.term-side-git-toolbar .git-icon-btn {
+  padding: 0;
 }
 .term-side-git-toolbar .ghost-btn.active {
   color: var(--accent);
@@ -1200,6 +1225,10 @@ body.resizing-sidebar * {
 }
 .git-btn {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-sm);
@@ -1210,6 +1239,10 @@ body.resizing-sidebar * {
   font-weight: 500;
   cursor: pointer;
   transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.git-btn svg {
+  display: block;
+  flex-shrink: 0;
 }
 .git-btn:hover:not(:disabled) {
   color: var(--fg);
