@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Channel, invoke } from "../lib/tauri-shim";
 
 export interface AiMessage {
@@ -35,8 +35,10 @@ export interface CompleteHandle {
   cancel: () => Promise<void>;
 }
 
+type ActiveEntry = { handle: CompleteHandle; channel: Channel<AiEvent> };
+
 export function useAI() {
-  const activeRef = useRef<Map<number, CompleteHandle>>(new Map());
+  const activeRef = useRef<Map<number, ActiveEntry>>(new Map());
 
   const complete = useCallback(
     async (opts: CompleteOptions): Promise<CompleteHandle> => {
@@ -60,20 +62,30 @@ export function useAI() {
         taskId,
         cancel: async () => {
           await invoke("ai_cancel", { taskId });
+          const entry = activeRef.current.get(taskId);
+          entry?.channel.unsubscribe?.();
           activeRef.current.delete(taskId);
         },
       };
-      activeRef.current.set(taskId, handle);
+      activeRef.current.set(taskId, { handle, channel });
       return handle;
     },
     [],
   );
 
   const cancelAll = useCallback(async () => {
-    const ids = Array.from(activeRef.current.keys());
-    await Promise.all(ids.map((id) => invoke("ai_cancel", { taskId: id }).catch(() => {})));
+    const entries = Array.from(activeRef.current.entries());
+    await Promise.all(
+      entries.map(([id, { channel }]) =>
+        invoke("ai_cancel", { taskId: id })
+          .catch(() => {})
+          .then(() => channel.unsubscribe?.()),
+      ),
+    );
     activeRef.current.clear();
   }, []);
+
+  useEffect(() => () => { void cancelAll(); }, [cancelAll]);
 
   return { complete, cancelAll };
 }

@@ -2,7 +2,10 @@ import { ipcMain } from 'electron'
 import os from 'node:os'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileP = promisify(execFile)
 import * as nodePty from 'node-pty'
 import pidtree from 'pidtree'
 import {
@@ -239,7 +242,7 @@ export interface ProcInfo {
   cmd: string | null
 }
 
-export function readProcInfo(pid: number): ProcInfo {
+export async function readProcInfo(pid: number): Promise<ProcInfo> {
   if (process.platform === 'linux') {
     return { cwd: readLinuxCwd(pid), cmd: readLinuxComm(pid) }
   }
@@ -247,11 +250,12 @@ export function readProcInfo(pid: number): ProcInfo {
     let cwd: string | null = null
     let cmd: string | null = null
     try {
-      const out = execFileSync('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      })
-      for (const line of out.split('\n')) {
+      const { stdout } = await execFileP(
+        'lsof',
+        ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
+        { encoding: 'utf8' }
+      )
+      for (const line of stdout.split('\n')) {
         if (line.startsWith('n')) {
           cwd = line.slice(1)
           break
@@ -259,10 +263,12 @@ export function readProcInfo(pid: number): ProcInfo {
       }
     } catch {}
     try {
-      const out = execFileSync('ps', ['-o', 'comm=', '-p', String(pid)], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim()
+      const { stdout } = await execFileP(
+        'ps',
+        ['-o', 'comm=', '-p', String(pid)],
+        { encoding: 'utf8' }
+      )
+      const out = stdout.trim()
       if (out) cmd = path.basename(out)
     } catch {}
     return { cwd, cmd }
@@ -271,12 +277,12 @@ export function readProcInfo(pid: number): ProcInfo {
     let cwd: string | null = null
     let cmd: string | null = null
     try {
-      const out = execFileSync(
+      const { stdout } = await execFileP(
         'wmic',
         ['process', 'where', `ProcessId=${pid}`, 'get', 'Name,ExecutablePath', '/format:list'],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+        { encoding: 'utf8' }
       )
-      for (const rawLine of out.split(/\r?\n/)) {
+      for (const rawLine of stdout.split(/\r?\n/)) {
         const line = rawLine.trim()
         if (line.startsWith('Name=')) {
           let name = line.slice('Name='.length)
@@ -290,12 +296,12 @@ export function readProcInfo(pid: number): ProcInfo {
       }
     } catch {
       try {
-        const out = execFileSync(
+        const { stdout } = await execFileP(
           'tasklist',
           ['/fi', `PID eq ${pid}`, '/fo', 'csv', '/nh'],
-          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+          { encoding: 'utf8' }
         )
-        const first = out.split('\n')[0]?.trim()
+        const first = stdout.split('\n')[0]?.trim()
         if (first) {
           const m = /^"([^"]+)"/.exec(first)
           if (m) {
@@ -328,9 +334,9 @@ async function ptyInfo(
   } catch {
     leaf = rootPid
   }
-  const info = readProcInfo(leaf)
+  const info = await readProcInfo(leaf)
   if (info.cwd === null && info.cmd === null && leaf !== rootPid) {
-    const fallback = readProcInfo(rootPid)
+    const fallback = await readProcInfo(rootPid)
     return { cwd: fallback.cwd, cmd: fallback.cmd, pid: leaf }
   }
   return { cwd: info.cwd, cmd: info.cmd, pid: leaf }

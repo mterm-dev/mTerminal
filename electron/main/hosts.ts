@@ -64,13 +64,19 @@ function emptyFile(): HostsFile {
 }
 
 function normalizeHost(raw: Partial<HostMeta>): HostMeta {
+  const rawPort = typeof raw.port === 'number' ? raw.port : NaN
+  const port = Number.isFinite(rawPort)
+    ? Math.max(1, Math.min(65535, Math.floor(rawPort)))
+    : 22
+  const rawAuth = typeof raw.auth === 'string' ? raw.auth : ''
+  const auth = VALID_AUTH.has(rawAuth) ? rawAuth : 'key'
   return {
     id: typeof raw.id === 'string' ? raw.id : '',
     name: typeof raw.name === 'string' ? raw.name : '',
     host: typeof raw.host === 'string' ? raw.host : '',
-    port: typeof raw.port === 'number' ? raw.port : 22,
+    port,
     user: typeof raw.user === 'string' ? raw.user : '',
-    auth: typeof raw.auth === 'string' ? raw.auth : 'key',
+    auth,
     identityPath: typeof raw.identityPath === 'string' ? raw.identityPath : undefined,
     savePassword: raw.savePassword === true,
     lastUsed: typeof raw.lastUsed === 'number' ? raw.lastUsed : undefined,
@@ -252,13 +258,18 @@ export function registerHostsHandlers(): void {
   ipcMain.handle(
     'hosts:save',
     async (_e, args: { host: HostMeta; password?: string }): Promise<string> => {
-      const incoming = normalizeHost(args.host)
+      const raw = args.host
+      if (
+        typeof raw.auth === 'string' &&
+        raw.auth.length > 0 &&
+        !VALID_AUTH.has(raw.auth)
+      ) {
+        throw new Error('invalid auth: ' + raw.auth)
+      }
+      if (raw.port === 0) raw.port = 22
+      const incoming = normalizeHost(raw)
       if (incoming.host.trim().length === 0) throw new Error('host cannot be empty')
       if (incoming.user.trim().length === 0) throw new Error('user cannot be empty')
-      if (!VALID_AUTH.has(incoming.auth)) {
-        throw new Error('invalid auth: ' + incoming.auth)
-      }
-      if (incoming.port === 0) incoming.port = 22
 
       const id = await withLock(async () => {
         const file = await readFileLocked()

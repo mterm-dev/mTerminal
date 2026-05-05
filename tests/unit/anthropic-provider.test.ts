@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { AnthropicProvider } from '../../electron/main/ai/anthropic'
-import { estimateCost, type AiEvent, type AbortFlag } from '../../electron/main/ai/provider'
+import { estimateCost, type AiEvent } from '../../electron/main/ai/provider'
 
 function sseResponse(chunks: string[], status = 200): Response {
   const enc = new TextEncoder()
@@ -43,12 +43,12 @@ describe('AnthropicProvider.streamComplete', () => {
 
     const provider = new AnthropicProvider('sk-ant-test')
     const events: AiEvent[] = []
-    const cancel: AbortFlag = { cancelled: false }
+    const signal = new AbortController().signal
 
     await provider.streamComplete(
       { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
       (ev) => events.push(ev),
-      cancel
+      signal
     )
 
     const deltas = events.filter((e) => e.kind === 'delta') as DeltaEv[]
@@ -81,7 +81,7 @@ describe('AnthropicProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'claude-haiku-3', messages: [{ role: 'user', content: 'hi' }] },
       (ev) => events.push(ev),
-      { cancelled: false }
+      new AbortController().signal
     )
     const dones = events.filter((e) => e.kind === 'done') as DoneEv[]
     expect(dones).toHaveLength(1)
@@ -102,7 +102,7 @@ describe('AnthropicProvider.streamComplete', () => {
       provider.streamComplete(
         { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
         () => {},
-        { cancelled: false }
+        new AbortController().signal
       )
     ).rejects.toThrow(/anthropic/)
 
@@ -110,7 +110,7 @@ describe('AnthropicProvider.streamComplete', () => {
       provider.streamComplete(
         { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
         () => {},
-        { cancelled: false }
+        new AbortController().signal
       )
     ).rejects.toThrow(/401/)
 
@@ -118,7 +118,7 @@ describe('AnthropicProvider.streamComplete', () => {
       provider.streamComplete(
         { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
         () => {},
-        { cancelled: false }
+        new AbortController().signal
       )
     ).rejects.toThrow(/invalid api key/)
   })
@@ -136,7 +136,7 @@ describe('AnthropicProvider.streamComplete', () => {
       provider.streamComplete(
         { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
         () => {},
-        { cancelled: false }
+        new AbortController().signal
       )
     ).rejects.toThrow(/anthropic: empty response body/)
   })
@@ -157,7 +157,7 @@ describe('AnthropicProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
       (ev) => events.push(ev),
-      { cancelled: false }
+      new AbortController().signal
     )
     const deltas = events.filter((e) => e.kind === 'delta') as DeltaEv[]
     expect(deltas.map((d) => d.value)).toEqual(['a', 'b'])
@@ -179,7 +179,7 @@ describe('AnthropicProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
       (ev) => events.push(ev),
-      { cancelled: false }
+      new AbortController().signal
     )
     const deltas = events.filter((e) => e.kind === 'delta') as DeltaEv[]
     expect(deltas).toHaveLength(1)
@@ -203,7 +203,7 @@ describe('AnthropicProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
       (ev) => events.push(ev),
-      { cancelled: false }
+      new AbortController().signal
     )
     const deltas = events.filter((e) => e.kind === 'delta') as DeltaEv[]
     expect(deltas).toHaveLength(1)
@@ -212,7 +212,8 @@ describe('AnthropicProvider.streamComplete', () => {
   })
 
   it('cancelled stream terminates cleanly without emitting done', async () => {
-    const cancel: AbortFlag = { cancelled: true }
+    const controller = new AbortController()
+    controller.abort()
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const err = new Error('aborted')
       err.name = 'AbortError'
@@ -227,7 +228,7 @@ describe('AnthropicProvider.streamComplete', () => {
       provider.streamComplete(
         { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
         (ev) => events.push(ev),
-        cancel
+        controller.signal
       )
     ).resolves.toBeUndefined()
     expect(events.find((e) => e.kind === 'done')).toBeUndefined()
@@ -243,7 +244,7 @@ describe('AnthropicProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
       () => {},
-      { cancelled: false }
+      new AbortController().signal
     )
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const call = fetchMock.mock.calls[0] as [string, RequestInit]
@@ -265,7 +266,7 @@ describe('AnthropicProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'claude-sonnet-4', messages: [{ role: 'user', content: 'hi' }] },
       () => {},
-      { cancelled: false }
+      new AbortController().signal
     )
     const init = (fetchMock.mock.calls[0] as [string, RequestInit])[1]
     const body = JSON.parse(init.body as string)
@@ -293,7 +294,7 @@ describe('AnthropicProvider.streamComplete', () => {
         maxTokens: 2048,
       },
       () => {},
-      { cancelled: false }
+      new AbortController().signal
     )
     const init = (fetchMock.mock.calls[0] as [string, RequestInit])[1]
     const body = JSON.parse(init.body as string)

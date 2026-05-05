@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { OpenAiProvider } from '../../electron/main/ai/openai'
-import { estimateCost, type AiEvent, type AbortFlag } from '../../electron/main/ai/provider'
+import { estimateCost, type AiEvent } from '../../electron/main/ai/provider'
 
 function sseResponse(chunks: string[], status = 200): Response {
   const enc = new TextEncoder()
@@ -38,12 +38,11 @@ describe('OpenAiProvider.streamComplete', () => {
 
     const provider = new OpenAiProvider('sk-test', 'https://api.example.com/v1', 'openai')
     const events: AiEvent[] = []
-    const cancel: AbortFlag = { cancelled: false }
 
     await provider.streamComplete(
       { model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] },
       (ev) => events.push(ev),
-      cancel
+      new AbortController().signal
     )
 
     const deltas = events.filter((e) => e.kind === 'delta')
@@ -72,7 +71,7 @@ describe('OpenAiProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'gpt-4', messages: [{ role: 'user', content: 'hi' }] },
       (ev) => events.push(ev),
-      { cancelled: false }
+      new AbortController().signal
     )
     const done = events.find((e) => e.kind === 'done') as
       | { kind: 'done'; value: { inTokens: number; outTokens: number; costUsd: number } }
@@ -92,7 +91,7 @@ describe('OpenAiProvider.streamComplete', () => {
       provider.streamComplete(
         { model: 'gpt-4', messages: [{ role: 'user', content: 'hi' }] },
         () => {},
-        { cancelled: false }
+        new AbortController().signal
       )
     ).rejects.toThrow(/401/)
 
@@ -100,20 +99,17 @@ describe('OpenAiProvider.streamComplete', () => {
       provider.streamComplete(
         { model: 'gpt-4', messages: [{ role: 'user', content: 'hi' }] },
         () => {},
-        { cancelled: false }
+        new AbortController().signal
       )
     ).rejects.toThrow(/invalid api key/)
   })
 
   it('cancelled stream terminates cleanly without emitting done', async () => {
-    
-    
-    const cancel: AbortFlag = { cancelled: true }
+    const controller = new AbortController()
+    controller.abort()
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
-      
       const err = new Error('aborted')
       err.name = 'AbortError'
-      
       if (init?.signal?.aborted) throw err
       throw err
     })
@@ -125,7 +121,7 @@ describe('OpenAiProvider.streamComplete', () => {
       provider.streamComplete(
         { model: 'gpt-4', messages: [{ role: 'user', content: 'hi' }] },
         (ev) => events.push(ev),
-        cancel
+        controller.signal
       )
     ).resolves.toBeUndefined()
     expect(events.find((e) => e.kind === 'done')).toBeUndefined()
@@ -147,7 +143,7 @@ describe('OpenAiProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'gpt-4', messages: [{ role: 'user', content: 'hi' }] },
       (ev) => events.push(ev),
-      { cancelled: false }
+      new AbortController().signal
     )
     const deltas = events.filter((e) => e.kind === 'delta') as Array<{
       kind: 'delta'
@@ -171,7 +167,7 @@ describe('OpenAiProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'gpt-4', messages: [{ role: 'user', content: 'hi' }] },
       () => {},
-      { cancelled: false }
+      new AbortController().signal
     )
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const url = (fetchMock.mock.calls[0] as [string, RequestInit])[0]
@@ -186,7 +182,7 @@ describe('OpenAiProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'llama3', messages: [{ role: 'user', content: 'hi' }] },
       () => {},
-      { cancelled: false }
+      new AbortController().signal
     )
     const init = (fetchMock.mock.calls[0] as [string, RequestInit])[1]
     const headers = init.headers as Record<string, string>
@@ -202,7 +198,7 @@ describe('OpenAiProvider.streamComplete', () => {
     await provider.streamComplete(
       { model: 'gpt-4', messages: [{ role: 'user', content: 'hi' }] },
       () => {},
-      { cancelled: false }
+      new AbortController().signal
     )
     const init = (fetchMock.mock.calls[0] as [string, RequestInit])[1]
     const headers = init.headers as Record<string, string>

@@ -271,6 +271,7 @@ export function TerminalTab({
       if (id != null) {
         invoke("pty_kill", { id }).catch(() => {});
       }
+      events.unsubscribe?.();
       onPtyCloseRef.current?.(tabId);
       term.dispose();
       termRef.current = null;

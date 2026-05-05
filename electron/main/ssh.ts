@@ -178,19 +178,20 @@ export function registerSshHandlers(): void {
     let command: string
     let argv: string[]
     let display: string[]
+    const env = buildEnv()
     if (host.auth === 'password') {
       const sshpassPath = whichOnPath('sshpass')
       if (!sshpassPath) throw new Error('sshpass missing on PATH')
       command = 'sshpass'
-      argv = ['-p', password as string, 'ssh', ...baseArgs]
-      display = ['sshpass', '-p', '***', 'ssh', ...baseArgs]
+      argv = ['-e', 'ssh', ...baseArgs]
+      display = ['sshpass', '-e', 'ssh', ...baseArgs]
+      env.SSHPASS = password as string
     } else {
       command = 'ssh'
       argv = baseArgs
       display = ['ssh', ...baseArgs]
     }
 
-    const env = buildEnv()
     const id = spawnRaw({
       rows: args.rows,
       cols: args.cols,

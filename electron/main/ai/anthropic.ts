@@ -1,19 +1,15 @@
 import {
-  AbortFlag,
   AiEvent,
   AiProvider,
   CompleteRequest,
   EventSink,
+  JsonValue,
   ModelInfo,
   estimateCost,
 } from './provider'
 
 const ANTHROPIC_VERSION = '2023-06-01'
 const BASE = 'https://api.anthropic.com/v1'
-
-interface JsonValue {
-  [k: string]: unknown
-}
 
 export class AnthropicProvider implements AiProvider {
   private apiKey: string
@@ -25,9 +21,9 @@ export class AnthropicProvider implements AiProvider {
   async streamComplete(
     req: CompleteRequest,
     sink: EventSink,
-    cancel: AbortFlag
+    signal: AbortSignal
   ): Promise<void> {
-    const body: JsonValue = {
+    const body: { [k: string]: JsonValue } = {
       model: req.model,
       max_tokens: req.maxTokens ?? 4096,
       stream: true,
@@ -35,11 +31,6 @@ export class AnthropicProvider implements AiProvider {
     }
     if (req.system != null) body.system = req.system
     if (req.temperature != null) body.temperature = req.temperature
-
-    const controller = new AbortController()
-    const cancelPoll = setInterval(() => {
-      if (cancel.cancelled) controller.abort()
-    }, 100)
 
     let resp: Response
     try {
@@ -52,21 +43,18 @@ export class AnthropicProvider implements AiProvider {
           accept: 'text/event-stream',
         },
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal,
       })
     } catch (e) {
-      clearInterval(cancelPoll)
-      if (cancel.cancelled) return
-      throw new Error(`anthropic request: ${(e as Error).message}`)
+      if (signal.aborted) return
+      throw new Error(`anthropic request: ${e instanceof Error ? e.message : String(e)}`)
     }
 
     if (!resp.ok) {
-      clearInterval(cancelPoll)
       const text = await resp.text().catch(() => '')
       throw new Error(`anthropic ${resp.status}: ${text}`)
     }
     if (!resp.body) {
-      clearInterval(cancelPoll)
       throw new Error('anthropic: empty response body')
     }
 
@@ -75,28 +63,33 @@ export class AnthropicProvider implements AiProvider {
     const reader = resp.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let buf = ''
+    let donned = false
+
+    const emitDone = () => {
+      if (donned) return
+      donned = true
+      const cost = estimateCost('anthropic', req.model, inTokens, outTokens)
+      sink({ kind: 'done', value: { inTokens, outTokens, costUsd: cost } })
+    }
 
     try {
       while (true) {
-        if (cancel.cancelled) {
-          try {
-            await reader.cancel()
-          } catch {}
+        if (signal.aborted) {
+          try { await reader.cancel() } catch {}
           return
         }
         let chunk: { done: boolean; value?: Uint8Array }
         try {
           chunk = await reader.read()
         } catch (e) {
-          if (cancel.cancelled) return
-          throw new Error(`read sse: ${(e as Error).message}`)
+          if (signal.aborted) return
+          throw new Error(`read sse: ${e instanceof Error ? e.message : String(e)}`)
         }
         if (chunk.done) break
         if (!chunk.value) continue
         buf += decoder.decode(chunk.value, { stream: true })
 
         let nl: number
-        // eslint-disable-next-line no-cond-assign
         while ((nl = buf.indexOf('\n')) >= 0) {
           const rawLine = buf.slice(0, nl)
           buf = buf.slice(nl + 1)
@@ -104,55 +97,42 @@ export class AnthropicProvider implements AiProvider {
           if (!line.startsWith('data: ')) continue
           const payload = line.slice(6)
           if (payload.length === 0) continue
-          let v: JsonValue
+          let v: { [k: string]: JsonValue }
           try {
-            v = JSON.parse(payload) as JsonValue
+            v = JSON.parse(payload) as { [k: string]: JsonValue }
           } catch {
             continue
           }
           const t = typeof v.type === 'string' ? (v.type as string) : ''
           if (t === 'content_block_delta') {
-            const delta = v.delta as JsonValue | undefined
+            const delta = v.delta as { [k: string]: JsonValue } | undefined
             const text = delta?.text
             if (typeof text === 'string') {
               const ev: AiEvent = { kind: 'delta', value: text }
               sink(ev)
             }
           } else if (t === 'message_start') {
-            const msg = v.message as JsonValue | undefined
-            const u = msg?.usage as JsonValue | undefined
+            const msg = v.message as { [k: string]: JsonValue } | undefined
+            const u = msg?.usage as { [k: string]: JsonValue } | undefined
             if (u) {
-              if (typeof u.input_tokens === 'number')
-                inTokens = u.input_tokens as number
-              if (typeof u.output_tokens === 'number')
-                outTokens = u.output_tokens as number
+              if (typeof u.input_tokens === 'number') inTokens = u.input_tokens as number
+              if (typeof u.output_tokens === 'number') outTokens = u.output_tokens as number
             }
           } else if (t === 'message_delta') {
-            const u = v.usage as JsonValue | undefined
+            const u = v.usage as { [k: string]: JsonValue } | undefined
             if (u && typeof u.output_tokens === 'number') {
               outTokens = u.output_tokens as number
             }
           } else if (t === 'message_stop') {
-            const cost = estimateCost(
-              'anthropic',
-              req.model,
-              inTokens,
-              outTokens
-            )
-            sink({
-              kind: 'done',
-              value: { inTokens, outTokens, costUsd: cost },
-            })
+            emitDone()
             return
           }
         }
       }
     } finally {
-      clearInterval(cancelPoll)
     }
 
-    const cost = estimateCost('anthropic', req.model, inTokens, outTokens)
-    sink({ kind: 'done', value: { inTokens, outTokens, costUsd: cost } })
+    emitDone()
   }
 
   async listModels(): Promise<ModelInfo[]> {

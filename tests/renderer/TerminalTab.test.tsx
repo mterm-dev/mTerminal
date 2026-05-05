@@ -77,7 +77,7 @@ const { shimMock, fakeTerminals, fitMock, webLinksMock } = vi.hoisted(() => {
     invoke: vi.fn(),
     Channel: class<T> {
       public onmessage: ((msg: T) => void) | null = null;
-      public _unsubscribe: (() => void) | null = null;
+      public unsubscribe: (() => void) | null = null;
     },
     readText: vi.fn(async () => ""),
     writeText: vi.fn(async () => {}),
@@ -433,6 +433,22 @@ describe("TerminalTab", () => {
     expect(kill).toBeTruthy();
     expect((kill![1] as Record<string, unknown>).id).toBe(55);
     expect(t.dispose).toHaveBeenCalled();
+  });
+
+  it("9b. unmount calls channel.unsubscribe() to remove ipcRenderer listener", async () => {
+    const unsubscribeFn = vi.fn();
+    shimMock.invoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === "pty_spawn") {
+        const ch = (args as { events: { unsubscribe: (() => void) | null } }).events;
+        ch.unsubscribe = unsubscribeFn;
+        return 66;
+      }
+      return undefined;
+    });
+    const { unmount } = render(<TerminalTab {...baseProps} tabId={1} />);
+    await flush();
+    unmount();
+    expect(unsubscribeFn).toHaveBeenCalledTimes(1);
   });
 
   it("10. right-click w/ non-empty selection invokes onSelectionMenu", async () => {

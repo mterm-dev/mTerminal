@@ -12,8 +12,7 @@ const mt = (): MtApi => {
 
 export class Channel<T> {
   public onmessage: ((msg: T) => void) | null = null
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public _unsubscribe: (() => void) | null = null
+  public unsubscribe: (() => void) | null = null
 }
 
 type Args = Record<string, unknown> | undefined
@@ -39,7 +38,7 @@ export async function invoke<T = unknown>(
       })
       if (events) {
         const off = api.pty.onEvent(id, (ev) => events.onmessage?.(ev as unknown))
-        events._unsubscribe = off
+        events.unsubscribe = off
       }
       return id as T
     }
@@ -52,7 +51,7 @@ export async function invoke<T = unknown>(
       })
       if (events) {
         const off = api.pty.onEvent(id, (ev) => events.onmessage?.(ev as unknown))
-        events._unsubscribe = off
+        events.unsubscribe = off
       }
       return id as T
     }
@@ -126,7 +125,7 @@ export async function invoke<T = unknown>(
       })
       if (events) {
         const off = api.ai.onEvent(taskId, (ev) => events.onmessage?.(ev as unknown))
-        events._unsubscribe = off
+        events.unsubscribe = off
       }
       return taskId as T
     }

@@ -192,8 +192,8 @@ describe('buildEnv', () => {
 describe('readProcInfo', () => {
   it.skipIf(process.platform !== 'linux')(
     'returns cwd and cmd for the current process on Linux',
-    () => {
-      const info = readProcInfo(process.pid)
+    async () => {
+      const info = await readProcInfo(process.pid)
       expect(info.cwd).not.toBeNull()
       expect(info.cmd).not.toBeNull()
       expect(info.cwd).toBe(process.cwd())
@@ -204,8 +204,8 @@ describe('readProcInfo', () => {
 
   it.skipIf(process.platform !== 'linux')(
     'returns nulls for an invalid pid on Linux',
-    () => {
-      const info = readProcInfo(999999)
+    async () => {
+      const info = await readProcInfo(999999)
       expect(info.cwd).toBeNull()
       expect(info.cmd).toBeNull()
     }

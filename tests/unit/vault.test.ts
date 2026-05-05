@@ -19,6 +19,7 @@ import {
   setHostPassword,
   clearHostPassword,
   isUnlocked,
+  zero,
 } from '../../electron/main/vault'
 
 const TEST_TIMEOUT = 30000
@@ -251,11 +252,30 @@ describe('vault', () => {
       expect(getAiKey('anthropic')).toBeNull()
       expect(getHostPassword('host-1')).toBeNull()
 
-      
+
       await invoke('vault:lock')
       await invoke('vault:unlock', { masterPassword: 'pw' })
       expect(getAiKey('anthropic')).toBeNull()
       expect(getHostPassword('host-1')).toBeNull()
     }
   )
+})
+
+describe('zero', () => {
+  it('fills every byte of the buffer with 0', () => {
+    const buf = new Uint8Array(32)
+    for (let i = 0; i < buf.length; i++) buf[i] = (i + 1) & 0xff
+    zero(buf)
+    for (let i = 0; i < buf.length; i++) {
+      expect(buf[i]).toBe(0)
+    }
+  })
+
+  it('works on an already-zeroed buffer without throwing', () => {
+    const buf = new Uint8Array(16)
+    expect(() => zero(buf)).not.toThrow()
+    for (let i = 0; i < buf.length; i++) {
+      expect(buf[i]).toBe(0)
+    }
+  })
 })

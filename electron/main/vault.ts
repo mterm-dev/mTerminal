@@ -141,8 +141,7 @@ function persist(): void {
   writeVaultFile(fileFromKey(state.key, state.salt, state.payload))
 }
 
-function zero(buf: Uint8Array): void {
-  crypto.randomFillSync(buf)
+export function zero(buf: Uint8Array): void {
   buf.fill(0)
 }
 
@@ -266,8 +265,9 @@ export function registerVaultHandlers(): void {
       const newSalt = crypto.randomBytes(SALT_LEN)
       const newKey = deriveKey(newPw, newSalt)
       writeVaultFile(fileFromKey(newKey, newSalt, payload))
-      if (state) zero(state.key)
+      const oldState = state
       state = { key: newKey, salt: newSalt, payload }
+      if (oldState) zero(oldState.key)
     }
   )
 }

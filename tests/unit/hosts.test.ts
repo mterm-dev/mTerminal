@@ -179,6 +179,78 @@ describe('hosts', () => {
     expect(list.hosts.find((h) => h.id === id)!.port).toBe(22)
   })
 
+  it('normalizeHost clamps port=-1 to 1', async () => {
+    await loadModules()
+    const dir = path.join(cfgDir, 'mterminal')
+    fs.mkdirSync(dir, { recursive: true })
+    const file = {
+      version: 1,
+      hosts: [
+        {
+          id: 'h_neg',
+          name: 'h',
+          host: 'h.test',
+          port: -1,
+          user: 'u',
+          auth: 'key',
+          savePassword: false,
+        },
+      ],
+      groups: [],
+    }
+    fs.writeFileSync(path.join(dir, 'hosts.json'), JSON.stringify(file))
+    const list = (await invoke('hosts:list')) as HostListResult
+    expect(list.hosts.find((h) => h.id === 'h_neg')!.port).toBe(1)
+  })
+
+  it('normalizeHost clamps port=999999 to 65535', async () => {
+    await loadModules()
+    const dir = path.join(cfgDir, 'mterminal')
+    fs.mkdirSync(dir, { recursive: true })
+    const file = {
+      version: 1,
+      hosts: [
+        {
+          id: 'h_big',
+          name: 'h',
+          host: 'h.test',
+          port: 999999,
+          user: 'u',
+          auth: 'key',
+          savePassword: false,
+        },
+      ],
+      groups: [],
+    }
+    fs.writeFileSync(path.join(dir, 'hosts.json'), JSON.stringify(file))
+    const list = (await invoke('hosts:list')) as HostListResult
+    expect(list.hosts.find((h) => h.id === 'h_big')!.port).toBe(65535)
+  })
+
+  it('normalizeHost coerces unknown auth to "key"', async () => {
+    await loadModules()
+    const dir = path.join(cfgDir, 'mterminal')
+    fs.mkdirSync(dir, { recursive: true })
+    const file = {
+      version: 1,
+      hosts: [
+        {
+          id: 'h_auth',
+          name: 'h',
+          host: 'h.test',
+          port: 22,
+          user: 'u',
+          auth: 'malicious',
+          savePassword: false,
+        },
+      ],
+      groups: [],
+    }
+    fs.writeFileSync(path.join(dir, 'hosts.json'), JSON.stringify(file))
+    const list = (await invoke('hosts:list')) as HostListResult
+    expect(list.hosts.find((h) => h.id === 'h_auth')!.auth).toBe('key')
+  })
+
   it('hosts:save with existing id updates in place — no duplicate', async () => {
     await loadModules()
     const id = (await invoke('hosts:save', {

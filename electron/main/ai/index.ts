@@ -2,7 +2,6 @@ import { ipcMain } from 'electron'
 import { AnthropicProvider } from './anthropic'
 import { OpenAiProvider } from './openai'
 import {
-  AbortFlag,
   AiEvent,
   AiProvider,
   CompleteRequest,
@@ -14,11 +13,17 @@ import { getMainWindow } from '../sessions'
 import { isUnlocked } from '../vault'
 
 interface TaskEntry {
-  flag: AbortFlag
+  controller: AbortController
 }
 
 const tasks = new Map<number, TaskEntry>()
 let nextTaskId = 1
+
+export function cancelAllAiTasks(): void {
+  for (const entry of tasks.values()) {
+    entry.controller.abort()
+  }
+}
 
 function requireVaultKey(provider: string): string {
   if (!isUnlocked()) throw new Error(`vault locked — unlock to use ${provider}`)
@@ -61,14 +66,17 @@ interface StreamArgs {
 export function registerAiHandlers(): void {
   ipcMain.handle('ai:stream-complete', (_e, args: StreamArgs) => {
     const taskId = nextTaskId++
-    const flag: AbortFlag = { cancelled: false }
+    const controller = new AbortController()
 
     let prov: AiProvider
     try {
       prov = buildProvider(args.provider, args.baseUrl)
     } catch (e) {
       setImmediate(() => {
-        sendEvent(taskId, { kind: 'error', value: (e as Error).message })
+        sendEvent(taskId, {
+          kind: 'error',
+          value: e instanceof Error ? e.message : String(e),
+        })
       })
       return taskId
     }
@@ -81,19 +89,16 @@ export function registerAiHandlers(): void {
       temperature: args.temperature,
     }
 
-    tasks.set(taskId, { flag })
+    tasks.set(taskId, { controller })
     ;(async () => {
       try {
-        await prov.streamComplete(
-          req,
-          (ev) => {
-            sendEvent(taskId, ev)
-          },
-          flag
-        )
+        await prov.streamComplete(req, (ev) => { sendEvent(taskId, ev) }, controller.signal)
       } catch (e) {
-        if (!flag.cancelled) {
-          sendEvent(taskId, { kind: 'error', value: (e as Error).message })
+        if (!controller.signal.aborted) {
+          sendEvent(taskId, {
+            kind: 'error',
+            value: e instanceof Error ? e.message : String(e),
+          })
         }
       } finally {
         tasks.delete(taskId)
@@ -105,7 +110,7 @@ export function registerAiHandlers(): void {
 
   ipcMain.handle('ai:cancel', (_e, args: { taskId: number }) => {
     const t = tasks.get(args.taskId)
-    if (t) t.flag.cancelled = true
+    if (t) t.controller.abort()
   })
 
   ipcMain.handle(

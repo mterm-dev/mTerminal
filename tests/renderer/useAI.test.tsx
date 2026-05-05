@@ -6,7 +6,7 @@ import { renderHook, act } from "@testing-library/react";
 const { invokeMock, MockChannel } = vi.hoisted(() => {
   class MockChannel<T> {
     public onmessage: ((msg: T) => void) | null = null;
-    public _unsubscribe: (() => void) | null = null;
+    public unsubscribe: (() => void) | null = null;
   }
   return { invokeMock: vi.fn(), MockChannel };
 });
@@ -164,6 +164,52 @@ describe("useAI - cancelAll()", () => {
       await result.current.cancelAll();
     });
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("cancelAll calls unsubscribe on each channel", async () => {
+    const unsub1 = vi.fn();
+    const unsub2 = vi.fn();
+    invokeMock.mockResolvedValueOnce(10);
+    invokeMock.mockResolvedValueOnce(20);
+    const { result } = renderHook(() => useAI());
+
+    await act(async () => {
+      await result.current.complete({ provider: "p", model: "m", messages: [] });
+    });
+    const ch1: MockChannel<AiEvent> = invokeMock.mock.calls[0][1].events;
+    ch1.unsubscribe = unsub1;
+
+    await act(async () => {
+      await result.current.complete({ provider: "p", model: "m", messages: [] });
+    });
+    const ch2: MockChannel<AiEvent> = invokeMock.mock.calls[1][1].events;
+    ch2.unsubscribe = unsub2;
+
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
+    await act(async () => {
+      await result.current.cancelAll();
+    });
+    expect(unsub1).toHaveBeenCalledTimes(1);
+    expect(unsub2).toHaveBeenCalledTimes(1);
+  });
+
+  it("unmount triggers cancelAll for active tasks", async () => {
+    invokeMock.mockResolvedValueOnce(77);
+    invokeMock.mockResolvedValue(undefined);
+    const { result, unmount } = renderHook(() => useAI());
+    await act(async () => {
+      await result.current.complete({ provider: "p", model: "m", messages: [] });
+    });
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
+    unmount();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const cancelCall = invokeMock.mock.calls.find((c) => c[0] === "ai_cancel");
+    expect(cancelCall).toBeTruthy();
+    expect((cancelCall![1] as { taskId: number }).taskId).toBe(77);
   });
 });
 

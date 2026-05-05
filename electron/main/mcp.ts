@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import fs from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -18,6 +19,7 @@ interface McpStatus {
 
 let server: net.Server | null = null
 let socketPath: string | null = null
+let starting: Promise<McpStatus> | null = null
 
 function computeSocketPath(): string {
   const base =
@@ -33,11 +35,11 @@ interface JsonRpcRequest {
   params?: unknown
 }
 
-function successResponse(id: unknown, result: unknown): string {
+function successResponse(id: number | string | null, result: unknown): string {
   return JSON.stringify({ jsonrpc: '2.0', id: id ?? null, result })
 }
 
-function errorResponse(id: unknown, code: number, message: string): string {
+function errorResponse(id: number | string | null, code: number, message: string): string {
   return JSON.stringify({
     jsonrpc: '2.0',
     id: id ?? null,
@@ -86,19 +88,25 @@ export function toolDefinitions(): unknown {
   ]
 }
 
-export function callTool(name: string, args: Record<string, unknown>): string {
+export async function callTool(
+  name: string,
+  args: Record<string, unknown>
+): Promise<string> {
   switch (name) {
     case 'list_tabs': {
-      const tabs = listSessionIds().map((sid) => {
-        const pid = sessionPid(sid)
-        const info = pid != null ? readProcInfo(pid) : { cwd: null, cmd: null }
-        return {
-          tab_id: sid,
-          pid,
-          cwd: info.cwd,
-          cmd: info.cmd,
-        }
-      })
+      const tabs = await Promise.all(
+        listSessionIds().map(async (sid) => {
+          const pid = sessionPid(sid)
+          const info =
+            pid != null ? await readProcInfo(pid) : { cwd: null, cmd: null }
+          return {
+            tab_id: sid,
+            pid,
+            cwd: info.cwd,
+            cmd: info.cmd,
+          }
+        })
+      )
       return JSON.stringify({ tabs }, null, 2)
     }
     case 'get_output': {
@@ -126,10 +134,10 @@ export function callTool(name: string, args: Record<string, unknown>): string {
   }
 }
 
-export function dispatch(
+export async function dispatch(
   method: string,
   params: unknown
-): { result?: unknown; error?: { code: number; message: string } } {
+): Promise<{ result?: unknown; error?: { code: number; message: string } }> {
   switch (method) {
     case 'initialize':
       return {
@@ -151,7 +159,7 @@ export function dispatch(
           ? (p['arguments'] as Record<string, unknown>)
           : {}
       try {
-        const text = callTool(name, argsObj)
+        const text = await callTool(name, argsObj)
         return {
           result: {
             content: [{ type: 'text', text }],
@@ -173,7 +181,7 @@ export function dispatch(
   }
 }
 
-export function handleMessage(raw: string): string | null {
+export async function handleMessage(raw: string): Promise<string | null> {
   let req: JsonRpcRequest
   try {
     req = JSON.parse(raw) as JsonRpcRequest
@@ -183,7 +191,7 @@ export function handleMessage(raw: string): string | null {
   const isNotification = !('id' in req) || req.id === undefined
   const id = req.id ?? null
   const method = typeof req.method === 'string' ? req.method : ''
-  const result = dispatch(method, req.params)
+  const result = await dispatch(method, req.params)
   if (isNotification) return null
   if (result.error) return errorResponse(id, result.error.code, result.error.message)
   return successResponse(id, result.result)
@@ -199,44 +207,60 @@ function attachClient(socket: net.Socket): void {
       const line = buf.slice(0, nl).trim()
       buf = buf.slice(nl + 1)
       if (!line) continue
-      const resp = handleMessage(line)
-      if (resp != null) {
-        try {
-          socket.write(resp + '\n')
-        } catch {}
-      }
+      handleMessage(line)
+        .then((resp) => {
+          if (resp != null) {
+            try {
+              socket.write(resp + '\n')
+            } catch {}
+          }
+        })
+        .catch(() => {})
     }
   })
   socket.on('error', () => {})
 }
 
-export async function startServer(): Promise<McpStatus> {
+export function startServer(): Promise<McpStatus> {
   if (process.platform === 'win32') {
-    throw new Error('MCP server not yet supported on Windows')
+    return Promise.reject(new Error('MCP server not yet supported on Windows'))
   }
   if (server) {
-    return { running: true, socketPath }
+    return Promise.resolve({ running: true, socketPath })
   }
-  const sp = computeSocketPath()
-  try {
-    await fsp.unlink(sp)
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+  if (starting) {
+    return starting
+  }
+  starting = (async (): Promise<McpStatus> => {
+    const sp = computeSocketPath()
+    try {
+      await fsp.unlink(sp)
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('[mcp] failed to remove stale socket:', e)
+      }
     }
-  }
-  await new Promise<void>((resolve, reject) => {
-    const s = net.createServer(attachClient)
-    s.once('error', reject)
-    s.listen(sp, () => {
-      s.removeListener('error', reject)
-      server = s
-      socketPath = sp
-      resolve()
+    await new Promise<void>((resolve, reject) => {
+      const s = net.createServer(attachClient)
+      s.once('error', reject)
+      s.listen(sp, () => {
+        s.removeListener('error', reject)
+        server = s
+        socketPath = sp
+        try {
+          fs.chmodSync(sp, 0o600)
+        } catch (e) {
+          console.error('[mcp] chmod failed:', e)
+        }
+        resolve()
+      })
     })
+    console.error(`[mcp] listening on ${sp}`)
+    return { running: true, socketPath }
+  })().finally(() => {
+    starting = null
   })
-  // eslint-disable-next-line no-console
-  console.error(`[mcp] listening on ${sp}`)
-  return { running: true, socketPath }
+  return starting
 }
 
 export async function stopServer(): Promise<McpStatus> {

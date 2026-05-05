@@ -1,15 +1,11 @@
 import {
-  AbortFlag,
   AiProvider,
   CompleteRequest,
   EventSink,
+  JsonValue,
   ModelInfo,
   estimateCost,
 } from './provider'
-
-interface JsonValue {
-  [k: string]: unknown
-}
 
 export class OpenAiProvider implements AiProvider {
   private apiKey: string | null
@@ -33,7 +29,7 @@ export class OpenAiProvider implements AiProvider {
   async streamComplete(
     req: CompleteRequest,
     sink: EventSink,
-    cancel: AbortFlag
+    signal: AbortSignal
   ): Promise<void> {
     const messages: Array<{ role: string; content: string }> = []
     if (req.system != null) {
@@ -42,7 +38,7 @@ export class OpenAiProvider implements AiProvider {
     for (const m of req.messages) {
       messages.push({ role: m.role, content: m.content })
     }
-    const body: JsonValue = {
+    const body: { [k: string]: JsonValue } = {
       model: req.model,
       messages,
       stream: true,
@@ -51,32 +47,24 @@ export class OpenAiProvider implements AiProvider {
     if (req.temperature != null) body.temperature = req.temperature
     if (req.maxTokens != null) body.max_tokens = req.maxTokens
 
-    const controller = new AbortController()
-    const cancelPoll = setInterval(() => {
-      if (cancel.cancelled) controller.abort()
-    }, 100)
-
     let resp: Response
     try {
       resp = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { ...this.headers(), accept: 'text/event-stream' },
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal,
       })
     } catch (e) {
-      clearInterval(cancelPoll)
-      if (cancel.cancelled) return
-      throw new Error(`${this.costLabel}-compat request: ${(e as Error).message}`)
+      if (signal.aborted) return
+      throw new Error(`${this.costLabel}-compat request: ${e instanceof Error ? e.message : String(e)}`)
     }
 
     if (!resp.ok) {
-      clearInterval(cancelPoll)
       const text = await resp.text().catch(() => '')
       throw new Error(`${this.costLabel} ${resp.status}: ${text}`)
     }
     if (!resp.body) {
-      clearInterval(cancelPoll)
       throw new Error(`${this.costLabel}: empty response body`)
     }
 
@@ -88,25 +76,22 @@ export class OpenAiProvider implements AiProvider {
 
     try {
       while (true) {
-        if (cancel.cancelled) {
-          try {
-            await reader.cancel()
-          } catch {}
+        if (signal.aborted) {
+          try { await reader.cancel() } catch {}
           return
         }
         let chunk: { done: boolean; value?: Uint8Array }
         try {
           chunk = await reader.read()
         } catch (e) {
-          if (cancel.cancelled) return
-          throw new Error(`read sse: ${(e as Error).message}`)
+          if (signal.aborted) return
+          throw new Error(`read sse: ${e instanceof Error ? e.message : String(e)}`)
         }
         if (chunk.done) break
         if (!chunk.value) continue
         buf += decoder.decode(chunk.value, { stream: true })
 
         let nl: number
-        // eslint-disable-next-line no-cond-assign
         while ((nl = buf.indexOf('\n')) >= 0) {
           const rawLine = buf.slice(0, nl)
           buf = buf.slice(nl + 1)
@@ -126,33 +111,30 @@ export class OpenAiProvider implements AiProvider {
             })
             return
           }
-          let v: JsonValue
+          let v: { [k: string]: JsonValue }
           try {
-            v = JSON.parse(payload) as JsonValue
+            v = JSON.parse(payload) as { [k: string]: JsonValue }
           } catch {
             continue
           }
-          const choices = v.choices as Array<JsonValue> | undefined
+          const choices = v.choices as Array<{ [k: string]: JsonValue }> | undefined
           if (Array.isArray(choices)) {
             for (const choice of choices) {
-              const delta = choice.delta as JsonValue | undefined
+              const delta = choice.delta as { [k: string]: JsonValue } | undefined
               const text = delta?.content
               if (typeof text === 'string' && text.length > 0) {
                 sink({ kind: 'delta', value: text })
               }
             }
           }
-          const u = v.usage as JsonValue | undefined
+          const u = v.usage as { [k: string]: JsonValue } | undefined
           if (u) {
-            if (typeof u.prompt_tokens === 'number')
-              inTokens = u.prompt_tokens as number
-            if (typeof u.completion_tokens === 'number')
-              outTokens = u.completion_tokens as number
+            if (typeof u.prompt_tokens === 'number') inTokens = u.prompt_tokens as number
+            if (typeof u.completion_tokens === 'number') outTokens = u.completion_tokens as number
           }
         }
       }
     } finally {
-      clearInterval(cancelPoll)
     }
 
     const cost = estimateCost(this.costLabel, req.model, inTokens, outTokens)

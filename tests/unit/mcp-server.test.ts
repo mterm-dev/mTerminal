@@ -167,6 +167,36 @@ describe('mcp server lifecycle + IPC', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'concurrent startServer() calls resolve to the same status without EADDRINUSE',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      mcp = await loadMcp()
+      const [a, b, c] = await Promise.all([
+        mcp.startServer(),
+        mcp.startServer(),
+        mcp.startServer(),
+      ])
+      expect(a.running).toBe(true)
+      expect(b.running).toBe(true)
+      expect(c.running).toBe(true)
+      expect(a.socketPath).toBe(b.socketPath)
+      expect(a.socketPath).toBe(c.socketPath)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'socket file has mode 0o600 after startServer()',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      mcp = await loadMcp()
+      const status = await mcp.startServer()
+      const sp = status.socketPath as string
+      const mode = fs.statSync(sp).mode & 0o777
+      expect(mode).toBe(0o600)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'real client can send a JSON-RPC ping and receive {result:{}}',
     { timeout: TEST_TIMEOUT },
     async () => {

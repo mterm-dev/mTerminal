@@ -311,16 +311,18 @@ describe('ssh:spawn IPC handler', () => {
         expect(ptyCalls).toHaveLength(1)
         const call = ptyCalls[0]!
         expect(call.command).toBe('sshpass')
-        
-        expect(call.args[0]).toBe('-p')
-        expect(call.args[1]).toBe('TopSecretPwd')
-        expect(call.args[2]).toBe('ssh')
+
+        expect(call.args[0]).toBe('-e')
+        expect(call.args[1]).toBe('ssh')
         expect(call.args[call.args.length - 1]).toBe('bob@srv.test')
 
-        
+        expect((call.options as { env?: Record<string, string> }).env?.['SSHPASS']).toBe('TopSecretPwd')
+        expect(call.args).not.toContain('TopSecretPwd')
+
+
         const banner = sentEvents.find((e) => e.channel === 'pty:event:' + id)!
           .payload as { kind: string; value: string }
-        expect(banner.value).toContain('sshpass -p ***')
+        expect(banner.value).toContain('sshpass -e ssh')
         expect(banner.value).not.toContain('TopSecretPwd')
       } finally {
         fs.rmSync(binDir, { recursive: true, force: true })

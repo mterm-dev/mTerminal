@@ -45,8 +45,7 @@ interface LoadedModules {
 }
 
 interface ProviderBehavior {
-  
-  stream?: (sink: (ev: unknown) => void, cancel: { cancelled: boolean }) => Promise<void>
+  stream?: (sink: (ev: unknown) => void, signal: AbortSignal) => Promise<void>
   models?: Array<{ id: string; name: string }>
 }
 
@@ -96,10 +95,10 @@ async function loadModules(): Promise<LoadedModules> {
       async streamComplete(
         _req: unknown,
         sink: (ev: unknown) => void,
-        cancel: { cancelled: boolean }
+        signal: AbortSignal
       ): Promise<void> {
         if (providerBehavior.stream) {
-          await providerBehavior.stream(sink, cancel)
+          await providerBehavior.stream(sink, signal)
         }
       }
       async listModels(): Promise<Array<{ id: string; name: string }>> {
@@ -117,10 +116,10 @@ async function loadModules(): Promise<LoadedModules> {
       async streamComplete(
         _req: unknown,
         sink: (ev: unknown) => void,
-        cancel: { cancelled: boolean }
+        signal: AbortSignal
       ): Promise<void> {
         if (providerBehavior.stream) {
-          await providerBehavior.stream(sink, cancel)
+          await providerBehavior.stream(sink, signal)
         }
       }
       async listModels(): Promise<Array<{ id: string; name: string }>> {
@@ -319,12 +318,10 @@ describe('ai/index IPC handlers', () => {
     const { sentEvents, setProviderBehavior } = await loadModules()
     let observedCancelled = false
     setProviderBehavior({
-      stream: async (sink, cancel) => {
-        
-        
+      stream: async (sink, signal) => {
         await new Promise((r) => setImmediate(r))
         await new Promise((r) => setImmediate(r))
-        observedCancelled = cancel.cancelled
+        observedCancelled = signal.aborted
         sink({ kind: 'done', value: { inTokens: 0, outTokens: 0, costUsd: 0 } })
       },
     })

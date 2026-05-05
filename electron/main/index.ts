@@ -38,7 +38,7 @@ const createWindow = (): BrowserWindow => {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
 
@@ -51,42 +51,52 @@ const createWindow = (): BrowserWindow => {
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    void win.loadURL(process.env.ELECTRON_RENDERER_URL)
+    win.loadURL(process.env.ELECTRON_RENDERER_URL).catch((err) => {
+      console.error('[main] loadURL failed:', err)
+    })
   } else {
-    void win.loadFile(path.join(__dirname, '../renderer/index.html'))
+    win.loadFile(path.join(__dirname, '../renderer/index.html')).catch((err) => {
+      console.error('[main] loadFile failed:', err)
+    })
   }
 
   return win
 }
 
-app.whenReady().then(() => {
-  registerWindowIpc()
-  registerClipboardIpc()
-  registerDialogIpc()
-  registerNotificationIpc()
+app
+  .whenReady()
+  .then(() => {
+    registerWindowIpc()
+    registerClipboardIpc()
+    registerDialogIpc()
+    registerNotificationIpc()
 
-  registerPtyHandlers()
-  registerSshHandlers()
-  registerVaultHandlers()
-  registerHostsHandlers()
-  registerAiHandlers()
-  registerClaudeCodeHandlers()
-  registerMcpHandlers()
-  app.on('before-quit', () => {
-    void stopMcpServer()
+    registerPtyHandlers()
+    registerSshHandlers()
+    registerVaultHandlers()
+    registerHostsHandlers()
+    registerAiHandlers()
+    registerClaudeCodeHandlers()
+    registerMcpHandlers()
+    app.on('before-quit', () => {
+      void stopMcpServer()
+    })
+    registerSystemHandlers()
+
+    const win = createWindow()
+    setPtyWindow(win)
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        const w = createWindow()
+        setPtyWindow(w)
+      }
+    })
   })
-  registerSystemHandlers()
-
-  const win = createWindow()
-  setPtyWindow(win)
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      const w = createWindow()
-      setPtyWindow(w)
-    }
+  .catch((err) => {
+    console.error('[main] startup failed:', err)
+    app.exit(1)
   })
-})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

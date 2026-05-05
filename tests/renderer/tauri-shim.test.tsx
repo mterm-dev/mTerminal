@@ -137,7 +137,7 @@ describe("invoke routing", () => {
     const cb = mt.pty.onEvent.mock.calls[0][1] as (ev: unknown) => void;
     cb({ kind: "data", value: "x" });
     expect(lastEv).toEqual({ kind: "data", value: "x" });
-    expect(typeof ch._unsubscribe).toBe("function");
+    expect(typeof ch.unsubscribe).toBe("function");
   });
 
   it("pty_write/resize/kill/info/recent_output", async () => {
@@ -279,10 +279,10 @@ describe("invoke routing", () => {
 });
 
 describe("Channel", () => {
-  it("constructs with null onmessage and _unsubscribe", () => {
+  it("constructs with null onmessage and unsubscribe", () => {
     const ch = new Channel<number>();
     expect(ch.onmessage).toBeNull();
-    expect(ch._unsubscribe).toBeNull();
+    expect(ch.unsubscribe).toBeNull();
     let got = -1;
     ch.onmessage = (n) => (got = n);
     ch.onmessage(42);
