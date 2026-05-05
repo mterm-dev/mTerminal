@@ -142,7 +142,6 @@ function persist(): void {
 }
 
 function zero(buf: Uint8Array): void {
-  // Overwrite with random then zeros so secrets aren't recoverable from heap.
   crypto.randomFillSync(buf)
   buf.fill(0)
 }

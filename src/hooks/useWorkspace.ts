@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-function basename(p: string): string {
+export function basename(p: string): string {
   if (!p) return "";
   const trimmed = p.replace(/\/+$/, "");
   if (trimmed === "" || trimmed === "/") return "/";

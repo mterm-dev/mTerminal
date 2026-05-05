@@ -1,8 +1,3 @@
-// Transport: Unix domain socket, JSON-RPC 2.0, line-delimited.
-// Connect e.g.:
-//   claude mcp add mterminal --transport stdio \
-//     "socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/mterminal-mcp-$USER.sock"
-
 import { ipcMain } from 'electron'
 import net from 'node:net'
 import os from 'node:os'
@@ -50,7 +45,7 @@ function errorResponse(id: unknown, code: number, message: string): string {
   })
 }
 
-function toolDefinitions(): unknown {
+export function toolDefinitions(): unknown {
   return [
     {
       name: 'list_tabs',
@@ -91,7 +86,7 @@ function toolDefinitions(): unknown {
   ]
 }
 
-function callTool(name: string, args: Record<string, unknown>): string {
+export function callTool(name: string, args: Record<string, unknown>): string {
   switch (name) {
     case 'list_tabs': {
       const tabs = listSessionIds().map((sid) => {
@@ -131,7 +126,7 @@ function callTool(name: string, args: Record<string, unknown>): string {
   }
 }
 
-function dispatch(
+export function dispatch(
   method: string,
   params: unknown
 ): { result?: unknown; error?: { code: number; message: string } } {
@@ -178,7 +173,7 @@ function dispatch(
   }
 }
 
-function handleMessage(raw: string): string | null {
+export function handleMessage(raw: string): string | null {
   let req: JsonRpcRequest
   try {
     req = JSON.parse(raw) as JsonRpcRequest

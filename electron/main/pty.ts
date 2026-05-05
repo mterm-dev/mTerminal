@@ -15,7 +15,7 @@ import {
 
 export { setMainWindow } from './sessions'
 
-function whichOnPath(prog: string): string | null {
+export function whichOnPath(prog: string): string | null {
   const PATH = process.env.PATH
   if (!PATH) return null
   const sep = process.platform === 'win32' ? ';' : ':'
@@ -99,7 +99,7 @@ interface SpawnArgs {
   env?: Record<string, string>
 }
 
-function buildEnv(
+export function buildEnv(
   shell: string,
   extra: Record<string, string> | undefined
 ): Record<string, string> {
@@ -167,12 +167,12 @@ export function spawnSession(opts: {
   return id
 }
 
-interface NodeInfo {
+export interface NodeInfo {
   pid: number
   ppid: number
 }
 
-function pickNewestLeaf(
+export function pickNewestLeaf(
   rootPid: number,
   nodes: NodeInfo[],
   startTimes: Map<number, number>

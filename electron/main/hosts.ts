@@ -108,27 +108,7 @@ async function readFileLocked(): Promise<HostsFile> {
 async function writeFileLocked(file: HostsFile): Promise<void> {
   const p = hostsPath()
   const tmp = p + '.tmp'
-  // Strip undefined fields to mirror Rust skip_serializing_if = "Option::is_none".
-  const serializable: HostsFile = {
-    version: file.version,
-    hosts: file.hosts.map((h) => {
-      const out: Record<string, unknown> = {
-        id: h.id,
-        name: h.name,
-        host: h.host,
-        port: h.port,
-        user: h.user,
-        auth: h.auth,
-        savePassword: h.savePassword,
-      }
-      if (h.identityPath !== undefined) out.identityPath = h.identityPath
-      if (h.lastUsed !== undefined) out.lastUsed = h.lastUsed
-      if (h.groupId !== undefined) out.groupId = h.groupId
-      return out as unknown as HostMeta
-    }),
-    groups: file.groups,
-  }
-  const bytes = Buffer.from(JSON.stringify(serializable, null, 2), 'utf8')
+  const bytes = Buffer.from(JSON.stringify(file, null, 2), 'utf8')
   const fd = await fsp.open(tmp, 'w')
   try {
     await fd.writeFile(bytes)

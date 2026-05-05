@@ -27,7 +27,7 @@ interface TreeCacheEntry {
 const treeCache: Map<number, TreeCacheEntry> = new Map()
 const TREE_CACHE_TTL_MS = 1500
 
-function isClaudeName(raw: string): boolean {
+export function isClaudeName(raw: string): boolean {
   let n = raw.trim()
   if (n.toLowerCase().endsWith('.exe')) n = n.slice(0, -4)
   n = n.toLowerCase()
@@ -96,7 +96,7 @@ async function getCachedClaudeBinary(
   return promise
 }
 
-function stripAnsi(s: string): string {
+export function stripAnsi(s: string): string {
   let out = ''
   let i = 0
   while (i < s.length) {
@@ -149,7 +149,7 @@ const THINKING_MARKERS = [
   '(↑↓ to navigate', // (↑↓ to navigate
 ]
 
-function classify(buffer: string): CcState | null {
+export function classify(buffer: string): CcState | null {
   const lower = stripAnsi(buffer).toLowerCase()
   for (const m of AWAITING_MARKERS) {
     if (lower.includes(m)) return 'awaitingInput'
@@ -177,15 +177,16 @@ export async function statusFor(tabId: number): Promise<CcStatus> {
   }
   const tail = sessionOutput(tabId, 4096) ?? ''
   const parsed = classify(tail)
+  const sinceLastMs = lastMs != null ? Date.now() - lastMs : null
   let state: CcState
   if (parsed) {
     state = parsed
-  } else if (lastMs != null && lastMs < 600) {
+  } else if (sinceLastMs != null && sinceLastMs < 600) {
     state = 'thinking'
   } else {
     state = 'idle'
   }
-  return { state, running: true, binary: claudeBin, lastActivityMs: lastMs }
+  return { state, running: true, binary: claudeBin, lastActivityMs: sinceLastMs }
 }
 
 export function registerClaudeCodeHandlers(): void {

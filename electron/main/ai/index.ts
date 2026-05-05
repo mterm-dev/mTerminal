@@ -20,27 +20,20 @@ interface TaskEntry {
 const tasks = new Map<number, TaskEntry>()
 let nextTaskId = 1
 
+function requireVaultKey(provider: string): string {
+  if (!isUnlocked()) throw new Error(`vault locked — unlock to use ${provider}`)
+  const key = keys.get(provider)
+  if (!key) throw new Error(`${provider} api key not set — open settings → ai`)
+  return key
+}
+
 function buildProvider(name: string, baseUrl?: string): AiProvider {
   if (name === 'anthropic') {
-    if (!isUnlocked()) {
-      throw new Error('vault locked — unlock to use anthropic')
-    }
-    const key = keys.get('anthropic')
-    if (!key) {
-      throw new Error('anthropic api key not set — open settings → ai')
-    }
-    return new AnthropicProvider(key)
+    return new AnthropicProvider(requireVaultKey('anthropic'))
   }
   if (name === 'openai') {
-    if (!isUnlocked()) {
-      throw new Error('vault locked — unlock to use openai')
-    }
-    const key = keys.get('openai')
-    if (!key) {
-      throw new Error('openai api key not set — open settings → ai')
-    }
     const url = baseUrl ?? 'https://api.openai.com/v1'
-    return new OpenAiProvider(key, url, 'openai')
+    return new OpenAiProvider(requireVaultKey('openai'), url, 'openai')
   }
   if (name === 'ollama') {
     const url = baseUrl ?? 'http://localhost:11434/v1'
@@ -74,7 +67,6 @@ export function registerAiHandlers(): void {
     try {
       prov = buildProvider(args.provider, args.baseUrl)
     } catch (e) {
-      // Emit error asynchronously so the renderer has time to subscribe.
       setImmediate(() => {
         sendEvent(taskId, { kind: 'error', value: (e as Error).message })
       })

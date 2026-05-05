@@ -24,6 +24,8 @@
     "package:win": "electron-vite build && electron-builder --win --publish never",
     "rebuild": "electron-rebuild -f -w node-pty",
     "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "electron-vite preview"
   },
   "dependencies": {
@@ -48,14 +50,19 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.6.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "electron": "latest",
     "electron-builder": "latest",
     "electron-vite": "latest",
+    "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
-    "vite": "^7.3.2"
+    "vite": "^7.3.2",
+    "vitest": "^4.1.5"
   }
 }

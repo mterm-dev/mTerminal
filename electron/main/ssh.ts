@@ -18,7 +18,7 @@ interface SshSpawnArgs {
   hostId: string
 }
 
-interface HostMeta {
+export interface HostMeta {
   id: string
   name: string
   host: string
@@ -29,7 +29,7 @@ interface HostMeta {
   savePassword?: boolean
 }
 
-function whichOnPath(prog: string): string | null {
+export function whichOnPath(prog: string): string | null {
   const PATH = process.env.PATH
   if (!PATH) return null
   const sep = process.platform === 'win32' ? ';' : ':'
@@ -53,7 +53,7 @@ function whichOnPath(prog: string): string | null {
   return null
 }
 
-function sshArgs(host: HostMeta): string[] {
+export function sshArgs(host: HostMeta): string[] {
   const args: string[] = [
     '-t',
     '-o',
@@ -81,7 +81,7 @@ function sshArgs(host: HostMeta): string[] {
   return args
 }
 
-function buildEnv(): Record<string, string> {
+export function buildEnv(): Record<string, string> {
   const env: Record<string, string> = {}
   const home = process.env.HOME || process.env.USERPROFILE || os.homedir()
   if (home) env.HOME = home
