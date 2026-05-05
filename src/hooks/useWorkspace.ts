@@ -43,6 +43,7 @@ export interface Group {
   name: string;
   collapsed: boolean;
   accent: GroupAccent;
+  defaultCwd?: string;
 }
 
 export interface WorkspaceState {
@@ -126,6 +127,10 @@ function loadInitial(): WorkspaceState {
           accent: (GROUP_ACCENTS.includes(g.accent as GroupAccent)
             ? (g.accent as GroupAccent)
             : GROUP_ACCENTS[i % GROUP_ACCENTS.length]) as GroupAccent,
+          defaultCwd:
+            typeof g.defaultCwd === "string" && g.defaultCwd.length > 0
+              ? g.defaultCwd
+              : undefined,
         }));
         const groupIds = new Set(groups.map((g) => g.id));
         const tabs: Tab[] = parsed.tabs.map((t) => {
@@ -214,6 +219,9 @@ export function useWorkspace() {
       const active = s.tabs.find((t) => t.id === s.activeId);
       const activeGroup = active && active.kind === "local" ? active.groupId : null;
       const targetGroup = groupId === undefined ? activeGroup ?? null : groupId;
+      const group = targetGroup
+        ? s.groups.find((g) => g.id === targetGroup)
+        : null;
       const id = s.nextTabId;
       createdId = id;
       const tab: Tab = {
@@ -222,6 +230,7 @@ export function useWorkspace() {
         groupId: targetGroup,
         autoLabel: true,
         kind: "local",
+        cwd: group?.defaultCwd,
       };
       return {
         ...s,
@@ -389,6 +398,17 @@ export function useWorkspace() {
     }));
   }, []);
 
+  const setGroupCwd = useCallback((id: string, cwd: string | null) => {
+    setState((s) => ({
+      ...s,
+      groups: s.groups.map((g) =>
+        g.id === id
+          ? { ...g, defaultCwd: cwd && cwd.trim() ? cwd : undefined }
+          : g,
+      ),
+    }));
+  }, []);
+
   const renameGroup = useCallback((id: string, name: string) => {
     setState((s) => ({
       ...s,
@@ -469,6 +489,7 @@ export function useWorkspace() {
     addGroup,
     renameGroup,
     setGroupAccent,
+    setGroupCwd,
     toggleGroup,
     reorderGroup,
     deleteGroup,

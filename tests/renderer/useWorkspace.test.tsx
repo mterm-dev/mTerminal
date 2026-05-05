@@ -570,6 +570,49 @@ describe("useWorkspace - groups", () => {
     expect(result.current.groups[0].collapsed).toBe(false);
   });
 
+  it("31b. setGroupCwd stores and clears defaultCwd", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let gid = "";
+    act(() => {
+      gid = result.current.addGroup("g");
+    });
+    act(() => {
+      result.current.setGroupCwd(gid, "/var/log");
+    });
+    expect(result.current.groups.find((g) => g.id === gid)!.defaultCwd).toBe(
+      "/var/log",
+    );
+    act(() => {
+      result.current.setGroupCwd(gid, null);
+    });
+    expect(
+      result.current.groups.find((g) => g.id === gid)!.defaultCwd,
+    ).toBeUndefined();
+    act(() => {
+      result.current.setGroupCwd(gid, "   ");
+    });
+    expect(
+      result.current.groups.find((g) => g.id === gid)!.defaultCwd,
+    ).toBeUndefined();
+  });
+
+  it("31c. addTab inherits group.defaultCwd", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let gid = "";
+    act(() => {
+      gid = result.current.addGroup("g");
+    });
+    act(() => {
+      result.current.setGroupCwd(gid, "/srv/app");
+    });
+    act(() => {
+      result.current.addTab(gid);
+    });
+    const tab = result.current.tabs[result.current.tabs.length - 1];
+    expect(tab.groupId).toBe(gid);
+    expect(tab.cwd).toBe("/srv/app");
+  });
+
   it("32. deleteGroup removes group and clears tab.groupId", () => {
     const { result } = renderHook(() => useWorkspace());
     let gid = "";

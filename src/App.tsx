@@ -20,7 +20,7 @@ import { useMcpServer } from "./hooks/useMcpServer";
 import { AICommandPalette } from "./components/AICommandPalette";
 import { ExplainPopover } from "./components/ExplainPopover";
 import { AIPanel } from "./components/AIPanel";
-import { invoke } from "./lib/tauri-shim";
+import { invoke, open as openDialog } from "./lib/tauri-shim";
 import type { AiUsage } from "./hooks/useAI";
 import {
   useRemoteHosts,
@@ -570,11 +570,47 @@ export default function App() {
     setCtx({ x, y, items });
   };
 
+  const pickGroupCwd = useCallback(
+    async (id: string) => {
+      const group = wsRef.current.groups.find((g) => g.id === id);
+      try {
+        const picked = await openDialog({
+          directory: true,
+          defaultPath: group?.defaultCwd,
+          title: "select default working directory",
+        });
+        if (typeof picked === "string" && picked.length > 0) {
+          ws.setGroupCwd(id, picked);
+        }
+      } catch {}
+    },
+    [ws],
+  );
+
   const openGroupMenu = (id: string, x: number, y: number) => {
+    const group = ws.groups.find((g) => g.id === id);
+    const hasCwd = !!group?.defaultCwd;
     const items: MenuItem[] = [
       { label: "rename group", onSelect: () => setEditingGroupId(id) },
       { label: "new tab here", onSelect: () => ws.addTab(id) },
       { label: "toggle collapse", onSelect: () => ws.toggleGroup(id) },
+      { label: "", onSelect: () => {}, separator: true },
+      {
+        label: hasCwd
+          ? `default cwd: ${group?.defaultCwd}`
+          : "set default cwd…",
+        onSelect: () => {
+          pickGroupCwd(id).catch(() => {});
+        },
+      },
+      ...(hasCwd
+        ? [
+            {
+              label: "clear default cwd",
+              onSelect: () => ws.setGroupCwd(id, null),
+            } as MenuItem,
+          ]
+        : []),
       { label: "", onSelect: () => {}, separator: true },
       ...GROUP_ACCENTS.map<MenuItem>((c) => ({
         label: `accent: ${c}`,
