@@ -2601,6 +2601,75 @@ body.resizing-git-panel * {
 }
 
 /* ── git: branches / history / pull-push dialogs ──────── */
+.git-confirm-body,
+.git-confirm-commits,
+.git-branches-body,
+.git-history-list,
+.git-history-files,
+.git-history-detail-body {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-300) transparent;
+}
+.git-confirm-body::-webkit-scrollbar,
+.git-confirm-commits::-webkit-scrollbar,
+.git-branches-body::-webkit-scrollbar,
+.git-history-list::-webkit-scrollbar,
+.git-history-files::-webkit-scrollbar,
+.git-history-detail-body::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: transparent;
+}
+.git-confirm-body::-webkit-scrollbar-track,
+.git-confirm-commits::-webkit-scrollbar-track,
+.git-branches-body::-webkit-scrollbar-track,
+.git-history-list::-webkit-scrollbar-track,
+.git-history-files::-webkit-scrollbar-track,
+.git-history-detail-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 6px;
+  margin: 4px 0;
+}
+.git-confirm-body::-webkit-scrollbar-thumb,
+.git-confirm-commits::-webkit-scrollbar-thumb,
+.git-branches-body::-webkit-scrollbar-thumb,
+.git-history-list::-webkit-scrollbar-thumb,
+.git-history-files::-webkit-scrollbar-thumb,
+.git-history-detail-body::-webkit-scrollbar-thumb {
+  background: var(--n-300);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 6px;
+  min-height: 30px;
+}
+.git-confirm-body::-webkit-scrollbar-thumb:hover,
+.git-confirm-commits::-webkit-scrollbar-thumb:hover,
+.git-branches-body::-webkit-scrollbar-thumb:hover,
+.git-history-list::-webkit-scrollbar-thumb:hover,
+.git-history-files::-webkit-scrollbar-thumb:hover,
+.git-history-detail-body::-webkit-scrollbar-thumb:hover {
+  background: var(--n-500);
+  background-clip: padding-box;
+}
+.git-confirm-body::-webkit-scrollbar-thumb:active,
+.git-confirm-commits::-webkit-scrollbar-thumb:active,
+.git-branches-body::-webkit-scrollbar-thumb:active,
+.git-history-list::-webkit-scrollbar-thumb:active,
+.git-history-files::-webkit-scrollbar-thumb:active,
+.git-history-detail-body::-webkit-scrollbar-thumb:active {
+  background: var(--n-600);
+  background-clip: padding-box;
+}
+.git-confirm-body::-webkit-scrollbar-corner,
+.git-confirm-commits::-webkit-scrollbar-corner,
+.git-branches-body::-webkit-scrollbar-corner,
+.git-history-list::-webkit-scrollbar-corner,
+.git-history-files::-webkit-scrollbar-corner,
+.git-history-detail-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .branch-clickable {
   background: transparent;
   border: 1px solid transparent;
@@ -2778,6 +2847,8 @@ body.resizing-git-panel * {
 .git-branches-body {
   padding: 10px 14px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 .git-branch-section-h {
@@ -2951,6 +3022,8 @@ body.resizing-git-panel * {
   color: var(--fg-dim);
   margin: 0;
   font-family: inherit;
+  max-height: 160px;
+  overflow: auto;
 }
 .git-history-files {
   border-bottom: 1px solid var(--border-subtle);
