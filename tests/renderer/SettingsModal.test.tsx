@@ -542,7 +542,7 @@ describe("SettingsModal — AI key management", () => {
     expect(clearKeyMock).toHaveBeenCalledWith("anthropic");
   });
 
-  it("set key button is disabled when vault is locked", () => {
+  it("set key button triggers vault unlock when vault is locked", () => {
     hasKeyState.current = {};
     const props = makeProps({
       settings: { ...DEFAULT_SETTINGS, aiEnabled: true },
@@ -551,8 +551,12 @@ describe("SettingsModal — AI key management", () => {
     });
     render(<SettingsModal {...props} />);
     gotoSection(/^AI$/);
-    const btn = screen.getAllByRole("button", { name: /^set key$/ })[0] as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    const btn = screen.getAllByRole("button", {
+      name: /^unlock vault to set key$/,
+    })[0] as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+    expect(props.onRequestVault).toHaveBeenCalled();
   });
 
   it("ollama provider renders without key-management buttons", () => {

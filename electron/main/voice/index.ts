@@ -138,8 +138,8 @@ async function transcribeWhisperCpp(args: TranscribeArgs, wavPath: string): Prom
 
 async function transcribeOpenAi(args: TranscribeArgs, wavBuf: Buffer): Promise<string> {
   if (!isUnlocked()) throw new Error('vault locked — unlock to use OpenAI Whisper')
-  const key = getAiKey('openai')
-  if (!key) throw new Error('OpenAI API key not configured')
+  const key = getAiKey('voice-openai')
+  if (!key) throw new Error('OpenAI API key not configured for voice — set it in Settings → Voice')
 
   const baseUrl = (args.openaiBaseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '')
   const model = (args.openaiModel || 'whisper-1').trim() || 'whisper-1'

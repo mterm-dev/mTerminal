@@ -1,9 +1,10 @@
-import type { KeyboardEvent } from "react";
+import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import type { VoiceEngineId } from "../useSettings";
-import { useAIKeys } from "../../hooks/useAIKeys";
-import { open as openDialog } from "../../lib/ipc";
+import { invoke, open as openDialog } from "../../lib/ipc";
 import { formatHotkey, specFromKeyboardEvent } from "../../lib/hotkey";
 import { Field, Toggle, type VaultSectionProps } from "./_shared";
+
+const VOICE_KEY_PROVIDER = "voice-openai";
 
 export function VoicePanel({
   settings,
@@ -12,7 +13,40 @@ export function VoicePanel({
   vaultExists,
   onRequestVault,
 }: VaultSectionProps) {
-  const { hasKey } = useAIKeys(vaultUnlocked);
+  const [hasVoiceKey, setHasVoiceKey] = useState(false);
+  const [keyDraftActive, setKeyDraftActive] = useState(false);
+  const [keyDraft, setKeyDraft] = useState("");
+
+  const refreshKey = useCallback(async () => {
+    if (!vaultUnlocked) {
+      setHasVoiceKey(false);
+      return;
+    }
+    try {
+      const ok = await invoke<boolean>("ai_has_key", { provider: VOICE_KEY_PROVIDER });
+      setHasVoiceKey(!!ok);
+    } catch {
+      setHasVoiceKey(false);
+    }
+  }, [vaultUnlocked]);
+
+  useEffect(() => {
+    refreshKey();
+  }, [refreshKey]);
+
+  const submitKey = async () => {
+    const v = keyDraft.trim();
+    if (!v) return;
+    await invoke("ai_set_key", { provider: VOICE_KEY_PROVIDER, key: v });
+    setKeyDraft("");
+    setKeyDraftActive(false);
+    await refreshKey();
+  };
+
+  const clearKey = async () => {
+    await invoke("ai_clear_key", { provider: VOICE_KEY_PROVIDER });
+    await refreshKey();
+  };
 
   const pickFile = async (
     key: "voiceWhisperCppBinPath" | "voiceWhisperCppModelPath",
@@ -40,7 +74,6 @@ export function VoicePanel({
     update("voiceHotkey", formatHotkey(spec));
   };
 
-  const openaiKeyOk = hasKey.openai === true;
   const showOpenAi = settings.voiceEngine === "openai";
   const showWhisper = settings.voiceEngine === "whisper-cpp";
 
@@ -191,8 +224,8 @@ export function VoicePanel({
                   style={{ cursor: "pointer" }}
                   onClick={onRequestVault}
                 >
-                  vault not initialised — click to create. OpenAI key is read from
-                  the same vault as the AI panel.
+                  vault not initialised — click to create. The voice key is stored
+                  encrypted in the vault, separate from the AI panel key.
                 </div>
               )}
               {vaultExists && !vaultUnlocked && (
@@ -201,17 +234,77 @@ export function VoicePanel({
                   style={{ cursor: "pointer" }}
                   onClick={onRequestVault}
                 >
-                  vault locked — click to unlock so the OpenAI key can be used.
+                  vault locked — click to unlock so the voice key can be used.
                 </div>
               )}
-              {vaultUnlocked && !openaiKeyOk && (
-                <div className="settings-note">
-                  no OpenAI API key — set one in Settings → AI first.
+
+              <Field
+                label="OpenAI API key"
+                hint="Stored encrypted in the vault, separate from the AI panel key"
+              >
+                <div style={{ display: "flex", gap: 8, flex: 1, flexWrap: "wrap" }}>
+                  {!keyDraftActive && (
+                    <>
+                      <span
+                        className="settings-field-hint"
+                        style={{ alignSelf: "center" }}
+                      >
+                        {hasVoiceKey
+                          ? "key saved ✓"
+                          : vaultUnlocked
+                            ? "no key"
+                            : "vault locked"}
+                      </span>
+                      <button
+                        className="ghost-btn"
+                        onClick={() => {
+                          if (!vaultUnlocked) {
+                            onRequestVault();
+                            return;
+                          }
+                          setKeyDraft("");
+                          setKeyDraftActive(true);
+                        }}
+                      >
+                        {!vaultUnlocked
+                          ? "unlock vault to set key"
+                          : hasVoiceKey
+                            ? "replace key"
+                            : "set key"}
+                      </button>
+                      {hasVoiceKey && vaultUnlocked && (
+                        <button className="ghost-btn" onClick={clearKey}>
+                          remove key
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {keyDraftActive && (
+                    <>
+                      <input
+                        type="password"
+                        value={keyDraft}
+                        onChange={(e) => setKeyDraft(e.target.value)}
+                        placeholder="paste OpenAI API key"
+                        autoFocus
+                        style={{ flex: 1, minWidth: 180 }}
+                      />
+                      <button className="ghost-btn" onClick={submitKey}>
+                        save
+                      </button>
+                      <button
+                        className="ghost-btn"
+                        onClick={() => {
+                          setKeyDraft("");
+                          setKeyDraftActive(false);
+                        }}
+                      >
+                        cancel
+                      </button>
+                    </>
+                  )}
                 </div>
-              )}
-              {vaultUnlocked && openaiKeyOk && (
-                <div className="settings-note">OpenAI key found ✓</div>
-              )}
+              </Field>
 
               <Field label="Whisper model" hint="Default: whisper-1">
                 <input

@@ -281,6 +281,22 @@ export default function App() {
     ],
   );
 
+  const voiceModelLabel = useMemo(() => {
+    if (settings.voiceEngine === "openai") {
+      const model = settings.voiceOpenaiModel.trim() || "whisper-1";
+      return `OpenAI · ${model}`;
+    }
+    const path = settings.voiceWhisperCppModelPath.trim();
+    if (!path) return "whisper.cpp";
+    const base = path.split(/[\\/]/).pop() || path;
+    const name = base.replace(/^ggml-/, "").replace(/\.bin$/i, "");
+    return `whisper.cpp · ${name}`;
+  }, [
+    settings.voiceEngine,
+    settings.voiceOpenaiModel,
+    settings.voiceWhisperCppModelPath,
+  ]);
+
   const voice = useVoiceRecognition({
     config: voiceConfig,
     onText: (text) => {
@@ -1099,6 +1115,7 @@ export default function App() {
           state={voice.state}
           stream={voice.stream}
           onStop={voice.stop}
+          modelLabel={voiceModelLabel}
         />
       )}
 

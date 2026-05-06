@@ -1814,6 +1814,17 @@ body.resizing-git-msg * {
 .voice-indicator.voice-transcribing .voice-indicator__label {
   color: var(--accent);
 }
+.voice-indicator__model {
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: color-mix(in oklch, var(--fg-muted) 80%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  line-height: 1.2;
+  margin-top: -1px;
+}
 
 .voice-indicator__bars {
   display: flex;
@@ -2551,7 +2562,11 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
 }
 .settings-field-control { display: flex; }
 .settings-field-control input[type="text"],
-.settings-field-control input[type="number"] {
+.settings-field-control input[type="number"],
+.settings-field-control input[type="password"],
+.settings-field-control input[type="search"],
+.settings-field-control input[type="email"],
+.settings-field-control input[type="url"] {
   flex: 1;
   min-width: 0;
   background: var(--bg-muted);
@@ -2562,11 +2577,27 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
   padding: 7px 10px;
   border-radius: var(--r-sm);
   outline: none;
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+.settings-field-control input[type="text"]::placeholder,
+.settings-field-control input[type="password"]::placeholder,
+.settings-field-control input[type="search"]::placeholder,
+.settings-field-control input[type="email"]::placeholder,
+.settings-field-control input[type="url"]::placeholder {
+  color: color-mix(in oklch, var(--fg-muted) 70%, transparent);
 }
 .settings-field-control input[type="text"]:focus,
-.settings-field-control input[type="number"]:focus {
+.settings-field-control input[type="number"]:focus,
+.settings-field-control input[type="password"]:focus,
+.settings-field-control input[type="search"]:focus,
+.settings-field-control input[type="email"]:focus,
+.settings-field-control input[type="url"]:focus {
   border-color: var(--accent);
+  background: color-mix(in oklch, var(--bg-muted) 70%, var(--bg) 30%);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 18%, transparent);
+}
+.settings-field-control input[type="password"] {
+  letter-spacing: 0.08em;
 }
 .settings-field-control input[type="range"] {
   flex: 1;

@@ -99,6 +99,7 @@ export function AIPanel({
             onClearKey={() => clearKey("anthropic")}
             modelsState={models.anthropic}
             onFetchModels={() => fetchModels("anthropic")}
+            onRequestVault={onRequestVault}
           />
 
           <ProviderBlock
@@ -119,6 +120,7 @@ export function AIPanel({
             onClearKey={() => clearKey("openai")}
             modelsState={models.openai}
             onFetchModels={() => fetchModels("openai")}
+            onRequestVault={onRequestVault}
           />
 
           <ProviderBlock

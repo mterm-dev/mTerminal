@@ -20,6 +20,7 @@ interface Props {
   modelsState?: ModelInfo[] | "loading" | "error";
   onFetchModels: () => void;
   noKeyNeeded?: boolean;
+  onRequestVault?: () => void;
 }
 
 export function ProviderBlock({
@@ -40,7 +41,15 @@ export function ProviderBlock({
   modelsState,
   onFetchModels,
   noKeyNeeded,
+  onRequestVault,
 }: Props) {
+  const handleStartEdit = () => {
+    if (!vaultUnlocked && onRequestVault) {
+      onRequestVault();
+      return;
+    }
+    onStartEdit?.();
+  };
   return (
     <div className="settings-field" style={{ flexDirection: "column", alignItems: "stretch" }}>
       <div className="settings-field-label">
@@ -55,11 +64,15 @@ export function ProviderBlock({
       <div className="settings-field-control" style={{ flexDirection: "column", gap: 8 }}>
         {!noKeyNeeded && !keyDraftActive && (
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="ghost-btn" onClick={onStartEdit} disabled={!vaultUnlocked}>
-              {hasKey ? "replace key" : "set key"}
+            <button className="ghost-btn" onClick={handleStartEdit}>
+              {!vaultUnlocked
+                ? "unlock vault to set key"
+                : hasKey
+                  ? "replace key"
+                  : "set key"}
             </button>
-            {hasKey && (
-              <button className="ghost-btn" onClick={onClearKey} disabled={!vaultUnlocked}>
+            {hasKey && vaultUnlocked && (
+              <button className="ghost-btn" onClick={onClearKey}>
                 remove key
               </button>
             )}

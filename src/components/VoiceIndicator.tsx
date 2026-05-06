@@ -5,11 +5,12 @@ interface Props {
   state: VoiceState;
   stream: MediaStream | null;
   onStop: () => void;
+  modelLabel?: string;
 }
 
 const BAR_COUNT = 7;
 
-export function VoiceIndicator({ state, stream, onStop }: Props) {
+export function VoiceIndicator({ state, stream, onStop, modelLabel }: Props) {
   const visible = state === "recording" || state === "transcribing";
   const [mounted, setMounted] = useState(visible);
   const [leaving, setLeaving] = useState(false);
@@ -44,6 +45,11 @@ export function VoiceIndicator({ state, stream, onStop }: Props) {
         <div className="voice-indicator__label">
           {state === "transcribing" ? "transcribing…" : "listening"}
         </div>
+        {modelLabel && (
+          <div className="voice-indicator__model" title={modelLabel}>
+            {modelLabel}
+          </div>
+        )}
         <Bars stream={state === "recording" ? stream : null} />
       </div>
 
