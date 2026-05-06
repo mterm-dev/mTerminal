@@ -122,6 +122,76 @@ export interface MtGit {
     cwd: string,
     strategy: GitPullStrategy,
   ) => Promise<{ stdout: string; stderr: string }>;
+  stash: (
+    cwd: string,
+    message?: string,
+  ) => Promise<{ created: boolean; stdout: string }>;
+  stashPop: (
+    cwd: string,
+  ) => Promise<{ stdout: string; stderr: string; conflict: boolean }>;
+  discardAll: (cwd: string) => Promise<void>;
+  listConflicts: (cwd: string) => Promise<ConflictFileEntry[]>;
+  readConflictFile: (
+    cwd: string,
+    path: string,
+  ) => Promise<ConflictFile>;
+  resolveFile: (cwd: string, path: string, content: string) => Promise<void>;
+  mergeState: (cwd: string) => Promise<MergeStateKind>;
+  mergeAbort: (cwd: string) => Promise<void>;
+}
+
+export type MergeStateKind = "merge" | "rebase" | "cherry-pick" | "revert" | null;
+
+export interface ConflictFileEntry {
+  path: string;
+  indexStatus: string;
+  worktreeStatus: string;
+}
+
+export type ConflictSegment =
+  | { kind: "common"; lines: string[] }
+  | {
+      kind: "conflict";
+      id: number;
+      ours: string[];
+      theirs: string[];
+      base?: string[];
+      labelOurs?: string;
+      labelTheirs?: string;
+      labelBase?: string;
+    };
+
+export interface ConflictFile {
+  path: string;
+  content: string;
+  segments: ConflictSegment[];
+  hasConflicts: boolean;
+  binary: boolean;
+}
+
+export function isConflictFile(f: { indexStatus: string; worktreeStatus: string }): boolean {
+  const x = f.indexStatus;
+  const y = f.worktreeStatus;
+  if (x === "U" || y === "U") return true;
+  if (x === "A" && y === "A") return true;
+  if (x === "D" && y === "D") return true;
+  return false;
+}
+
+export function isMergeConflictResult(message: string): boolean {
+  if (typeof message !== "string" || message.length === 0) return false;
+  if (/CONFLICT\s*\(/i.test(message)) return true;
+  if (/Automatic merge failed/i.test(message)) return true;
+  if (/fix conflicts and then commit/i.test(message)) return true;
+  return false;
+}
+
+export function isLocalChangesPullConflict(message: string): boolean {
+  if (typeof message !== "string" || message.length === 0) return false;
+  if (/would be overwritten by (merge|checkout|reset)/i.test(message)) return true;
+  if (/please commit your changes or stash them before/i.test(message)) return true;
+  if (/please move or remove them before/i.test(message)) return true;
+  return false;
 }
 
 export function getGitApi(): MtGit | null {

@@ -313,6 +313,39 @@ const api = {
       strategy: 'ff-only' | 'merge' | 'rebase'
     ): Promise<{ stdout: string; stderr: string }> =>
       ipcRenderer.invoke('git:pull-strategy', { cwd, strategy }),
+    stash: (
+      cwd: string,
+      message?: string
+    ): Promise<{ created: boolean; stdout: string }> =>
+      ipcRenderer.invoke('git:stash', { cwd, message }),
+    stashPop: (
+      cwd: string
+    ): Promise<{ stdout: string; stderr: string; conflict: boolean }> =>
+      ipcRenderer.invoke('git:stash-pop', { cwd }),
+    discardAll: (cwd: string): Promise<void> =>
+      ipcRenderer.invoke('git:discard-all', { cwd }),
+    listConflicts: (
+      cwd: string
+    ): Promise<Array<{ path: string; indexStatus: string; worktreeStatus: string }>> =>
+      ipcRenderer.invoke('git:list-conflicts', { cwd }),
+    readConflictFile: (
+      cwd: string,
+      path: string
+    ): Promise<{
+      path: string
+      content: string
+      segments: unknown[]
+      hasConflicts: boolean
+      binary: boolean
+    }> => ipcRenderer.invoke('git:read-conflict-file', { cwd, path }),
+    resolveFile: (cwd: string, path: string, content: string): Promise<void> =>
+      ipcRenderer.invoke('git:resolve-file', { cwd, path, content }),
+    mergeState: (
+      cwd: string
+    ): Promise<'merge' | 'rebase' | 'cherry-pick' | 'revert' | null> =>
+      ipcRenderer.invoke('git:merge-state', { cwd }),
+    mergeAbort: (cwd: string): Promise<void> =>
+      ipcRenderer.invoke('git:merge-abort', { cwd }),
   },
   settings: {
     loadSync: (): string | null => {

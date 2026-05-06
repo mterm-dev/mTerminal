@@ -36,6 +36,8 @@ import { BranchesModal } from "./git-panel/BranchesModal";
 import { HistoryModal } from "./git-panel/HistoryModal";
 import { PullDialog } from "./git-panel/PullDialog";
 import { PushDialog } from "./git-panel/PushDialog";
+import { ConflictResolverModal } from "./git-panel/ConflictResolverModal";
+import { isConflictFile } from "../lib/git-api";
 
 const FEW_SHOT_DIFF = `Generate a commit message for the following staged changes:
 
@@ -108,6 +110,7 @@ export function GitPanel({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pullOpen, setPullOpen] = useState(false);
   const [pushOpen, setPushOpen] = useState(false);
+  const [conflictsOpen, setConflictsOpen] = useState<{ initialPath?: string | null } | null>(null);
   const aiCancelRef = useRef<(() => Promise<void>) | null>(null);
 
   const files = status?.files ?? [];
@@ -136,6 +139,7 @@ export function GitPanel({
     });
   }, [files]);
 
+  const conflictedFiles = useMemo(() => files.filter(isConflictFile), [files]);
   const tree = useMemo(() => compactTree(buildTree(files)), [files]);
   const allDirPaths = useMemo(() => collectDirPaths(tree), [tree]);
 
@@ -789,6 +793,20 @@ export function GitPanel({
             </button>
           </div>
 
+          {conflictedFiles.length > 0 && (
+            <button
+              type="button"
+              className="git-conflict-banner"
+              onClick={() => setConflictsOpen({})}
+              title="open conflict resolver"
+            >
+              <span>
+                {conflictedFiles.length} unresolved conflict
+                {conflictedFiles.length === 1 ? "" : "s"}
+              </span>
+              <span>resolve →</span>
+            </button>
+          )}
           {(actionError || error) && (
             <div className="git-error" onClick={() => setActionError(null)}>
               {actionError ?? error}
@@ -836,6 +854,24 @@ export function GitPanel({
           onClose={() => setPullOpen(false)}
           onComplete={(info) => {
             setActionInfo(info);
+            void refresh();
+          }}
+          onError={(msg) => setActionError(msg)}
+          onConflicts={(info) => {
+            setActionInfo(info);
+            void refresh();
+            setConflictsOpen({});
+          }}
+        />
+      )}
+
+      {conflictsOpen && cwd && (
+        <ConflictResolverModal
+          cwd={cwd}
+          initialPath={conflictsOpen.initialPath ?? null}
+          onClose={() => setConflictsOpen(null)}
+          onResolved={(info) => {
+            if (info) setActionInfo(info);
             void refresh();
           }}
           onError={(msg) => setActionError(msg)}
