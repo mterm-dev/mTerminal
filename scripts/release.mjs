@@ -2,8 +2,10 @@
 import { execSync } from 'node:child_process';
 import { argv, exit, stdout } from 'node:process';
 
-const sh = (cmd, opts = {}) =>
-  execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
+const sh = (cmd, opts = {}) => {
+  const out = execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+  return typeof out === 'string' ? out.trim() : '';
+};
 
 const fail = (msg) => {
   stdout.write(`\x1b[31merror:\x1b[0m ${msg}\n`);
