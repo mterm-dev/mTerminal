@@ -3,6 +3,7 @@ import { getCurrentWindow } from "./lib/ipc";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { VoiceIndicator } from "./components/VoiceIndicator";
 import { TerminalTab } from "./components/TerminalTab";
 import { GridTabToolbar } from "./components/GridTabToolbar";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
@@ -881,6 +882,14 @@ export default function App() {
           baseUrl={aiBaseUrl}
           onClose={() => setExplainState(null)}
           onUsage={accumulateUsage}
+        />
+      )}
+
+      {settings.voiceEnabled && (
+        <VoiceIndicator
+          state={voice.state}
+          stream={voice.stream}
+          onStop={voice.stop}
         />
       )}
 

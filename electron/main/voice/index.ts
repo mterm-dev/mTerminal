@@ -40,6 +40,50 @@ async function safeUnlink(p: string): Promise<void> {
   } catch {}
 }
 
+interface ExecError extends Error {
+  stderr?: string | Buffer
+  stdout?: string | Buffer
+  code?: number | string
+}
+
+function stderrText(e: unknown): string {
+  const err = e as ExecError
+  const raw = err?.stderr
+  if (!raw) return ''
+  return typeof raw === 'string' ? raw : raw.toString('utf8')
+}
+
+const GPU_OOM_PATTERNS = [
+  /out\s*of\s*(device\s*)?memory/i,
+  /ErrorOutOfDeviceMemory/i,
+  /failed to allocate (Vulkan|CUDA|Metal|GPU)/i,
+  /cudaMalloc.*failed/i,
+  /CUDA error.*out of memory/i,
+  /ggml_vulkan:.*allocat/i,
+]
+
+function isGpuOom(stderr: string): boolean {
+  return GPU_OOM_PATTERNS.some((re) => re.test(stderr))
+}
+
+function summarizeWhisperError(e: unknown): string {
+  const stderr = stderrText(e)
+  if (stderr) {
+    if (isGpuOom(stderr)) {
+      return 'whisper.cpp ran out of GPU/system memory loading the model. Close other GPU apps or use a smaller model.'
+    }
+    const lines = stderr
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('whisper_') && !l.startsWith('ggml_'))
+    const last = lines[lines.length - 1]
+    if (last) return last.slice(0, 240)
+  }
+  const msg = e instanceof Error ? e.message : String(e)
+  const firstLine = msg.split(/\r?\n/)[0] || msg
+  return firstLine.slice(0, 240)
+}
+
 async function transcribeWhisperCpp(args: TranscribeArgs, wavPath: string): Promise<string> {
   const bin = (args.whisperBinPath || '').trim()
   const model = (args.whisperModelPath || '').trim()
@@ -48,7 +92,7 @@ async function transcribeWhisperCpp(args: TranscribeArgs, wavPath: string): Prom
 
   const lang = (args.language || 'auto').trim() || 'auto'
   const threads = Math.max(1, Math.min(16, os.cpus().length))
-  const cliArgs = [
+  const baseArgs = [
     '-m', model,
     '-l', lang,
     '-f', wavPath,
@@ -60,14 +104,26 @@ async function transcribeWhisperCpp(args: TranscribeArgs, wavPath: string): Prom
     '-nt',
   ]
 
-  try {
-    await execFileAsync(bin, cliArgs, {
+  const run = async (extra: string[]) => {
+    await execFileAsync(bin, [...baseArgs, ...extra], {
       maxBuffer: 32 * 1024 * 1024,
       windowsHide: true,
     })
+  }
+
+  try {
+    await run([])
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    throw new Error(`whisper.cpp failed: ${msg}`)
+    if (isGpuOom(stderrText(e))) {
+      console.warn('[voice] whisper.cpp GPU OOM — retrying on CPU')
+      try {
+        await run(['-ng'])
+      } catch (e2) {
+        throw new Error(`whisper.cpp failed: ${summarizeWhisperError(e2)}`)
+      }
+    } else {
+      throw new Error(`whisper.cpp failed: ${summarizeWhisperError(e)}`)
+    }
   }
 
   const txtPath = `${wavPath}.txt`

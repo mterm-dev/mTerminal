@@ -22,6 +22,7 @@ export interface UseVoiceRecognitionArgs {
 export interface VoiceController {
   state: VoiceState;
   error: string | null;
+  stream: MediaStream | null;
   toggle: () => void;
   start: () => void;
   stop: () => void;
@@ -99,6 +100,7 @@ export function useVoiceRecognition(
 ): VoiceController {
   const [state, setState] = useState<VoiceState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -113,6 +115,7 @@ export function useVoiceRecognition(
     streamRef.current = null;
     recorderRef.current = null;
     chunksRef.current = [];
+    setStream(null);
   }, []);
 
   const fail = useCallback((msg: string) => {
@@ -168,6 +171,7 @@ export function useVoiceRecognition(
         },
       });
       streamRef.current = stream;
+      setStream(stream);
 
       const mime = pickRecorderMime();
       const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
@@ -220,5 +224,5 @@ export function useVoiceRecognition(
     };
   }, [cleanupStream]);
 
-  return { state, error, toggle, start, stop };
+  return { state, error, stream, toggle, start, stop };
 }
