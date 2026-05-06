@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "../lib/ipc";
 import { useAI, type AiMessage, type AiUsage } from "../hooks/useAI";
+import { MarkdownLite } from "../lib/markdown-lite";
 
 interface Props {
   defaultProvider: string;
@@ -154,14 +155,16 @@ export function AIPanel({
         {history.map((m, i) => (
           <div key={i} className={`ai-msg ai-msg-${m.role}`}>
             <div className="ai-msg-role">{m.role}</div>
-            <div className="ai-msg-content">{m.content}</div>
+            <div className="ai-msg-content">
+              <MarkdownLite text={m.content} />
+            </div>
           </div>
         ))}
         {streamBuf && (
           <div className="ai-msg ai-msg-assistant">
             <div className="ai-msg-role">assistant</div>
             <div className="ai-msg-content">
-              {streamBuf}
+              <MarkdownLite text={streamBuf} />
               <span className="ai-cursor">▍</span>
             </div>
           </div>

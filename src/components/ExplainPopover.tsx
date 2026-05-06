@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAI, type AiUsage } from "../hooks/useAI";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { CodeBlock } from "./CodeBlock";
+import { MarkdownLite } from "../lib/markdown-lite";
 
 interface Props {
   selection: string;
@@ -96,12 +98,14 @@ export function ExplainPopover({
         </button>
       </div>
       <div className="ai-explain-snippet">
-        <pre>{selection.length > 800 ? selection.slice(0, 800) + "…" : selection}</pre>
+        <CodeBlock
+          code={selection.length > 800 ? selection.slice(0, 800) + "…" : selection}
+        />
       </div>
       <div className="ai-explain-body">
         {error && <div className="ai-palette-error">{error}</div>}
         <div className="ai-explain-text">
-          {text}
+          <MarkdownLite text={text} />
           {busy && <span className="ai-cursor">▍</span>}
         </div>
       </div>

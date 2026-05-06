@@ -1457,7 +1457,7 @@ body.resizing-git-panel * {
 }
 .git-diff-cell {
   padding: 0 8px;
-  white-space: pre;
+  white-space: pre-wrap;
   min-width: 0;
   overflow-wrap: anywhere;
   border-right: 1px solid var(--border-subtle);

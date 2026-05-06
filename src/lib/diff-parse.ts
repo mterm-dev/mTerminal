@@ -14,9 +14,65 @@ export interface DiffRow {
   rightText?: string;
   rightSpans?: DiffSpan[];
   hunkHeader?: string;
+  filename?: string;
 }
 
 const HUNK_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+const GIT_HEADER_RE = /^diff --git a\/(.+?) b\/(.+)$/;
+
+const EXT_TO_LANG: Record<string, string> = {
+  ts: "typescript",
+  tsx: "typescript",
+  js: "javascript",
+  jsx: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  json: "json",
+  py: "python",
+  rb: "ruby",
+  go: "go",
+  rs: "rust",
+  java: "java",
+  kt: "kotlin",
+  c: "c",
+  h: "c",
+  cpp: "cpp",
+  cc: "cpp",
+  hpp: "cpp",
+  cs: "csharp",
+  php: "php",
+  sh: "bash",
+  bash: "bash",
+  zsh: "bash",
+  fish: "bash",
+  yml: "yaml",
+  yaml: "yaml",
+  md: "markdown",
+  markdown: "markdown",
+  html: "xml",
+  htm: "xml",
+  xml: "xml",
+  svg: "xml",
+  css: "css",
+  scss: "scss",
+  less: "less",
+  sql: "sql",
+  toml: "ini",
+  ini: "ini",
+  dockerfile: "dockerfile",
+  swift: "swift",
+  lua: "lua",
+};
+
+export function langFromFilename(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  const base = name.split("/").pop() ?? name;
+  if (base.toLowerCase() === "dockerfile") return "dockerfile";
+  const dot = base.lastIndexOf(".");
+  if (dot < 0) return undefined;
+  const ext = base.slice(dot + 1).toLowerCase();
+  return EXT_TO_LANG[ext];
+}
 
 const FILE_HEADER_PREFIXES = [
   "diff ",
@@ -119,8 +175,14 @@ export function parseUnifiedDiffSideBySide(text: string): DiffRow[] {
   let inHunk = false;
   let lNo = 0;
   let rNo = 0;
+  let currentFile: string | undefined;
   const delBuf: PendingLine[] = [];
   const addBuf: PendingLine[] = [];
+
+  const stamp = (row: DiffRow): DiffRow => {
+    if (currentFile) row.filename = currentFile;
+    return row;
+  };
 
   const flush = () => {
     const pair = Math.min(delBuf.length, addBuf.length);
@@ -128,23 +190,25 @@ export function parseUnifiedDiffSideBySide(text: string): DiffRow[] {
       const d = delBuf[k]!;
       const a = addBuf[k]!;
       const { left, right } = diffWords(d.text, a.text);
-      rows.push({
-        type: "change",
-        leftNo: d.no,
-        leftText: d.text,
-        leftSpans: left,
-        rightNo: a.no,
-        rightText: a.text,
-        rightSpans: right,
-      });
+      rows.push(
+        stamp({
+          type: "change",
+          leftNo: d.no,
+          leftText: d.text,
+          leftSpans: left,
+          rightNo: a.no,
+          rightText: a.text,
+          rightSpans: right,
+        }),
+      );
     }
     for (let k = pair; k < delBuf.length; k++) {
       const d = delBuf[k]!;
-      rows.push({ type: "del", leftNo: d.no, leftText: d.text });
+      rows.push(stamp({ type: "del", leftNo: d.no, leftText: d.text }));
     }
     for (let k = pair; k < addBuf.length; k++) {
       const a = addBuf[k]!;
-      rows.push({ type: "add", rightNo: a.no, rightText: a.text });
+      rows.push(stamp({ type: "add", rightNo: a.no, rightText: a.text }));
     }
     delBuf.length = 0;
     addBuf.length = 0;
@@ -154,12 +218,20 @@ export function parseUnifiedDiffSideBySide(text: string): DiffRow[] {
     const line = lines[idx]!;
     if (idx === lines.length - 1 && line === "") break;
 
+    const gh = line.match(GIT_HEADER_RE);
+    if (gh) {
+      flush();
+      currentFile = gh[2];
+      inHunk = false;
+      continue;
+    }
+
     const hunkMatch = line.match(HUNK_RE);
     if (hunkMatch) {
       flush();
       lNo = parseInt(hunkMatch[1]!, 10);
       rNo = parseInt(hunkMatch[2]!, 10);
-      rows.push({ type: "hunk", hunkHeader: line });
+      rows.push(stamp({ type: "hunk", hunkHeader: line }));
       inHunk = true;
       continue;
     }
@@ -175,13 +247,15 @@ export function parseUnifiedDiffSideBySide(text: string): DiffRow[] {
     const rest = line.slice(1);
     if (ch === " ") {
       flush();
-      rows.push({
-        type: "context",
-        leftNo: lNo,
-        leftText: rest,
-        rightNo: rNo,
-        rightText: rest,
-      });
+      rows.push(
+        stamp({
+          type: "context",
+          leftNo: lNo,
+          leftText: rest,
+          rightNo: rNo,
+          rightText: rest,
+        }),
+      );
       lNo++;
       rNo++;
     } else if (ch === "-") {
@@ -192,13 +266,15 @@ export function parseUnifiedDiffSideBySide(text: string): DiffRow[] {
       rNo++;
     } else if (line === "") {
       flush();
-      rows.push({
-        type: "context",
-        leftNo: lNo,
-        leftText: "",
-        rightNo: rNo,
-        rightText: "",
-      });
+      rows.push(
+        stamp({
+          type: "context",
+          leftNo: lNo,
+          leftText: "",
+          rightNo: rNo,
+          rightText: "",
+        }),
+      );
       lNo++;
       rNo++;
     } else {

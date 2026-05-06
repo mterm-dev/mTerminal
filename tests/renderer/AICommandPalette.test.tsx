@@ -96,11 +96,21 @@ describe("AICommandPalette", () => {
     await act(async () => {
       opts.onDelta("CMD: ls -la\n");
     });
-    expect(screen.getByText("ls -la")).toBeTruthy();
+    expect(
+      screen.getByText(
+        (_, node) =>
+          node?.tagName === "CODE" && (node.textContent ?? "").trim() === "ls -la",
+      ),
+    ).toBeTruthy();
     await act(async () => {
       opts.onDelta("EXPLAIN: lists all files including hidden\n");
     });
-    expect(screen.getByText("ls -la")).toBeTruthy();
+    expect(
+      screen.getByText(
+        (_, node) =>
+          node?.tagName === "CODE" && (node.textContent ?? "").trim() === "ls -la",
+      ),
+    ).toBeTruthy();
     expect(screen.getByText(/lists all files including hidden/)).toBeTruthy();
 
     await act(async () => {

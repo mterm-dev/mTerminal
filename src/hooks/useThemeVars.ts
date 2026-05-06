@@ -8,6 +8,21 @@ export function useThemeVars(theme: Theme, settings: Settings) {
     for (const [k, v] of Object.entries(theme.cssVars)) {
       root.setProperty(k, v);
     }
+    const x = theme.xterm;
+    root.setProperty("--xt-bg", x.background);
+    root.setProperty("--xt-fg", x.foreground);
+    root.setProperty("--xt-red", x.red);
+    root.setProperty("--xt-green", x.green);
+    root.setProperty("--xt-yellow", x.yellow);
+    root.setProperty("--xt-blue", x.blue);
+    root.setProperty("--xt-magenta", x.magenta);
+    root.setProperty("--xt-cyan", x.cyan);
+    root.setProperty("--xt-bright-red", x.brightRed);
+    root.setProperty("--xt-bright-green", x.brightGreen);
+    root.setProperty("--xt-bright-yellow", x.brightYellow);
+    root.setProperty("--xt-bright-blue", x.brightBlue);
+    root.setProperty("--xt-bright-magenta", x.brightMagenta);
+    root.setProperty("--xt-bright-cyan", x.brightCyan);
     root.setProperty("--ui-font-size", `${settings.uiFontSize}px`);
     document.body.style.fontSize = `${settings.uiFontSize}px`;
   }, [theme, settings.uiFontSize]);

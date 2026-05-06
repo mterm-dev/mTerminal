@@ -1,5 +1,11 @@
 import { Fragment, useMemo } from "react";
-import { parseUnifiedDiffSideBySide, type DiffRow, type DiffSpan } from "../../lib/diff-parse";
+import hljs from "highlight.js/lib/common";
+import {
+  parseUnifiedDiffSideBySide,
+  langFromFilename,
+  type DiffRow,
+  type DiffSpan,
+} from "../../lib/diff-parse";
 
 interface Props {
   text: string;
@@ -38,22 +44,7 @@ export function DiffView({
         </div>
       )}
       {!error && !loading && !isEmpty && view === "unified" && (
-        <pre className="git-diff-modal-pre">
-          {text.split("\n").map((line, i) => {
-            let cls = "git-diff-line";
-            if (line.startsWith("+++") || line.startsWith("---")) cls += " head";
-            else if (line.startsWith("@@")) cls += " hunk";
-            else if (line.startsWith("+")) cls += " add";
-            else if (line.startsWith("-")) cls += " del";
-            else if (line.startsWith("diff ")) cls += " head";
-            return (
-              <span key={i} className={cls}>
-                {line}
-                {"\n"}
-              </span>
-            );
-          })}
-        </pre>
+        <UnifiedView text={text} />
       )}
       {truncated && (
         <div className="git-diff-truncated">diff truncated (size limit reached)</div>
@@ -73,19 +64,26 @@ function SideRow({ row }: { row: DiffRow }) {
 
   const leftCls = `git-diff-cell left ${cellClass(row, "left")}`;
   const rightCls = `git-diff-cell right ${cellClass(row, "right")}`;
+  const lang = langFromFilename(row.filename);
+  const leftHasChange = hasChangedSpans(row.leftSpans);
+  const rightHasChange = hasChangedSpans(row.rightSpans);
 
   return (
     <Fragment>
       <div className={leftCls}>
         <span className="ln">{row.leftNo ?? ""}</span>
         <span className="text">
-          {renderText(row.leftSpans, row.leftText, "left")}
+          {leftHasChange
+            ? renderText(row.leftSpans, row.leftText, "left")
+            : renderHighlighted(row.leftText, lang)}
         </span>
       </div>
       <div className={rightCls}>
         <span className="ln">{row.rightNo ?? ""}</span>
         <span className="text">
-          {renderText(row.rightSpans, row.rightText, "right")}
+          {rightHasChange
+            ? renderText(row.rightSpans, row.rightText, "right")
+            : renderHighlighted(row.rightText, lang)}
         </span>
       </div>
     </Fragment>
@@ -98,6 +96,12 @@ function cellClass(row: DiffRow, side: "left" | "right"): string {
   if (row.type === "del") return side === "left" ? "del" : "empty";
   if (row.type === "change") return `change ${side}`;
   return "";
+}
+
+function hasChangedSpans(spans: DiffSpan[] | undefined): boolean {
+  if (!spans || spans.length === 0) return false;
+  for (const s of spans) if (s.changed) return true;
+  return false;
 }
 
 function renderText(
@@ -117,4 +121,99 @@ function renderText(
     );
   }
   return fallback ?? "";
+}
+
+function renderHighlighted(text: string | undefined, lang: string | undefined) {
+  if (!text) return text ?? "";
+  const html = highlightSafe(text, lang);
+  if (html == null) return text;
+  return (
+    <span
+      style={{ display: "contents" }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+function highlightSafe(code: string, lang: string | undefined): string | null {
+  try {
+    if (lang && hljs.getLanguage(lang)) {
+      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function UnifiedView({ text }: { text: string }) {
+  const items = useMemo(() => {
+    const out: { line: string; cls: string; lang?: string }[] = [];
+    let currentFile: string | undefined;
+    const lines = text.split("\n");
+    for (const line of lines) {
+      const gh = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+      if (gh) currentFile = gh[2];
+
+      let cls = "git-diff-line";
+      let isHeader = false;
+      if (line.startsWith("+++") || line.startsWith("---")) {
+        cls += " head";
+        isHeader = true;
+      } else if (line.startsWith("@@")) {
+        cls += " hunk";
+        isHeader = true;
+      } else if (line.startsWith("diff ")) {
+        cls += " head";
+        isHeader = true;
+      } else if (line.startsWith("+")) {
+        cls += " add";
+      } else if (line.startsWith("-")) {
+        cls += " del";
+      }
+      out.push({
+        line,
+        cls,
+        lang: isHeader ? undefined : langFromFilename(currentFile),
+      });
+    }
+    return out;
+  }, [text]);
+
+  return (
+    <pre className="git-diff-modal-pre">
+      {items.map((it, i) => {
+        const sign = it.line.charAt(0);
+        const isBody =
+          !it.cls.includes("head") &&
+          !it.cls.includes("hunk") &&
+          (sign === "+" || sign === "-" || sign === " ");
+        if (!isBody || !it.lang) {
+          return (
+            <span key={i} className={it.cls}>
+              {it.line}
+              {"\n"}
+            </span>
+          );
+        }
+        const body = it.line.slice(1);
+        const html = highlightSafe(body, it.lang);
+        if (html == null) {
+          return (
+            <span key={i} className={it.cls}>
+              {it.line}
+              {"\n"}
+            </span>
+          );
+        }
+        return (
+          <span key={i} className={it.cls}>
+            {sign}
+            <span dangerouslySetInnerHTML={{ __html: html }} />
+            {"\n"}
+          </span>
+        );
+      })}
+    </pre>
+  );
 }

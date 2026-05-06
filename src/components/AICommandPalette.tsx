@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAI } from "../hooks/useAI";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { CodeBlock } from "./CodeBlock";
 
 import type { AiUsage } from "../hooks/useAI";
 
@@ -133,7 +134,11 @@ export function AICommandPalette({
         {error && <div className="ai-palette-error">{error}</div>}
         {(parsed.cmd || busy) && (
           <div className="ai-palette-out">
-            <pre className="ai-palette-cmd">{parsed.cmd || (busy ? "…" : "")}</pre>
+            {parsed.cmd ? (
+              <CodeBlock code={parsed.cmd} lang="bash" className="ai-palette-cmd" />
+            ) : (
+              <pre className="ai-palette-cmd">{busy ? "…" : ""}</pre>
+            )}
             {parsed.explain && (
               <div className="ai-palette-explain">{parsed.explain}</div>
             )}
