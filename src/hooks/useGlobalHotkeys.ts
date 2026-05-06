@@ -38,6 +38,16 @@ export function useGlobalHotkeys({
   setShowSettings,
 }: Args) {
   useEffect(() => {
+    const onVoiceKey = (e: KeyboardEvent) => {
+      const s = settingsRef.current;
+      if (!s || !s.voiceEnabled || !s.voiceHotkey) return;
+      if (!matchHotkey(e, s.voiceHotkey)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      voiceRef.current?.toggle();
+    };
+    window.addEventListener("keydown", onVoiceKey, { capture: true });
+
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
@@ -94,14 +104,12 @@ export function useGlobalHotkeys({
         e.preventDefault();
         setShowSettings(true);
       }
-      const s = settingsRef.current;
-      if (s && s.voiceEnabled && s.voiceHotkey && matchHotkey(e, s.voiceHotkey)) {
-        e.preventDefault();
-        voiceRef.current?.toggle();
-      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onVoiceKey, { capture: true });
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
