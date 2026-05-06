@@ -4,6 +4,7 @@ import { getGitApi, type GitStatus, type MtGit } from "../lib/git-api";
 export type { GitFile, GitStatus } from "../lib/git-api";
 
 const POLL_MS = 3000;
+const AUTO_FETCH_MS = 60_000;
 
 export interface UseGitStatusResult {
   status: GitStatus | null;
@@ -28,6 +29,8 @@ export function useGitStatus(
   const apiRef = useRef(api);
   apiRef.current = api;
   const pausedRef = useRef(false);
+  const upstreamRef = useRef<string | null>(null);
+  upstreamRef.current = status?.upstream ?? null;
 
   const fetchOnce = useCallback(async () => {
     const a = apiRef.current;
@@ -63,7 +66,23 @@ export function useGitStatus(
     const handle = setInterval(() => {
       if (!pausedRef.current) void fetchOnce();
     }, POLL_MS);
-    return () => clearInterval(handle);
+    const fetchHandle = setInterval(async () => {
+      if (pausedRef.current) return;
+      if (!upstreamRef.current) return;
+      const a = apiRef.current;
+      const c = cwdRef.current;
+      if (!a || !c) return;
+      try {
+        await a.fetch(c);
+      } catch {
+        return;
+      }
+      if (!pausedRef.current) void fetchOnce();
+    }, AUTO_FETCH_MS);
+    return () => {
+      clearInterval(handle);
+      clearInterval(fetchHandle);
+    };
   }, [cwd, enabled, fetchOnce]);
 
   const refresh = useCallback(async () => {
