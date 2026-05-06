@@ -107,7 +107,11 @@ export default function App() {
   const [vaultModal, setVaultModal] = useState<{ mode: MasterPasswordMode } | null>(null);
   const [pendingAfterUnlock, setPendingAfterUnlock] = useState<(() => void) | null>(null);
 
-  const vault = useVault(settings.remoteWorkspaceEnabled || settings.aiEnabled);
+  const vault = useVault(
+    settings.remoteWorkspaceEnabled ||
+      settings.aiEnabled ||
+      (settings.voiceEnabled && settings.voiceEngine === "openai"),
+  );
 
   const [ptyMap, setPtyMap] = useState<Map<number, number>>(new Map());
   const pendingCommandsRef = useRef<Map<number, string>>(new Map());
