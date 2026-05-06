@@ -1,0 +1,46 @@
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+
+{% for commit in commits -%}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/arthurr0/mTerminal/commit/{{ commit.id }}))
+{% endfor %}
+{%- endfor %}
+{% if previous and previous.version -%}
+**Full Changelog**: https://github.com/arthurr0/mTerminal/compare/{{ previous.version }}...{{ version }}
+{% endif %}
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "v[0-9]*"
+sort_commits = "newest"
+topo_order = false
+
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactor" },
+  { message = "^style", group = "<!-- 4 -->Style" },
+  { message = "^docs", group = "<!-- 5 -->Documentation" },
+  { message = "^test", group = "<!-- 6 -->Tests" },
+  { message = "^build", group = "<!-- 7 -->Build" },
+  { message = "^ci", group = "<!-- 8 -->CI" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "<!-- 9 -->Chores" },
+  { message = "^Merge", skip = true },
+  { message = ".*", group = "<!-- 99 -->Other" },
+]
+
+commit_preprocessors = [
+  { pattern = '\((#\d+)\)', replace = "([$1](https://github.com/arthurr0/mTerminal/issues/$1))" },
+]

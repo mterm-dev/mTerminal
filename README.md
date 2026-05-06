@@ -215,6 +215,56 @@ See [`CLAUDE.md`](CLAUDE.md) for deeper architecture notes.
 
 Issues and PRs welcome at <https://github.com/arthurr0/mTerminal>. There is no test suite yet; please verify changes manually with `pnpm dev` on at least one of Linux / Windows before opening a PR.
 
+### Commit style
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) so release notes can be generated automatically. Use one of: `feat`, `fix`, `perf`, `refactor`, `style`, `docs`, `test`, `build`, `ci`, `chore`. Add `!` after the type for breaking changes (e.g. `feat!: drop legacy vault format`) or include a `BREAKING CHANGE:` footer.
+
+---
+
+## Releasing
+
+Tags drive everything. Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds Linux + Windows artifacts, generates release notes from commits with [`git-cliff`](https://git-cliff.org/), and publishes a GitHub Release with the binaries attached. There is **no `CHANGELOG.md`** — release notes live only on the GitHub Releases page and are regenerated each tag.
+
+### Cut a release
+
+```bash
+pnpm release patch         # bump the patch component of the latest tag
+pnpm release minor         # bump minor, reset patch
+pnpm release major         # bump major, reset minor and patch
+pnpm release 0.5.0         # explicit version
+```
+
+The script (`scripts/release.mjs`) refuses to proceed unless:
+
+- you are on `master` (or `main`) with a clean working tree
+- local `HEAD` matches `origin/<branch>`
+- the computed tag does not already exist locally or on `origin`
+- there is at least one commit since the previous tag
+
+It then creates an annotated tag `v<x.y.z>` and pushes it to `origin`. CI takes over from there.
+
+### Manual tag (alternative)
+
+```bash
+git tag -a v0.5.0 -m "release v0.5.0"
+git push origin v0.5.0
+```
+
+CI will react identically. The `package.json` version is overwritten from the tag at build time, so you do **not** need to bump it by hand.
+
+### Preview release notes locally
+
+Optional — install [`git-cliff`](https://git-cliff.org/docs/installation) and run:
+
+```bash
+git-cliff --config cliff.toml --unreleased   # what the next release will contain
+git-cliff --config cliff.toml --latest       # what the most recent tag contained
+```
+
+Sections (Features, Bug Fixes, Performance, Refactor, …) are derived from commit prefixes via `cliff.toml`. `chore(release): …` and merge commits are skipped; non-conventional commits land under "Other".
+
+---
+
 ## License
 
 [MIT](LICENSE).

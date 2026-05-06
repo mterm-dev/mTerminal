@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@v8
@@ -25,13 +28,23 @@ jobs:
           name: windows-bundles
           path: release-artifacts
 
+      - name: Generate changelog
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+          GITHUB_REPO: ${{ github.repository }}
+
       - name: Create release
         uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
           files: |
             release-artifacts/*.AppImage
             release-artifacts/*.deb
