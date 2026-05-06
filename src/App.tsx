@@ -632,7 +632,11 @@ export default function App() {
           setEditingGroupId={setEditingGroupId}
           onSelectTab={selectTab}
           onAddTab={(g) => {
-            setGridGroupId(null);
+            const active = ws.tabs.find((t) => t.id === ws.activeId);
+            const activeGroup =
+              active && active.kind === "local" ? active.groupId : null;
+            const target = g === undefined ? activeGroup : g;
+            if (target !== gridGroupId) setGridGroupId(null);
             ws.addTab(g);
           }}
           onAddGroup={() => ws.addGroup()}
