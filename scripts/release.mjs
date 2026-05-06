@@ -30,7 +30,7 @@ if (sh('git status --porcelain')) {
   fail('working tree is dirty — commit or stash first');
 }
 
-sh('git fetch --tags origin', { stdio: 'inherit' });
+sh('git fetch --tags --force origin', { stdio: 'inherit' });
 const localHead = sh('git rev-parse @');
 const remoteHead = sh(`git rev-parse origin/${branch}`);
 if (localHead !== remoteHead) {
