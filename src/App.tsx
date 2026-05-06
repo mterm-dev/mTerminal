@@ -4,6 +4,7 @@ import { Titlebar } from "./components/Titlebar";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TerminalTab } from "./components/TerminalTab";
+import { GridTabToolbar } from "./components/GridTabToolbar";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { RemoteWorkspace } from "./components/RemoteWorkspace";
@@ -30,6 +31,7 @@ import {
   type HostGroup,
   type HostMeta,
 } from "./hooks/useRemoteHosts";
+import { computeGridLayout } from "./lib/grid-layout";
 import { useSettings } from "./settings/useSettings";
 import { findTheme } from "./settings/themes";
 import { SettingsModal } from "./settings/SettingsModal";
@@ -81,6 +83,7 @@ export default function App() {
   }, []);
   const [closeConfirm, setCloseConfirm] = useState<{ count: number } | null>(null);
   const [gridGroupId, setGridGroupId] = useState<string | null>(null);
+  const [soloTabId, setSoloTabId] = useState<number | null>(null);
   const [hostModal, setHostModal] = useState<{
     initial: HostMeta | null;
     presetGroupId?: string | null;
@@ -289,23 +292,45 @@ export default function App() {
     if (gridGroupId && gridTabs.length === 0) setGridGroupId(null);
   }, [gridGroupId, gridTabs.length]);
 
+  useEffect(() => {
+    if (soloTabId == null) return;
+    if (!gridGroupId || !gridTabs.some((t) => t.id === soloTabId)) {
+      setSoloTabId(null);
+    }
+  }, [soloTabId, gridGroupId, gridTabs]);
+
+  useEffect(() => {
+    if (soloTabId == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        const target = e.target as HTMLElement | null;
+        if (target?.closest(".xterm")) return;
+        setSoloTabId(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [soloTabId]);
+
   const visibleTabIds = useMemo(() => {
+    if (gridGroupId && soloTabId != null) {
+      return new Set([soloTabId]);
+    }
     if (gridGroupId && gridTabs.length > 0) {
       return new Set(gridTabs.map((t) => t.id));
     }
     return new Set(ws.activeId != null ? [ws.activeId] : []);
-  }, [gridGroupId, gridTabs, ws.activeId]);
+  }, [gridGroupId, gridTabs, ws.activeId, soloTabId]);
 
   const gridDims = useMemo(() => {
-    const n = gridTabs.length;
-    if (!gridGroupId || n === 0) return null;
-    const cols = Math.ceil(Math.sqrt(n));
-    const rows = Math.ceil(n / cols);
-    return { cols, rows };
-  }, [gridGroupId, gridTabs.length]);
+    if (!gridGroupId) return null;
+    if (soloTabId != null) return null;
+    return computeGridLayout(gridTabs.length);
+  }, [gridGroupId, gridTabs.length, soloTabId]);
 
   const selectTab = (id: number) => {
     setGridGroupId(null);
+    setSoloTabId(null);
     ws.setActive(id);
   };
 
@@ -480,9 +505,14 @@ export default function App() {
     const cwd = cur?.cwd;
     const cmd = cwd ? `cd ${shq(cwd)} && claude\n` : `claude\n`;
     setGridGroupId(null);
+    setSoloTabId(null);
     const id = ws.addTab();
     pendingCommandsRef.current.set(id, cmd);
   }, [ws]);
+
+  const toggleSolo = useCallback((id: number) => {
+    setSoloTabId((cur) => (cur === id ? null : id));
+  }, []);
   const spawnClaudeTabRef = useRef(spawnClaudeTab);
   spawnClaudeTabRef.current = spawnClaudeTab;
   const openPaletteRef = useRef(openPalette);
@@ -717,6 +747,11 @@ export default function App() {
                 : t.kind === "remote"
                   ? "connecting to remote host..."
                   : undefined;
+              const isGridContext =
+                gridGroupId !== null && t.groupId === gridGroupId;
+              const isSolo = soloTabId === t.id;
+              const showToolbar =
+                isGridContext && (gridDims !== null || isSolo);
               return (
                 <TerminalTab
                   key={t.id}
@@ -727,12 +762,29 @@ export default function App() {
                       ? gridTabs.findIndex((x) => x.id === t.id)
                       : null
                   }
+                  gridSpanRows={
+                    gridDims && t.groupId === gridGroupId
+                      ? gridDims.spanRowsSlots.has(
+                          gridTabs.findIndex((x) => x.id === t.id),
+                        )
+                      : false
+                  }
                   onExit={(id) => ws.closeTab(id)}
                   onInfo={ws.updateTabInfo}
                   onPtyReady={handlePtyReady}
                   onPtyClose={handlePtyClose}
                   initialCommand={pendingCommandsRef.current.get(t.id) ?? null}
                   onSelectionMenu={openExplain}
+                  toolbar={
+                    showToolbar ? (
+                      <GridTabToolbar
+                        isSolo={isSolo}
+                        onSolo={() => toggleSolo(t.id)}
+                        onRename={() => setEditingTabId(t.id)}
+                        onClose={() => ws.closeTab(t.id)}
+                      />
+                    ) : undefined
+                  }
                   fontFamily={settings.fontFamily}
                   fontSize={settings.fontSize}
                   lineHeight={settings.lineHeight}

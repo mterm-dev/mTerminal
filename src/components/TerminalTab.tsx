@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -11,6 +11,7 @@ interface Props {
   tabId: number;
   active: boolean;
   gridSlot?: number | null;
+  gridSpanRows?: boolean;
   onExit: (tabId: number) => void;
   onInfo?: (tabId: number, info: { cwd: string | null; cmd: string | null }) => void;
   onPtyReady?: (tabId: number, ptyId: number) => void;
@@ -37,6 +38,7 @@ interface Props {
   remoteHostId?: string;
   remoteBanner?: string;
   initialCwd?: string;
+  toolbar?: ReactNode;
 }
 
 type PtyEvent =
@@ -47,6 +49,7 @@ export function TerminalTab({
   tabId,
   active,
   gridSlot,
+  gridSpanRows,
   onExit,
   onInfo,
   onPtyReady,
@@ -68,6 +71,7 @@ export function TerminalTab({
   remoteHostId,
   remoteBanner,
   initialCwd,
+  toolbar,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -317,33 +321,38 @@ export function TerminalTab({
   }, [fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink, scrollback, theme]);
 
   const inGrid = typeof gridSlot === "number" && gridSlot >= 0;
-  const hostStyle: CSSProperties | undefined = inGrid
-    ? { order: gridSlot }
+  const cellStyle: CSSProperties | undefined = inGrid
+    ? { order: gridSlot, ...(gridSpanRows ? { gridRow: "span 2" } : {}) }
     : undefined;
   return (
     <div
-      ref={hostRef}
-      role="application"
-      aria-label="terminal"
-      className={`term-pane-host ${active ? "" : "hidden"} ${inGrid ? "in-grid" : ""}`}
-      style={hostStyle}
-      onMouseDown={(e) => {
-        mouseDownTargetRef.current = e.target;
-      }}
-      onMouseUp={(e) => {
-        if (mouseDownTargetRef.current === e.target) {
+      className={`term-pane-cell ${active ? "" : "hidden"} ${inGrid ? "in-grid" : ""}`}
+      style={cellStyle}
+    >
+      <div
+        ref={hostRef}
+        role="application"
+        aria-label="terminal"
+        className="term-pane-host"
+        onMouseDown={(e) => {
+          mouseDownTargetRef.current = e.target;
+        }}
+        onMouseUp={(e) => {
+          if (mouseDownTargetRef.current === e.target) {
+            const sel = termRef.current?.getSelection();
+            if (!sel) termRef.current?.focus();
+          }
+          mouseDownTargetRef.current = null;
+        }}
+        onContextMenu={(e) => {
           const sel = termRef.current?.getSelection();
-          if (!sel) termRef.current?.focus();
-        }
-        mouseDownTargetRef.current = null;
-      }}
-      onContextMenu={(e) => {
-        const sel = termRef.current?.getSelection();
-        if (sel && sel.trim().length > 0 && onSelectionMenuRef.current) {
-          e.preventDefault();
-          onSelectionMenuRef.current(tabId, sel, e.clientX, e.clientY);
-        }
-      }}
-    />
+          if (sel && sel.trim().length > 0 && onSelectionMenuRef.current) {
+            e.preventDefault();
+            onSelectionMenuRef.current(tabId, sel, e.clientX, e.clientY);
+          }
+        }}
+      />
+      {toolbar}
+    </div>
   );
 }

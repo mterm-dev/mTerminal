@@ -1644,13 +1644,17 @@ body.resizing-git-panel * {
   background: transparent;
   overflow: hidden;
 }
+.term-pane-cell {
+  position: absolute;
+  inset: 0;
+}
+.term-pane-cell.hidden { visibility: hidden; pointer-events: none; }
 .term-pane-host {
   position: absolute;
   inset: 0;
   padding: 8px 4px 4px 12px;
   overflow: hidden;
 }
-.term-pane-host.hidden { visibility: hidden; pointer-events: none; }
 
 .term-pane.grid {
   display: grid;
@@ -1659,17 +1663,69 @@ body.resizing-git-panel * {
   gap: 4px;
   padding: 4px;
 }
-.term-pane.grid .term-pane-host.in-grid {
+.term-pane.grid .term-pane-cell.in-grid {
   position: relative;
   inset: auto;
-  padding: 6px 4px 4px 8px;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--bg);
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
-.term-pane.grid .term-pane-host.in-grid.hidden { display: none; }
+.term-pane.grid .term-pane-cell.in-grid > .term-pane-host {
+  padding: 6px 4px 4px 8px;
+}
+.term-pane.grid .term-pane-cell.in-grid.hidden { display: none; }
+
+/* ── grid tab toolbar ────────────────────────────────────── */
+.grid-toolbar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0.35;
+  transition: opacity 0.12s ease;
+  z-index: 5;
+}
+.term-pane-cell:hover .grid-toolbar,
+.grid-toolbar:focus-within {
+  opacity: 1;
+}
+.grid-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.grid-toolbar-btn:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+.grid-toolbar-btn:focus-visible {
+  outline: 1px solid var(--accent, var(--fg));
+  outline-offset: 1px;
+}
+.grid-toolbar-close:hover {
+  background: color-mix(in srgb, #e06c75 60%, transparent);
+  color: #fff;
+}
 
 .term-pane-host .xterm-viewport {
   background-color: transparent !important;
