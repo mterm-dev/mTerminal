@@ -686,6 +686,174 @@ describe("useWorkspace - selectIndex", () => {
   });
 });
 
+describe("useWorkspace - groupLayouts", () => {
+  it("37. defaults to empty record on fresh workspace", () => {
+    const { result } = renderHook(() => useWorkspace());
+    expect(result.current.groupLayouts).toEqual({});
+  });
+
+  it("38. setGroupLayout materializes a layout for the group", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let gid = "";
+    act(() => {
+      gid = result.current.addGroup("g1");
+    });
+    act(() => {
+      result.current.addTab(gid);
+      result.current.addTab(gid);
+    });
+    act(() => {
+      result.current.setGroupLayout(gid, { cols: 2, colSizes: [2, 1], rowSizes: [1] });
+    });
+    const layout = result.current.groupLayouts[gid];
+    expect(layout).toBeDefined();
+    expect(layout.cols).toBe(2);
+    expect(layout.colSizes).toEqual([2, 1]);
+    expect(layout.rowSizes).toEqual([1]);
+  });
+
+  it("39. setGroupLayout is no-op when the group has no tabs", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let gid = "";
+    act(() => {
+      gid = result.current.addGroup("empty");
+    });
+    act(() => {
+      result.current.setGroupLayout(gid, { cols: 2, colSizes: [1, 1], rowSizes: [1] });
+    });
+    expect(result.current.groupLayouts[gid]).toBeUndefined();
+  });
+
+  it("40. tab count change synchronizes rowSizes", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let gid = "";
+    act(() => {
+      gid = result.current.addGroup("g");
+      result.current.addTab(gid);
+      result.current.addTab(gid);
+    });
+    act(() => {
+      result.current.setGroupLayout(gid, { cols: 2, colSizes: [1, 1], rowSizes: [1] });
+    });
+    expect(result.current.groupLayouts[gid].rowSizes).toHaveLength(1);
+    act(() => {
+      result.current.addTab(gid);
+      result.current.addTab(gid);
+    });
+    expect(result.current.groupLayouts[gid].rowSizes).toHaveLength(2);
+  });
+
+  it("41. deleting the group removes its layout entry", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let gid = "";
+    act(() => {
+      gid = result.current.addGroup("g");
+      result.current.addTab(gid);
+    });
+    act(() => {
+      result.current.setGroupLayout(gid, { cols: 1, colSizes: [1], rowSizes: [1] });
+    });
+    expect(result.current.groupLayouts[gid]).toBeDefined();
+    act(() => {
+      result.current.deleteGroup(gid);
+    });
+    expect(result.current.groupLayouts[gid]).toBeUndefined();
+  });
+
+  it("42. parses persisted layout on reload, drops bad shapes", () => {
+    const initialState = {
+      tabs: [
+        { id: 1, label: "a", groupId: "g1", autoLabel: true, kind: "local" },
+        { id: 2, label: "b", groupId: "g1", autoLabel: true, kind: "local" },
+      ],
+      groups: [
+        { id: "g1", name: "g", collapsed: false, accent: DEFAULT_ACCENTS[0] },
+      ],
+      activeId: 1,
+      nextTabId: 3,
+      groupLayouts: {
+        g1: { cols: 2, colSizes: [3, 1], rowSizes: [1] },
+        bogus: { cols: -1, colSizes: [], rowSizes: [] },
+        ghost: { cols: 2, colSizes: [1, 1], rowSizes: [1] },
+      },
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(initialState));
+    const { result } = renderHook(() => useWorkspace());
+    expect(result.current.groupLayouts.g1).toBeDefined();
+    expect(result.current.groupLayouts.g1.colSizes).toEqual([3, 1]);
+    expect(result.current.groupLayouts.bogus).toBeUndefined();
+    expect(result.current.groupLayouts.ghost).toBeUndefined();
+  });
+});
+
+describe("useWorkspace - swapTabsInGroup", () => {
+  it("43. swap stores order in groupLayouts.slotOrder, leaves ws.tabs order stable", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let gid = "";
+    act(() => {
+      gid = result.current.addGroup("g");
+    });
+    let aId = -1;
+    act(() => {
+      aId = result.current.addTab(gid);
+    });
+    let bId = -1;
+    act(() => {
+      bId = result.current.addTab(gid);
+    });
+    const tabsBefore = result.current.tabs.map((t) => t.id);
+    act(() => {
+      result.current.swapTabsInGroup(aId, bId);
+    });
+    expect(result.current.tabs.map((t) => t.id)).toEqual(tabsBefore);
+    expect(result.current.groupLayouts[gid]?.slotOrder).toEqual([bId, aId]);
+  });
+
+  it("44. is a no-op when tabs are in different groups", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let g1 = "";
+    let g2 = "";
+    act(() => {
+      g1 = result.current.addGroup("g1");
+    });
+    act(() => {
+      g2 = result.current.addGroup("g2");
+    });
+    let aId = -1;
+    act(() => {
+      aId = result.current.addTab(g1);
+    });
+    let bId = -1;
+    act(() => {
+      bId = result.current.addTab(g2);
+    });
+    const before = result.current.tabs.map((t) => t.id);
+    act(() => {
+      result.current.swapTabsInGroup(aId, bId);
+    });
+    expect(result.current.tabs.map((t) => t.id)).toEqual(before);
+    expect(result.current.groupLayouts[g1]?.slotOrder).toBeUndefined();
+    expect(result.current.groupLayouts[g2]?.slotOrder).toBeUndefined();
+  });
+
+  it("45. is a no-op when ids are equal", () => {
+    const { result } = renderHook(() => useWorkspace());
+    let gid = "";
+    act(() => {
+      gid = result.current.addGroup("g");
+    });
+    let aId = -1;
+    act(() => {
+      aId = result.current.addTab(gid);
+    });
+    const before = result.current.tabs.map((t) => t.id);
+    act(() => {
+      result.current.swapTabsInGroup(aId, aId);
+    });
+    expect(result.current.tabs.map((t) => t.id)).toEqual(before);
+  });
+});
+
 describe("useWorkspace - persistence", () => {
   it("36. mutations are written to localStorage after 200ms debounce", () => {
     vi.useFakeTimers();

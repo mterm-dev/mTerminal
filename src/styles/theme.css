@@ -1310,9 +1310,42 @@ body.resizing-git-msg * {
   border-color: var(--accent);
   color: var(--fg);
 }
+.git-btn.danger {
+  color: var(--err);
+  border-color: color-mix(in oklch, var(--err) 40%, transparent);
+}
+.git-btn.danger:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--err) 14%, transparent);
+  border-color: var(--err);
+  color: var(--err);
+}
 .git-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.git-conflict-output {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--fg-dim);
+  background: var(--bg-soft, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+}
+.git-conflict-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.git-conflict-confirm-row {
+  display: flex;
+  gap: 6px;
 }
 
 .git-error,
@@ -1908,8 +1941,8 @@ body.resizing-git-msg * {
 
 .term-pane.grid {
   display: grid;
-  grid-template-columns: repeat(var(--grid-cols, 1), 1fr);
-  grid-template-rows: repeat(var(--grid-rows, 1), 1fr);
+  grid-template-columns: var(--grid-col-sizes, 1fr);
+  grid-template-rows: var(--grid-row-sizes, 1fr);
   gap: 4px;
   padding: 4px;
 }
@@ -1923,32 +1956,168 @@ body.resizing-git-msg * {
   min-height: 0;
   overflow: hidden;
 }
+.term-pane.grid .term-pane-cell.in-grid.with-header > .term-pane-host {
+  position: absolute;
+  inset: 26px 0 0 0;
+}
 .term-pane.grid .term-pane-cell.in-grid > .term-pane-host {
   padding: 6px 4px 4px 8px;
 }
 .term-pane.grid .term-pane-cell.in-grid.hidden { display: none; }
+.term-pane.grid .term-pane-cell.in-grid.drop-target {
+  border-color: var(--accent, var(--fg));
+  box-shadow: inset 0 0 0 1px var(--accent, var(--fg));
+}
+.term-pane.grid .term-pane-cell.in-grid.drag-source {
+  opacity: 0.4;
+  transition: opacity 0.12s ease;
+}
 
-/* ── grid tab toolbar ────────────────────────────────────── */
+/* ── grid resizers ───────────────────────────────────────── */
+.grid-resizer {
+  position: absolute;
+  background: transparent;
+  z-index: 4;
+  transition: background 0.12s ease;
+}
+.grid-resizer.col {
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  margin-left: -4px;
+  cursor: col-resize;
+}
+.grid-resizer.row {
+  left: 0;
+  right: 0;
+  height: 8px;
+  margin-top: -4px;
+  cursor: row-resize;
+}
+.grid-resizer:hover,
+.grid-resizer.dragging {
+  background: color-mix(in srgb, var(--accent, var(--fg)) 35%, transparent);
+}
+body.resizing-grid { user-select: none; }
+body.resizing-grid-col { cursor: col-resize !important; }
+body.resizing-grid-row { cursor: row-resize !important; }
+body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
+
+.grid-drag-preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 0 10px;
+  height: 32px;
+  min-width: 160px;
+  max-width: 320px;
+  background: var(--bg);
+  border: 1px solid var(--accent, var(--fg));
+  border-radius: var(--r-md, 6px);
+  color: var(--fg);
+  font-size: var(--t-xs, 11px);
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--accent, var(--fg)) 30%, transparent) inset,
+    0 12px 32px rgba(0, 0, 0, 0.45);
+  rotate: -2deg;
+  translate: 0 0;
+  will-change: translate;
+  transform-origin: 16px 16px;
+}
+.grid-drag-preview svg {
+  color: var(--accent, var(--fg));
+  flex-shrink: 0;
+}
+.grid-drag-preview-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.grid-drag-preview-sub {
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── grid tab toolbar / header ───────────────────────────── */
 .grid-toolbar {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 0;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0.55;
+  transition: opacity 0.12s ease;
+  z-index: 5;
+  font-size: var(--t-xs, 11px);
+  font-family: var(--font-sans);
+}
+.term-pane-cell:hover .grid-toolbar,
+.grid-toolbar:focus-within,
+.grid-toolbar.dragging {
+  opacity: 1;
+}
+.grid-toolbar-handle {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 6px 0 6px;
+  gap: 6px;
+  cursor: grab;
+  color: var(--fg-muted);
+  touch-action: none;
+}
+.grid-toolbar-handle:active,
+.grid-toolbar.dragging .grid-toolbar-handle {
+  cursor: grabbing;
+}
+.grid-toolbar-grip {
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+.grid-toolbar-handle:hover .grid-toolbar-grip {
+  opacity: 1;
+}
+.grid-toolbar-label {
+  color: var(--fg);
+  font-size: var(--t-xs, 11px);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.grid-toolbar-sub {
+  color: var(--fg-muted);
+  font-size: var(--t-xs, 11px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.grid-toolbar-buttons {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding: 2px;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  opacity: 0.35;
-  transition: opacity 0.12s ease;
-  z-index: 5;
-}
-.term-pane-cell:hover .grid-toolbar,
-.grid-toolbar:focus-within {
-  opacity: 1;
+  flex-shrink: 0;
 }
 .grid-toolbar-btn {
   display: inline-flex;

@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normalizeAccent, pickDefaultAccent } from "../utils/accent";
+import {
+  rowsForCount,
+  syncLayoutSizes,
+  syncSlotOrder,
+  type CustomLayout,
+} from "../lib/grid-layout";
+
+export type GroupLayout = CustomLayout;
 
 export function basename(p: string): string {
   if (!p) return "";
@@ -37,6 +45,7 @@ export interface WorkspaceState {
   groups: Group[];
   activeId: number | null;
   nextTabId: number;
+  groupLayouts: Record<string, GroupLayout>;
 }
 
 const STORAGE_KEY = "mterminal:workspace:v2";
@@ -136,6 +145,11 @@ function loadInitial(): WorkspaceState {
             remoteHostId: kind === "remote" ? t.remoteHostId : undefined,
           };
         });
+        const groupLayouts = sanitizeGroupLayouts(
+          (parsed as { groupLayouts?: Record<string, unknown> }).groupLayouts,
+          groups,
+          tabs,
+        );
         return {
           tabs,
           groups,
@@ -144,6 +158,7 @@ function loadInitial(): WorkspaceState {
             parsed.nextTabId,
             tabs.reduce((m, t) => Math.max(m, t.id + 1), 1),
           ),
+          groupLayouts,
         };
       }
     } catch {}
@@ -162,13 +177,104 @@ function loadInitial(): WorkspaceState {
     groups: [],
     activeId: firstId,
     nextTabId: firstId + 1,
+    groupLayouts: {},
   };
+}
+
+function sanitizeGroupLayouts(
+  raw: unknown,
+  groups: Group[],
+  tabs: Tab[],
+): Record<string, GroupLayout> {
+  const out: Record<string, GroupLayout> = {};
+  if (!raw || typeof raw !== "object") return out;
+  const validGroupIds = new Set(groups.map((g) => g.id));
+  for (const [gid, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!validGroupIds.has(gid)) continue;
+    const layout = parseLayout(val);
+    if (!layout) continue;
+    const count = tabs.filter((t) => t.groupId === gid).length;
+    if (count <= 0) continue;
+    out[gid] = syncLayoutSizes(layout, count);
+  }
+  return out;
+}
+
+function parseLayout(val: unknown): GroupLayout | null {
+  if (!val || typeof val !== "object") return null;
+  const obj = val as {
+    cols?: unknown;
+    colSizes?: unknown;
+    rowSizes?: unknown;
+    slotOrder?: unknown;
+  };
+  const cols = typeof obj.cols === "number" && obj.cols >= 1 ? Math.floor(obj.cols) : null;
+  if (!cols) return null;
+  const colSizes = parseSizeArray(obj.colSizes);
+  const rowSizes = parseSizeArray(obj.rowSizes);
+  if (!colSizes || !rowSizes) return null;
+  const slotOrder = parseIntArray(obj.slotOrder);
+  return { cols, colSizes, rowSizes, slotOrder };
+}
+
+function parseSizeArray(val: unknown): number[] | null {
+  if (!Array.isArray(val) || val.length === 0) return null;
+  const out: number[] = [];
+  for (const v of val) {
+    if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) return null;
+    out.push(v);
+  }
+  return out;
+}
+
+function parseIntArray(val: unknown): number[] | undefined {
+  if (!Array.isArray(val)) return undefined;
+  const out: number[] = [];
+  for (const v of val) {
+    if (typeof v !== "number" || !Number.isFinite(v)) return undefined;
+    out.push(Math.floor(v));
+  }
+  return out;
 }
 
 export function useWorkspace() {
   const [state, setState] = useState<WorkspaceState>(loadInitial);
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  useEffect(() => {
+    setState((s) => {
+      const validGids = new Set(s.groups.map((g) => g.id));
+      const next: Record<string, GroupLayout> = {};
+      let changed = false;
+      for (const [gid, layout] of Object.entries(s.groupLayouts)) {
+        if (!validGids.has(gid)) {
+          changed = true;
+          continue;
+        }
+        const presentIds = s.tabs
+          .filter((t) => t.groupId === gid)
+          .map((t) => t.id);
+        if (presentIds.length <= 0) {
+          changed = true;
+          continue;
+        }
+        const sized = syncLayoutSizes(layout, presentIds.length);
+        const slotOrder = syncSlotOrder(sized.slotOrder, presentIds);
+        const synced =
+          slotOrder === sized.slotOrder ? sized : { ...sized, slotOrder };
+        if (synced !== layout) changed = true;
+        next[gid] = synced;
+      }
+      if (
+        !changed &&
+        Object.keys(next).length === Object.keys(s.groupLayouts).length
+      ) {
+        return s;
+      }
+      return { ...s, groupLayouts: next };
+    });
+  }, [state.tabs, state.groups]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -441,6 +547,93 @@ export function useWorkspace() {
     }));
   }, []);
 
+  const setGroupLayout = useCallback(
+    (groupId: string, patch: Partial<GroupLayout>) => {
+      setState((s) => {
+        const count = s.tabs.filter((t) => t.groupId === groupId).length;
+        if (count <= 0) return s;
+        const existing = s.groupLayouts[groupId];
+        const baseCols =
+          patch.cols ??
+          existing?.cols ??
+          Math.max(1, Math.ceil(Math.sqrt(count)));
+        const baseColSizes =
+          patch.colSizes ??
+          existing?.colSizes ??
+          Array.from({ length: baseCols }, () => 1);
+        const targetRows = rowsForCount(count, baseCols);
+        const baseRowSizes =
+          patch.rowSizes ??
+          existing?.rowSizes ??
+          Array.from({ length: targetRows }, () => 1);
+        const merged = syncLayoutSizes(
+          {
+            cols: baseCols,
+            colSizes: baseColSizes,
+            rowSizes: baseRowSizes,
+          },
+          count,
+        );
+        if (
+          existing &&
+          existing.cols === merged.cols &&
+          arraysEqual(existing.colSizes, merged.colSizes) &&
+          arraysEqual(existing.rowSizes, merged.rowSizes)
+        ) {
+          return s;
+        }
+        return {
+          ...s,
+          groupLayouts: { ...s.groupLayouts, [groupId]: merged },
+        };
+      });
+    },
+    [],
+  );
+
+  const swapTabsInGroup = useCallback((aId: number, bId: number) => {
+    if (aId === bId) return;
+    setState((s) => {
+      const a = s.tabs.find((t) => t.id === aId);
+      const b = s.tabs.find((t) => t.id === bId);
+      if (!a || !b) return s;
+      const gid = a.groupId;
+      if (gid == null || gid !== b.groupId) return s;
+      const presentIds = s.tabs
+        .filter((t) => t.groupId === gid)
+        .map((t) => t.id);
+      if (presentIds.length < 2) return s;
+      const existing = s.groupLayouts[gid];
+      const baseCols =
+        existing?.cols ?? Math.max(1, Math.ceil(Math.sqrt(presentIds.length)));
+      const baseColSizes =
+        existing?.colSizes ?? Array.from({ length: baseCols }, () => 1);
+      const baseRowSizes =
+        existing?.rowSizes ??
+        Array.from({ length: rowsForCount(presentIds.length, baseCols) }, () => 1);
+      const baseSlotOrder = existing?.slotOrder ?? presentIds;
+      const ai = baseSlotOrder.indexOf(aId);
+      const bi = baseSlotOrder.indexOf(bId);
+      if (ai < 0 || bi < 0) return s;
+      const slotOrder = baseSlotOrder.slice();
+      slotOrder[ai] = bId;
+      slotOrder[bi] = aId;
+      const merged = syncLayoutSizes(
+        {
+          cols: baseCols,
+          colSizes: baseColSizes,
+          rowSizes: baseRowSizes,
+          slotOrder,
+        },
+        presentIds.length,
+      );
+      return {
+        ...s,
+        groupLayouts: { ...s.groupLayouts, [gid]: merged },
+      };
+    });
+  }, []);
+
   const selectIndex = useCallback((idx: number) => {
     const cur = stateRef.current;
     if (idx < 0 || idx >= cur.tabs.length) return;
@@ -476,5 +669,16 @@ export function useWorkspace() {
     reorderGroup,
     deleteGroup,
     selectIndex,
+    setGroupLayout,
+    swapTabsInGroup,
   };
+}
+
+function arraysEqual(a: number[], b: number[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }

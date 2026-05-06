@@ -7,11 +7,20 @@ import type { CursorStyle } from "../settings/useSettings";
 
 type TabKind = "local" | "remote";
 
+export interface GridPlacement {
+  colStart: number;
+  rowStart: number;
+  colSpan: number;
+}
+
 interface Props {
   tabId: number;
   active: boolean;
   gridSlot?: number | null;
   gridSpanRows?: boolean;
+  gridPlacement?: GridPlacement | null;
+  isDropTarget?: boolean;
+  isDragging?: boolean;
   onExit: (tabId: number) => void;
   onInfo?: (tabId: number, info: { cwd: string | null; cmd: string | null }) => void;
   onPtyReady?: (tabId: number, ptyId: number) => void;
@@ -50,6 +59,9 @@ export function TerminalTab({
   active,
   gridSlot,
   gridSpanRows,
+  gridPlacement,
+  isDropTarget,
+  isDragging,
   onExit,
   onInfo,
   onPtyReady,
@@ -321,14 +333,37 @@ export function TerminalTab({
   }, [fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink, scrollback, theme]);
 
   const inGrid = typeof gridSlot === "number" && gridSlot >= 0;
-  const cellStyle: CSSProperties | undefined = inGrid
-    ? { order: gridSlot, ...(gridSpanRows ? { gridRow: "span 2" } : {}) }
-    : undefined;
+  let cellStyle: CSSProperties | undefined;
+  if (inGrid) {
+    if (gridPlacement) {
+      cellStyle = {
+        gridColumn: `${gridPlacement.colStart} / span ${gridPlacement.colSpan}`,
+        gridRow: `${gridPlacement.rowStart}`,
+      };
+    } else {
+      cellStyle = {
+        order: gridSlot,
+        ...(gridSpanRows ? { gridRow: "span 2" } : {}),
+      };
+    }
+  }
+  const cellCls = [
+    "term-pane-cell",
+    active ? "" : "hidden",
+    inGrid ? "in-grid" : "",
+    inGrid && toolbar ? "with-header" : "",
+    isDropTarget ? "drop-target" : "",
+    isDragging ? "drag-source" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
     <div
-      className={`term-pane-cell ${active ? "" : "hidden"} ${inGrid ? "in-grid" : ""}`}
+      className={cellCls}
       style={cellStyle}
+      data-tab-id={tabId}
     >
+      {toolbar}
       <div
         ref={hostRef}
         role="application"
@@ -352,7 +387,6 @@ export function TerminalTab({
           }
         }}
       />
-      {toolbar}
     </div>
   );
 }

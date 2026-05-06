@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as RPointerEvent,
+} from "react";
 import { getCurrentWindow } from "./lib/ipc";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar } from "./components/Sidebar";
@@ -6,6 +14,7 @@ import { StatusBar } from "./components/StatusBar";
 import { VoiceIndicator } from "./components/VoiceIndicator";
 import { TerminalTab } from "./components/TerminalTab";
 import { GridTabToolbar } from "./components/GridTabToolbar";
+import { GridResizers } from "./components/GridResizers";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { RemoteWorkspace } from "./components/RemoteWorkspace";
@@ -32,7 +41,12 @@ import {
   type HostGroup,
   type HostMeta,
 } from "./hooks/useRemoteHosts";
-import { computeGridLayout } from "./lib/grid-layout";
+import {
+  computeGridLayout,
+  defaultSizes,
+  rowsForCount,
+  slotPlacement,
+} from "./lib/grid-layout";
 import { useSettings } from "./settings/useSettings";
 import { findTheme } from "./settings/themes";
 import { SettingsModal } from "./settings/SettingsModal";
@@ -281,13 +295,29 @@ export default function App() {
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
 
-  const gridTabs = useMemo(
+  const gridTabsRaw = useMemo(
     () =>
       gridGroupId
         ? ws.tabs.filter((t) => t.groupId === gridGroupId)
         : [],
     [ws.tabs, gridGroupId],
   );
+
+  const gridSlotOrder = gridGroupId
+    ? ws.groupLayouts[gridGroupId]?.slotOrder
+    : undefined;
+
+  const gridTabs = useMemo(() => {
+    if (!gridSlotOrder) return gridTabsRaw;
+    const byId = new Map(gridTabsRaw.map((t) => [t.id, t]));
+    const ordered = gridSlotOrder
+      .map((id) => byId.get(id))
+      .filter((t): t is (typeof gridTabsRaw)[number] => t != null);
+    for (const t of gridTabsRaw) {
+      if (!gridSlotOrder.includes(t.id)) ordered.push(t);
+    }
+    return ordered;
+  }, [gridTabsRaw, gridSlotOrder]);
 
   useEffect(() => {
     if (gridGroupId && gridTabs.length === 0) setGridGroupId(null);
@@ -323,11 +353,131 @@ export default function App() {
     return new Set(ws.activeId != null ? [ws.activeId] : []);
   }, [gridGroupId, gridTabs, ws.activeId, soloTabId]);
 
+  const customLayout = gridGroupId ? ws.groupLayouts[gridGroupId] : undefined;
+
   const gridDims = useMemo(() => {
     if (!gridGroupId) return null;
     if (soloTabId != null) return null;
-    return computeGridLayout(gridTabs.length);
-  }, [gridGroupId, gridTabs.length, soloTabId]);
+    if (gridTabs.length === 0) return null;
+    if (customLayout) {
+      const cols = Math.max(1, customLayout.cols);
+      const rows = rowsForCount(gridTabs.length, cols);
+      return {
+        cols,
+        rows,
+        colSizes: customLayout.colSizes,
+        rowSizes: customLayout.rowSizes,
+        hasCustom: true,
+        spanRowsSlots: new Set<number>(),
+      };
+    }
+    const auto = computeGridLayout(gridTabs.length);
+    if (!auto) return null;
+    return {
+      cols: auto.cols,
+      rows: auto.rows,
+      colSizes: defaultSizes(auto.cols),
+      rowSizes: defaultSizes(auto.rows),
+      hasCustom: false,
+      spanRowsSlots: auto.spanRowsSlots,
+    };
+  }, [gridGroupId, gridTabs.length, soloTabId, customLayout]);
+
+  const [dragSourceTabId, setDragSourceTabId] = useState<number | null>(null);
+  const [dropTargetTabId, setDropTargetTabId] = useState<number | null>(null);
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
+  const dragStateRef = useRef<{ tabId: number; pointerId: number } | null>(null);
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
+
+  const swapTabsInGroup = ws.swapTabsInGroup;
+  const setGroupLayout = ws.setGroupLayout;
+
+  const startTabDrag = useCallback(
+    (tabId: number, e: RPointerEvent<HTMLDivElement>) => {
+      if (!gridGroupId || soloTabId != null) return;
+      e.preventDefault();
+      dragStateRef.current = { tabId, pointerId: e.pointerId };
+      setDragSourceTabId(tabId);
+      setDropTargetTabId(null);
+      setDragStartPos({ x: e.clientX, y: e.clientY });
+      document.body.classList.add("grid-tab-dragging");
+    },
+    [gridGroupId, soloTabId],
+  );
+
+  useEffect(() => {
+    if (dragSourceTabId == null) return;
+    const findTabUnder = (x: number, y: number): number | null => {
+      const el = document.elementFromPoint(x, y);
+      if (!el) return null;
+      const cell = (el as Element).closest?.(".term-pane-cell.in-grid");
+      if (!cell) return null;
+      const raw = (cell as HTMLElement).dataset.tabId;
+      if (!raw) return null;
+      const id = Number.parseInt(raw, 10);
+      return Number.isFinite(id) ? id : null;
+    };
+    const move = (ev: PointerEvent) => {
+      const el = dragPreviewRef.current;
+      if (el) el.style.translate = `${ev.clientX}px ${ev.clientY}px`;
+      const target = findTabUnder(ev.clientX, ev.clientY);
+      setDropTargetTabId(
+        target != null && target !== dragSourceTabId ? target : null,
+      );
+    };
+    const finish = (ev: PointerEvent) => {
+      const target = findTabUnder(ev.clientX, ev.clientY);
+      if (target != null && target !== dragSourceTabId) {
+        swapTabsInGroup(dragSourceTabId, target);
+      }
+      cleanup();
+    };
+    const cancel = () => cleanup();
+    const cleanup = () => {
+      dragStateRef.current = null;
+      setDragSourceTabId(null);
+      setDropTargetTabId(null);
+      setDragStartPos(null);
+      document.body.classList.remove("grid-tab-dragging");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", cancel);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", cancel);
+    return cleanup;
+  }, [dragSourceTabId, swapTabsInGroup]);
+
+  const dragSourceTab =
+    dragSourceTabId != null
+      ? ws.tabs.find((t) => t.id === dragSourceTabId)
+      : null;
+
+  const handleColSizes = useCallback(
+    (sizes: number[]) => {
+      if (!gridGroupId || !gridDims) return;
+      setGroupLayout(gridGroupId, {
+        cols: gridDims.cols,
+        colSizes: sizes,
+        rowSizes: gridDims.rowSizes,
+      });
+    },
+    [gridGroupId, gridDims, setGroupLayout],
+  );
+
+  const handleRowSizes = useCallback(
+    (sizes: number[]) => {
+      if (!gridGroupId || !gridDims) return;
+      setGroupLayout(gridGroupId, {
+        cols: gridDims.cols,
+        colSizes: gridDims.colSizes,
+        rowSizes: sizes,
+      });
+    },
+    [gridGroupId, gridDims, setGroupLayout],
+  );
 
   const selectTab = (id: number) => {
     setGridGroupId(null);
@@ -730,16 +880,32 @@ export default function App() {
 
         <main className="term-main">
           <div
+            ref={paneRef}
             className={`term-pane${gridDims ? " grid" : ""}`}
             style={
               gridDims
                 ? ({
-                    ["--grid-cols" as never]: gridDims.cols,
-                    ["--grid-rows" as never]: gridDims.rows,
+                    ["--grid-col-sizes" as never]: gridDims.colSizes
+                      .map((n) => `${n}fr`)
+                      .join(" "),
+                    ["--grid-row-sizes" as never]: gridDims.rowSizes
+                      .map((n) => `${n}fr`)
+                      .join(" "),
                   } as CSSProperties)
                 : undefined
             }
           >
+            {gridDims && (
+              <GridResizers
+                cols={gridDims.cols}
+                rows={gridDims.rows}
+                colSizes={gridDims.colSizes}
+                rowSizes={gridDims.rowSizes}
+                containerRef={paneRef}
+                onColSizes={handleColSizes}
+                onRowSizes={handleRowSizes}
+              />
+            )}
             {ws.tabs.map((t) => {
               const remoteHost =
                 t.kind === "remote" && t.remoteHostId
@@ -755,23 +921,30 @@ export default function App() {
               const isSolo = soloTabId === t.id;
               const showToolbar =
                 isGridContext && (gridDims !== null || isSolo);
+              const slotIndex =
+                gridDims && t.groupId === gridGroupId
+                  ? gridTabs.findIndex((x) => x.id === t.id)
+                  : -1;
+              const placement =
+                gridDims && gridDims.hasCustom && slotIndex >= 0
+                  ? slotPlacement(slotIndex, gridTabs.length, gridDims.cols)
+                  : null;
+              const isDropTarget = isGridContext && dropTargetTabId === t.id;
+              const isDragging = isGridContext && dragSourceTabId === t.id;
               return (
                 <TerminalTab
                   key={t.id}
                   tabId={t.id}
                   active={visibleTabIds.has(t.id)}
-                  gridSlot={
-                    gridDims && t.groupId === gridGroupId
-                      ? gridTabs.findIndex((x) => x.id === t.id)
-                      : null
-                  }
+                  gridSlot={slotIndex >= 0 ? slotIndex : null}
                   gridSpanRows={
-                    gridDims && t.groupId === gridGroupId
-                      ? gridDims.spanRowsSlots.has(
-                          gridTabs.findIndex((x) => x.id === t.id),
-                        )
+                    gridDims && !gridDims.hasCustom && slotIndex >= 0
+                      ? gridDims.spanRowsSlots.has(slotIndex)
                       : false
                   }
+                  gridPlacement={placement}
+                  isDropTarget={isDropTarget}
+                  isDragging={isDragging}
                   onExit={(id) => ws.closeTab(id)}
                   onInfo={ws.updateTabInfo}
                   onPtyReady={handlePtyReady}
@@ -781,10 +954,23 @@ export default function App() {
                   toolbar={
                     showToolbar ? (
                       <GridTabToolbar
+                        label={t.label}
+                        sub={t.sub}
                         isSolo={isSolo}
                         onSolo={() => toggleSolo(t.id)}
                         onRename={() => setEditingTabId(t.id)}
                         onClose={() => ws.closeTab(t.id)}
+                        onDragStart={
+                          gridDims && !isSolo
+                            ? (e) => startTabDrag(t.id, e)
+                            : undefined
+                        }
+                        dragging={isDragging}
+                        editing={editingTabId === t.id}
+                        setEditing={(b) =>
+                          setEditingTabId(b ? t.id : null)
+                        }
+                        onCommitRename={(v) => ws.renameTab(t.id, v)}
                       />
                     ) : undefined
                   }
@@ -835,6 +1021,27 @@ export default function App() {
           />
         </main>
       </div>
+
+      {dragSourceTab && dragStartPos && (
+        <div
+          ref={dragPreviewRef}
+          className="grid-drag-preview"
+          style={{ translate: `${dragStartPos.x}px ${dragStartPos.y}px` }}
+        >
+          <svg width="10" height="14" viewBox="0 0 10 14" aria-hidden="true">
+            <circle cx="2.5" cy="3" r="1" fill="currentColor" />
+            <circle cx="7.5" cy="3" r="1" fill="currentColor" />
+            <circle cx="2.5" cy="7" r="1" fill="currentColor" />
+            <circle cx="7.5" cy="7" r="1" fill="currentColor" />
+            <circle cx="2.5" cy="11" r="1" fill="currentColor" />
+            <circle cx="7.5" cy="11" r="1" fill="currentColor" />
+          </svg>
+          <span className="grid-drag-preview-label">{dragSourceTab.label}</span>
+          {dragSourceTab.sub ? (
+            <span className="grid-drag-preview-sub">{dragSourceTab.sub}</span>
+          ) : null}
+        </div>
+      )}
 
       {ctx && (
         <ContextMenu
