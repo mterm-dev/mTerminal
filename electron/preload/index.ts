@@ -91,6 +91,7 @@ const api = {
       system?: string
       maxTokens?: number
       temperature?: number
+      topP?: number
       baseUrl?: string
     }): Promise<number> => ipcRenderer.invoke('ai:stream-complete', args),
     cancel: (taskId: number): Promise<void> =>

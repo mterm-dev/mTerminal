@@ -9,6 +9,7 @@ export interface CompleteRequest {
   model: string
   maxTokens?: number
   temperature?: number
+  topP?: number
 }
 
 export interface Usage {

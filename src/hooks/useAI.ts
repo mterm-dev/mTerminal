@@ -24,6 +24,7 @@ export interface CompleteOptions {
   system?: string;
   maxTokens?: number;
   temperature?: number;
+  topP?: number;
   baseUrl?: string;
   onDelta?: (text: string) => void;
   onDone?: (usage: AiUsage) => void;
@@ -56,6 +57,7 @@ export function useAI() {
         system: opts.system ?? null,
         maxTokens: opts.maxTokens ?? null,
         temperature: opts.temperature ?? null,
+        topP: opts.topP ?? null,
         baseUrl: opts.baseUrl ?? null,
       });
       const handle: CompleteHandle = {

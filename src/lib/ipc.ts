@@ -122,6 +122,7 @@ export async function invoke<T = unknown>(
         system: (a.system as string | null | undefined) ?? undefined,
         maxTokens: (a.maxTokens as number | null | undefined) ?? undefined,
         temperature: (a.temperature as number | null | undefined) ?? undefined,
+        topP: (a.topP as number | null | undefined) ?? undefined,
         baseUrl: (a.baseUrl as string | null | undefined) ?? undefined,
       })
       if (events) {

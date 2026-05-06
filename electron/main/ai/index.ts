@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { AnthropicProvider } from './anthropic'
 import { OpenAiProvider } from './openai'
+import { OllamaProvider } from './ollama'
 import {
   AiEvent,
   AiProvider,
@@ -41,8 +42,8 @@ function buildProvider(name: string, baseUrl?: string): AiProvider {
     return new OpenAiProvider(requireVaultKey('openai'), url, 'openai')
   }
   if (name === 'ollama') {
-    const url = baseUrl ?? 'http://localhost:11434/v1'
-    return new OpenAiProvider(null, url, 'ollama')
+    const url = baseUrl ?? 'http://localhost:11434'
+    return new OllamaProvider(url)
   }
   throw new Error(`unknown provider: ${name}`)
 }
@@ -60,6 +61,7 @@ interface StreamArgs {
   system?: string
   maxTokens?: number
   temperature?: number
+  topP?: number
   baseUrl?: string
 }
 
@@ -87,6 +89,7 @@ export function registerAiHandlers(): void {
       model: args.model,
       maxTokens: args.maxTokens,
       temperature: args.temperature,
+      topP: args.topP,
     }
 
     tasks.set(taskId, { controller })

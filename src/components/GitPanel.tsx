@@ -37,6 +37,25 @@ import { HistoryModal } from "./git-panel/HistoryModal";
 import { PullDialog } from "./git-panel/PullDialog";
 import { PushDialog } from "./git-panel/PushDialog";
 
+const FEW_SHOT_DIFF = `Generate a commit message for the following staged changes:
+
+--- src/server.ts ---
+@@ -10,7 +10,7 @@
+ import { initWinstonLogger } from './logger';
+ const app = express();
+-const port = 7799;
++const PORT = 7799;
+ app.use(express.json());
+@@ -34,6 +34,6 @@
+ app.use(PROTECTED_ROUTER_URL, protectedRouter);
+-app.listen(port, () => {
+-  console.log(\`Server listening on port \${port}\`);
++app.listen(process.env.PORT || PORT, () => {
++  console.log(\`Server listening on port \${PORT}\`);
+ });`;
+
+const FEW_SHOT_COMMIT = `refactor: rename port to PORT and read from env`;
+
 interface Props {
   cwd: string | undefined;
   collapsed: boolean;
@@ -345,13 +364,16 @@ export function GitPanel({
         baseUrl,
         system: settings.gitCommitSystemPrompt,
         messages: [
+          { role: "user", content: FEW_SHOT_DIFF },
+          { role: "assistant", content: FEW_SHOT_COMMIT },
           {
             role: "user",
             content: `Generate a commit message for the following staged changes:\n\n${payload}`,
           },
         ],
         maxTokens: 500,
-        temperature: 0.2,
+        temperature: 0,
+        topP: 0.1,
         onDelta: (d) => setMessage((prev) => prev + d),
         onDone: () => {
           aiCancelRef.current = null;

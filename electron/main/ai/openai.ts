@@ -46,6 +46,7 @@ export class OpenAiProvider implements AiProvider {
       stream_options: { include_usage: true },
     }
     if (req.temperature != null) body.temperature = req.temperature
+    if (req.topP != null) body.top_p = req.topP
     if (req.maxTokens != null) body.max_tokens = req.maxTokens
 
     let resp: Response
