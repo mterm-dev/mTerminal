@@ -91,6 +91,23 @@ export function GitSettingsPanel({
         />
       </Field>
 
+      <Field
+        label="Default pull strategy"
+        hint="initial selection in the pull dialog — can be changed per pull"
+      >
+        <div className="seg-control">
+          {(["ff-only", "merge", "rebase"] as const).map((s) => (
+            <button
+              key={s}
+              className={settings.gitPullStrategy === s ? "active" : ""}
+              onClick={() => update("gitPullStrategy", s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </Field>
+
       <div className="settings-section-h">commit message ai</div>
 
       <Field

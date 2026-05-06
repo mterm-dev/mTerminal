@@ -157,6 +157,66 @@ export function ChevronToggle({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+export function BranchIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <circle cx="18" cy="9" r="2" />
+      <path d="M6 7v10" />
+      <path d="M18 11c0 3-3 4-6 4-2 0-4 0-6 2" />
+    </svg>
+  );
+}
+
+export function HistoryIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3 4 3 9 8 9" />
+      <polyline points="12 7 12 12 15.5 14" />
+    </svg>
+  );
+}
+
+export function TrashIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <path d="M9 7V4.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 4.5V7" />
+      <path d="M6 7l1 13h10l1-13" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
+
+export function PencilIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M14.5 3.5l6 6L9 21H3v-6z" />
+      <line x1="12.5" y1="5.5" x2="18.5" y2="11.5" />
+    </svg>
+  );
+}
+
+export function PlusIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+export function CheckIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <polyline points="4 12 10 18 20 6" />
+    </svg>
+  );
+}
+
 export function FolderIcon({ open }: { open: boolean }) {
   return (
     <span className="git-folder-icon" aria-hidden="true">

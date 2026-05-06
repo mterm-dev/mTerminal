@@ -45,6 +45,7 @@ export interface Settings {
   gitCommitOllamaModel: string;
   gitCommitOllamaBaseUrl: string;
   gitCommitSystemPrompt: string;
+  gitPullStrategy: "ff-only" | "merge" | "rebase";
   voiceEnabled: boolean;
   voiceEngine: VoiceEngineId;
   voiceLanguage: string;
@@ -105,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gitCommitOllamaModel: "",
   gitCommitOllamaBaseUrl: "http://localhost:11434/v1",
   gitCommitSystemPrompt: DEFAULT_COMMIT_PROMPT,
+  gitPullStrategy: "ff-only",
   voiceEnabled: false,
   voiceEngine: "whisper-cpp",
   voiceLanguage: "auto",

@@ -15,6 +15,7 @@ import {
 import { Checkbox } from "./git-panel/Checkbox";
 import { FileRow, renderTree } from "./git-panel/FileTree";
 import {
+  BranchIcon,
   ChevronToggle,
   ChevronsDownIcon,
   ChevronsUpIcon,
@@ -22,6 +23,7 @@ import {
   CommitIcon,
   CommitPushIcon,
   FetchIcon,
+  HistoryIcon,
   ListIcon,
   PullIcon,
   PushIcon,
@@ -30,6 +32,10 @@ import {
   SpinnerIcon,
   TreeIcon,
 } from "./git-panel/icons";
+import { BranchesModal } from "./git-panel/BranchesModal";
+import { HistoryModal } from "./git-panel/HistoryModal";
+import { PullDialog } from "./git-panel/PullDialog";
+import { PushDialog } from "./git-panel/PushDialog";
 
 interface Props {
   cwd: string | undefined;
@@ -40,6 +46,8 @@ interface Props {
   settings: Settings;
   height: number;
   onResizeHeight: (h: number) => void;
+  onUpdatePullStrategy?: (s: "ff-only" | "merge" | "rebase") => void;
+  onEnsureVaultUnlocked?: (after: () => void) => boolean;
 }
 
 interface DiffTarget {
@@ -58,6 +66,8 @@ export function GitPanel({
   settings,
   height,
   onResizeHeight,
+  onUpdatePullStrategy,
+  onEnsureVaultUnlocked,
 }: Props) {
   const enabled = !!cwd;
   const { status, error, refresh, runMutation, api } = useGitStatus(cwd, enabled);
@@ -71,6 +81,10 @@ export function GitPanel({
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [branchesOpen, setBranchesOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [pullOpen, setPullOpen] = useState(false);
+  const [pushOpen, setPushOpen] = useState(false);
   const aiCancelRef = useRef<(() => Promise<void>) | null>(null);
 
   const files = status?.files ?? [];
@@ -240,27 +254,19 @@ export function GitPanel({
       setActionInfo("fetched");
     });
 
-  const doPull = () =>
-    runAction("pull", async () => {
-      await runMutation((api) => api.pull(cwd!).then(() => undefined));
-      setActionInfo("pulled");
-    });
+  const doPull = () => {
+    if (!cwd) return;
+    setActionError(null);
+    setActionInfo(null);
+    setPullOpen(true);
+  };
 
-  const doPush = () =>
-    runAction("push", async () => {
-      try {
-        await runMutation((api) => api.push(cwd!, false).then(() => undefined));
-        setActionInfo("pushed");
-      } catch (e) {
-        const msg = (e as Error).message;
-        if (/no upstream|set-upstream|has no upstream/i.test(msg)) {
-          await runMutation((api) => api.push(cwd!, true).then(() => undefined));
-          setActionInfo("pushed (set upstream)");
-        } else {
-          throw e;
-        }
-      }
-    });
+  const doPush = () => {
+    if (!cwd) return;
+    setActionError(null);
+    setActionInfo(null);
+    setPushOpen(true);
+  };
 
   const generateCommitMessage = async () => {
     if (aiBusy) {
@@ -282,6 +288,13 @@ export function GitPanel({
     }
 
     const provider = settings.gitCommitProvider;
+    if (
+      (provider === "anthropic" || provider === "openai") &&
+      onEnsureVaultUnlocked &&
+      !onEnsureVaultUnlocked(() => void generateCommitMessage())
+    ) {
+      return;
+    }
     const model =
       provider === "anthropic"
         ? settings.gitCommitAnthropicModel
@@ -347,13 +360,28 @@ export function GitPanel({
         onError: (e) => {
           aiCancelRef.current = null;
           setAiBusy(false);
+          if (
+            /vault.*locked/i.test(e) &&
+            onEnsureVaultUnlocked &&
+            !onEnsureVaultUnlocked(() => void generateCommitMessage())
+          ) {
+            return;
+          }
           setAiError(e);
         },
       });
       aiCancelRef.current = handle.cancel;
     } catch (e) {
       setAiBusy(false);
-      setAiError((e as Error).message);
+      const msg = (e as Error).message;
+      if (
+        /vault.*locked/i.test(msg) &&
+        onEnsureVaultUnlocked &&
+        !onEnsureVaultUnlocked(() => void generateCommitMessage())
+      ) {
+        return;
+      }
+      setAiError(msg);
     }
   };
 
@@ -446,9 +474,16 @@ export function GitPanel({
           <span className="git-empty-note">not a repo</span>
         ) : (
           <>
-            <span className="branch" title={status?.upstream ?? undefined}>
+            <button
+              className="branch branch-clickable"
+              title={status?.upstream ?? "click to manage branches"}
+              onClick={(e) => {
+                e.stopPropagation();
+                setBranchesOpen(true);
+              }}
+            >
               {branchLabel}
-            </span>
+            </button>
             {ahead > 0 && <span className="ahead" title="ahead">↑{ahead}</span>}
             {behind > 0 && <span className="behind" title="behind">↓{behind}</span>}
             {files.length > 0 && (
@@ -505,6 +540,25 @@ export function GitPanel({
                 </button>
               </>
             )}
+            <span className="toolbar-sep" />
+            <button
+              className="ghost-btn git-icon-btn"
+              title="branches"
+              aria-label="branches"
+              onClick={() => setBranchesOpen(true)}
+              disabled={busyAction !== null}
+            >
+              <BranchIcon />
+            </button>
+            <button
+              className="ghost-btn git-icon-btn"
+              title="history"
+              aria-label="history"
+              onClick={() => setHistoryOpen(true)}
+              disabled={busyAction !== null}
+            >
+              <HistoryIcon />
+            </button>
             <span className="toolbar-sep" />
             <button
               className="ghost-btn git-icon-btn"
@@ -696,6 +750,48 @@ export function GitPanel({
           staged={diffOpen.staged}
           status={diffOpen.status}
           onClose={() => setDiffOpen(null)}
+        />
+      )}
+
+      {branchesOpen && cwd && (
+        <BranchesModal
+          cwd={cwd}
+          onClose={() => setBranchesOpen(false)}
+          onChanged={(info) => {
+            if (info) setActionInfo(info);
+            void refresh();
+          }}
+          onError={(msg) => setActionError(msg)}
+        />
+      )}
+
+      {historyOpen && cwd && (
+        <HistoryModal cwd={cwd} onClose={() => setHistoryOpen(false)} />
+      )}
+
+      {pullOpen && cwd && (
+        <PullDialog
+          cwd={cwd}
+          defaultStrategy={settings.gitPullStrategy}
+          onSaveDefault={(s) => onUpdatePullStrategy?.(s)}
+          onClose={() => setPullOpen(false)}
+          onComplete={(info) => {
+            setActionInfo(info);
+            void refresh();
+          }}
+          onError={(msg) => setActionError(msg)}
+        />
+      )}
+
+      {pushOpen && cwd && (
+        <PushDialog
+          cwd={cwd}
+          onClose={() => setPushOpen(false)}
+          onComplete={(info) => {
+            setActionInfo(info);
+            void refresh();
+          }}
+          onError={(msg) => setActionError(msg)}
         />
       )}
     </div>

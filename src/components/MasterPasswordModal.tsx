@@ -20,7 +20,9 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
 
   useEscapeKey(onClose, { enabled: !busy, preventDefault: true });
 
-  const submit = async () => {
+  const submit = async (e?: { preventDefault?: () => void }) => {
+    e?.preventDefault?.();
+    if (busy) return;
     setError(null);
     if (!pw) {
       setError("master password is required");
@@ -97,7 +99,7 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
             ×
           </button>
         </div>
-        <div className="settings-scroll vault-body">
+        <form className="settings-scroll vault-body" onSubmit={submit}>
           <p className="settings-note">{hint}</p>
 
           {mode === "change" && (
@@ -126,12 +128,6 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
                 autoFocus={mode !== "change"}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && mode === "unlock") {
-                    e.preventDefault();
-                    submit();
-                  }
-                }}
               />
             </div>
           </div>
@@ -145,12 +141,6 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
                   className="settings-input"
                   value={pw2}
                   onChange={(e) => setPw2(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      submit();
-                    }
-                  }}
                 />
               </div>
             </div>
@@ -159,18 +149,23 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
           {error && <div className="vault-error">{error}</div>}
 
           <div className="vault-actions">
-            <button className="confirm-btn" onClick={onClose} disabled={busy}>
+            <button
+              type="button"
+              className="confirm-btn"
+              onClick={onClose}
+              disabled={busy}
+            >
               cancel
             </button>
             <button
+              type="submit"
               className="confirm-btn confirm-btn-primary"
-              onClick={submit}
               disabled={busy}
             >
               {busy ? "..." : mode === "unlock" ? "unlock" : "save"}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

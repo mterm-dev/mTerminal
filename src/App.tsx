@@ -660,6 +660,8 @@ export default function App() {
                 settings={settings}
                 height={settings.gitPanelHeight}
                 onResizeHeight={(h) => update("gitPanelHeight", h)}
+                onUpdatePullStrategy={(s) => update("gitPullStrategy", s)}
+                onEnsureVaultUnlocked={ensureVaultUnlocked}
               />
             ) : undefined
           }

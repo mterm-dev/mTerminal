@@ -4,7 +4,13 @@ import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { parsePorcelainV2 } from '../../electron/main/git'
+import {
+  parsePorcelainV2,
+  parseLogOutput,
+  parseBranchOutput,
+  parseShowOutput,
+  isValidRefName,
+} from '../../electron/main/git'
 
 const TEST_TIMEOUT = 30000
 
@@ -48,6 +54,41 @@ async function loadModule() {
   const mod = await import('../../electron/main/git')
   mod.registerGitHandlers()
   return mod
+}
+
+interface BranchResult {
+  name: string
+  isRemote: boolean
+  isCurrent: boolean
+  upstream: string | null
+  ahead: number
+  behind: number
+  lastCommitSha: string
+  lastCommitSubject: string
+  lastCommitAuthor: string
+  lastCommitDate: number
+}
+
+interface LogResult {
+  sha: string
+  shortSha: string
+  parents: string[]
+  author: string
+  authorEmail: string
+  date: number
+  subject: string
+  refs: string[]
+}
+
+interface CommitDetailResult {
+  sha: string
+  parents: string[]
+  author: string
+  authorEmail: string
+  date: number
+  subject: string
+  body: string
+  files: Array<{ path: string; oldPath?: string; status: string }>
 }
 
 interface StatusResult {
@@ -395,6 +436,369 @@ describe('git IPC handlers', () => {
       } finally {
         try {
           fs.rmSync(upstream, { recursive: true, force: true })
+        } catch {}
+      }
+    },
+    TEST_TIMEOUT,
+  )
+})
+
+describe('isValidRefName', () => {
+  it('accepts simple names', () => {
+    expect(isValidRefName('main')).toBe(true)
+    expect(isValidRefName('feature/foo')).toBe(true)
+    expect(isValidRefName('release-1.2')).toBe(true)
+  })
+
+  it('rejects empty and leading/trailing/inner forbidden patterns', () => {
+    expect(isValidRefName('')).toBe(false)
+    expect(isValidRefName('-foo')).toBe(false)
+    expect(isValidRefName('/foo')).toBe(false)
+    expect(isValidRefName('foo/')).toBe(false)
+    expect(isValidRefName('.foo')).toBe(false)
+    expect(isValidRefName('foo.')).toBe(false)
+    expect(isValidRefName('foo.lock')).toBe(false)
+    expect(isValidRefName('foo..bar')).toBe(false)
+    expect(isValidRefName('foo@{bar')).toBe(false)
+    expect(isValidRefName('foo//bar')).toBe(false)
+  })
+
+  it('rejects forbidden chars and whitespace/control', () => {
+    for (const ch of [' ', '~', '^', ':', '?', '*', '[', '\\']) {
+      expect(isValidRefName(`foo${ch}bar`)).toBe(false)
+    }
+    expect(isValidRefName('foo\tbar')).toBe(false)
+    expect(isValidRefName('foo\nbar')).toBe(false)
+  })
+})
+
+describe('parseLogOutput', () => {
+  it('returns empty for empty input', () => {
+    expect(parseLogOutput('')).toEqual([])
+  })
+
+  it('parses one record with refs and multiple parents', () => {
+    const rec =
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\x00aaaaaaa\x00pp1 pp2\x00alice\x00a@x\x001700000000\x00HEAD -> main, origin/main\x00merge\x1e'
+    const out = parseLogOutput(rec)
+    expect(out).toHaveLength(1)
+    expect(out[0].sha).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    expect(out[0].parents).toEqual(['pp1', 'pp2'])
+    expect(out[0].author).toBe('alice')
+    expect(out[0].date).toBe(1700000000)
+    expect(out[0].subject).toBe('merge')
+    expect(out[0].refs).toEqual(['HEAD -> main', 'origin/main'])
+  })
+
+  it('parses commit without parents (root)', () => {
+    const rec =
+      'a'.repeat(40) + '\x00' + 'a'.repeat(7) + '\x00\x00bob\x00b@x\x001\x00\x00init\x1e'
+    const out = parseLogOutput(rec)
+    expect(out).toHaveLength(1)
+    expect(out[0].parents).toEqual([])
+    expect(out[0].refs).toEqual([])
+  })
+})
+
+describe('parseShowOutput', () => {
+  it('parses commit detail with file statuses', () => {
+    const stdout =
+      'a'.repeat(40) +
+      '\x00' +
+      'aaaaaaa' +
+      '\x00bb\x00alice\x00a@x\x001700000000\x00subj\x00body line\x1eM\x00src/foo.ts\x00A\x00new.md\x00R\x00old/p\x00new/p\x00'
+    const out = parseShowOutput(stdout)
+    expect(out).not.toBeNull()
+    expect(out!.subject).toBe('subj')
+    expect(out!.body).toBe('body line')
+    expect(out!.files).toEqual([
+      { path: 'src/foo.ts', status: 'M' },
+      { path: 'new.md', status: 'A' },
+      { path: 'new/p', oldPath: 'old/p', status: 'R' },
+    ])
+  })
+})
+
+describe('parseBranchOutput', () => {
+  it('parses local + remote', () => {
+    const recLocal =
+      'refs/heads/main\x00*\x00refs/remotes/origin/main\x00ahead 2\x00deadbeef\x00alice\x001700000000\x00subj-local\x1e'
+    const recRemote =
+      'refs/remotes/origin/main\x00 \x00\x00\x00deadbeef\x00alice\x001700000000\x00subj-remote\x1e'
+    const out = parseBranchOutput(recLocal + recRemote)
+    expect(out).toHaveLength(2)
+    const local = out.find((b) => !b.isRemote)!
+    expect(local.name).toBe('main')
+    expect(local.isCurrent).toBe(true)
+    expect(local.upstream).toBe('origin/main')
+    expect(local.ahead).toBe(2)
+    const remote = out.find((b) => b.isRemote)!
+    expect(remote.name).toBe('origin/main')
+    expect(remote.isCurrent).toBe(false)
+  })
+
+  it('skips refs/remotes/<remote>/HEAD', () => {
+    const rec =
+      'refs/remotes/origin/HEAD\x00 \x00\x00\x00d\x00a\x000\x00x\x1e'
+    expect(parseBranchOutput(rec)).toEqual([])
+  })
+})
+
+describe('git branches/log/checkout IPC', () => {
+  let repo: string
+
+  beforeEach(() => {
+    repo = freshTmpDir('git-br')
+  })
+
+  afterEach(() => {
+    try {
+      fs.rmSync(repo, { recursive: true, force: true })
+    } catch {}
+  })
+
+  it(
+    'git:branches lists local branches and current marker',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      git(repo, 'branch', 'feat')
+      await loadModule()
+      const out = (await invoke('git:branches', { cwd: repo })) as BranchResult[]
+      const main = out.find((b) => b.name === 'main')!
+      const feat = out.find((b) => b.name === 'feat')!
+      expect(main.isCurrent).toBe(true)
+      expect(feat.isCurrent).toBe(false)
+      expect(main.lastCommitSha).toMatch(/^[0-9a-f]{40}$/)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:log returns commits in reverse chronological order with parents',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'one', '--quiet')
+      fs.writeFileSync(path.join(repo, 'a.txt'), '2\n')
+      git(repo, 'commit', '-am', 'two', '--quiet')
+      await loadModule()
+      const out = (await invoke('git:log', { cwd: repo, limit: 10 })) as LogResult[]
+      expect(out).toHaveLength(2)
+      expect(out[0].subject).toBe('two')
+      expect(out[1].subject).toBe('one')
+      expect(out[0].parents).toEqual([out[1].sha])
+      expect(out[1].parents).toEqual([])
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:show returns files changed in a commit',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      fs.writeFileSync(path.join(repo, 'b.txt'), 'x\n')
+      git(repo, 'add', 'b.txt')
+      git(repo, 'commit', '-m', 'add b', '--quiet')
+      const sha = git(repo, 'rev-parse', 'HEAD').trim()
+      await loadModule()
+      const detail = (await invoke('git:show', { cwd: repo, sha })) as CommitDetailResult
+      expect(detail.subject).toBe('add b')
+      expect(detail.files.map((f) => f.path)).toContain('b.txt')
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:checkout switches branches',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      git(repo, 'branch', 'feat')
+      await loadModule()
+      await invoke('git:checkout', { cwd: repo, ref: 'feat' })
+      const head = git(repo, 'symbolic-ref', '--short', 'HEAD').trim()
+      expect(head).toBe('feat')
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:branch-create creates a new branch and rejects invalid names',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      await loadModule()
+      await invoke('git:branch-create', { cwd: repo, name: 'foo' })
+      const branches = git(repo, 'branch', '--list').split('\n')
+      expect(branches.some((l) => l.includes('foo'))).toBe(true)
+      await expect(
+        invoke('git:branch-create', { cwd: repo, name: 'bad name' }),
+      ).rejects.toThrow(/invalid ref name/)
+      await expect(
+        invoke('git:branch-create', { cwd: repo, name: '-evil' }),
+      ).rejects.toThrow(/invalid ref name/)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:branch-rename renames an existing branch',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      git(repo, 'branch', 'old')
+      await loadModule()
+      await invoke('git:branch-rename', {
+        cwd: repo,
+        oldName: 'old',
+        newName: 'newer',
+      })
+      const branches = git(repo, 'branch', '--list').split('\n')
+      expect(branches.some((l) => l.includes('newer'))).toBe(true)
+      expect(branches.some((l) => /\bold\b/.test(l))).toBe(false)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:branch-delete deletes branch (and rejects current branch without force)',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      git(repo, 'branch', 'tmp')
+      await loadModule()
+      await invoke('git:branch-delete', { cwd: repo, name: 'tmp' })
+      const branches = git(repo, 'branch', '--list').split('\n')
+      expect(branches.some((l) => l.includes('tmp'))).toBe(false)
+      await expect(
+        invoke('git:branch-delete', { cwd: repo, name: 'main' }),
+      ).rejects.toThrow()
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:incoming returns commits from upstream not yet local',
+    async () => {
+      const upstream = freshTmpDir('git-up')
+      const other = freshTmpDir('git-other')
+      try {
+        execFileSync('git', ['init', '--bare', '--initial-branch=main', '--quiet'], {
+          cwd: upstream,
+        })
+        initRepo(repo)
+        fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+        git(repo, 'add', 'a.txt')
+        git(repo, 'commit', '-m', 'first', '--quiet')
+        git(repo, 'remote', 'add', 'origin', upstream)
+        git(repo, 'push', '-u', 'origin', 'main', '--quiet')
+
+        execFileSync('git', ['clone', '--quiet', upstream, other])
+        execFileSync('git', ['config', 'user.email', 'o@x'], { cwd: other })
+        execFileSync('git', ['config', 'user.name', 'O'], { cwd: other })
+        execFileSync('git', ['config', 'commit.gpgsign', 'false'], { cwd: other })
+        fs.writeFileSync(path.join(other, 'b.txt'), 'b\n')
+        execFileSync('git', ['add', 'b.txt'], { cwd: other })
+        execFileSync('git', ['commit', '-m', 'remote-side', '--quiet'], { cwd: other })
+        execFileSync('git', ['push', '--quiet'], { cwd: other })
+
+        git(repo, 'fetch', '--quiet')
+        await loadModule()
+        const incoming = (await invoke('git:incoming', { cwd: repo })) as LogResult[]
+        expect(incoming.length).toBe(1)
+        expect(incoming[0].subject).toBe('remote-side')
+      } finally {
+        try {
+          fs.rmSync(upstream, { recursive: true, force: true })
+        } catch {}
+        try {
+          fs.rmSync(other, { recursive: true, force: true })
+        } catch {}
+      }
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:outgoing returns local-only commits',
+    async () => {
+      const upstream = freshTmpDir('git-up')
+      try {
+        execFileSync('git', ['init', '--bare', '--initial-branch=main', '--quiet'], {
+          cwd: upstream,
+        })
+        initRepo(repo)
+        fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+        git(repo, 'add', 'a.txt')
+        git(repo, 'commit', '-m', 'first', '--quiet')
+        git(repo, 'remote', 'add', 'origin', upstream)
+        git(repo, 'push', '-u', 'origin', 'main', '--quiet')
+        fs.writeFileSync(path.join(repo, 'a.txt'), '2\n')
+        git(repo, 'commit', '-am', 'second', '--quiet')
+        await loadModule()
+        const out = (await invoke('git:outgoing', { cwd: repo })) as LogResult[]
+        expect(out.length).toBe(1)
+        expect(out[0].subject).toBe('second')
+      } finally {
+        try {
+          fs.rmSync(upstream, { recursive: true, force: true })
+        } catch {}
+      }
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:pull-strategy ff-only fast-forwards when possible',
+    async () => {
+      const upstream = freshTmpDir('git-up')
+      const other = freshTmpDir('git-other')
+      try {
+        execFileSync('git', ['init', '--bare', '--initial-branch=main', '--quiet'], {
+          cwd: upstream,
+        })
+        initRepo(repo)
+        fs.writeFileSync(path.join(repo, 'a.txt'), '1\n')
+        git(repo, 'add', 'a.txt')
+        git(repo, 'commit', '-m', 'first', '--quiet')
+        git(repo, 'remote', 'add', 'origin', upstream)
+        git(repo, 'push', '-u', 'origin', 'main', '--quiet')
+
+        execFileSync('git', ['clone', '--quiet', upstream, other])
+        execFileSync('git', ['config', 'user.email', 'o@x'], { cwd: other })
+        execFileSync('git', ['config', 'user.name', 'O'], { cwd: other })
+        execFileSync('git', ['config', 'commit.gpgsign', 'false'], { cwd: other })
+        fs.writeFileSync(path.join(other, 'b.txt'), 'b\n')
+        execFileSync('git', ['add', 'b.txt'], { cwd: other })
+        execFileSync('git', ['commit', '-m', 'remote-side', '--quiet'], { cwd: other })
+        execFileSync('git', ['push', '--quiet'], { cwd: other })
+
+        git(repo, 'fetch', '--quiet')
+        await loadModule()
+        await invoke('git:pull-strategy', { cwd: repo, strategy: 'ff-only' })
+        const head = git(repo, 'log', '-1', '--format=%s').trim()
+        expect(head).toBe('remote-side')
+      } finally {
+        try {
+          fs.rmSync(upstream, { recursive: true, force: true })
+        } catch {}
+        try {
+          fs.rmSync(other, { recursive: true, force: true })
         } catch {}
       }
     },

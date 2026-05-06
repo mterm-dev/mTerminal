@@ -24,6 +24,49 @@ export interface GitStatus {
   error?: string
 }
 
+export interface GitBranch {
+  name: string
+  isRemote: boolean
+  isCurrent: boolean
+  upstream: string | null
+  ahead: number
+  behind: number
+  lastCommitSha: string
+  lastCommitSubject: string
+  lastCommitAuthor: string
+  lastCommitDate: number
+}
+
+export interface GitLogEntry {
+  sha: string
+  shortSha: string
+  parents: string[]
+  author: string
+  authorEmail: string
+  date: number
+  subject: string
+  refs: string[]
+}
+
+export interface GitCommitFile {
+  path: string
+  oldPath?: string
+  status: string
+}
+
+export interface GitCommitDetail {
+  sha: string
+  parents: string[]
+  author: string
+  authorEmail: string
+  date: number
+  subject: string
+  body: string
+  files: GitCommitFile[]
+}
+
+export type GitPullStrategyOption = 'ff-only' | 'merge' | 'rebase'
+
 interface RunOpts {
   cwd: string
   timeout?: number
@@ -209,6 +252,441 @@ async function statusForCwd(cwd: string): Promise<GitStatus> {
   return { isRepo: true, ...parsed }
 }
 
+export function isValidRefName(name: string): boolean {
+  if (typeof name !== 'string' || name.length === 0) return false
+  if (name.startsWith('-')) return false
+  if (name.startsWith('/') || name.endsWith('/')) return false
+  if (name.startsWith('.') || name.endsWith('.')) return false
+  if (name.endsWith('.lock')) return false
+  if (name.includes('..')) return false
+  if (name.includes('@{')) return false
+  if (name.includes('//')) return false
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i)
+    if (code < 0x20 || code === 0x7f) return false
+    const ch = name[i]
+    if (ch === ' ' || ch === '~' || ch === '^' || ch === ':' ||
+        ch === '?' || ch === '*' || ch === '[' || ch === '\\') return false
+  }
+  return true
+}
+
+function ensureRefName(name: unknown): string {
+  if (typeof name !== 'string') throw new Error('ref name must be a string')
+  if (!isValidRefName(name)) throw new Error(`invalid ref name: ${name}`)
+  return name
+}
+
+function ensureSafeRef(ref: unknown): string {
+  if (typeof ref !== 'string' || ref.length === 0) {
+    throw new Error('ref must be a non-empty string')
+  }
+  if (ref.startsWith('-')) throw new Error(`invalid ref: ${ref}`)
+  for (let i = 0; i < ref.length; i++) {
+    const code = ref.charCodeAt(i)
+    if (code < 0x20 || code === 0x7f) throw new Error(`invalid ref: ${ref}`)
+  }
+  return ref
+}
+
+const LOG_FORMAT = '%H%x00%h%x00%P%x00%an%x00%ae%x00%at%x00%D%x00%s'
+const LOG_RECORD_SEP = '\x1e'
+
+function parseRefs(decorate: string): string[] {
+  if (!decorate) return []
+  return decorate
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
+export function parseLogOutput(stdout: string): GitLogEntry[] {
+  if (!stdout) return []
+  const records = stdout.split(LOG_RECORD_SEP)
+  const out: GitLogEntry[] = []
+  for (const rec of records) {
+    if (!rec) continue
+    const trimmed = rec.startsWith('\n') ? rec.slice(1) : rec
+    if (!trimmed) continue
+    const parts = trimmed.split('\x00')
+    if (parts.length < 8) continue
+    const sha = parts[0]
+    if (!sha || sha.length < 7) continue
+    const parentsRaw = parts[2].trim()
+    out.push({
+      sha,
+      shortSha: parts[1],
+      parents: parentsRaw ? parentsRaw.split(/\s+/).filter((s) => s.length > 0) : [],
+      author: parts[3],
+      authorEmail: parts[4],
+      date: Number(parts[5]) || 0,
+      subject: parts[7],
+      refs: parseRefs(parts[6]),
+    })
+  }
+  return out
+}
+
+const BRANCH_FORMAT = [
+  '%(refname)',
+  '%(HEAD)',
+  '%(upstream)',
+  '%(upstream:track,nobracket)',
+  '%(objectname)',
+  '%(authorname)',
+  '%(authordate:unix)',
+  '%(contents:subject)',
+].join('%00')
+const BRANCH_RECORD_SEP = '\x1e'
+
+interface ParsedTrack {
+  ahead: number
+  behind: number
+}
+
+function parseTrack(track: string): ParsedTrack {
+  if (!track) return { ahead: 0, behind: 0 }
+  let ahead = 0
+  let behind = 0
+  const aheadMatch = track.match(/ahead (\d+)/)
+  if (aheadMatch) ahead = parseInt(aheadMatch[1], 10)
+  const behindMatch = track.match(/behind (\d+)/)
+  if (behindMatch) behind = parseInt(behindMatch[1], 10)
+  return { ahead, behind }
+}
+
+function shortRefName(refname: string): { name: string; isRemote: boolean } | null {
+  if (refname.startsWith('refs/heads/')) {
+    return { name: refname.slice('refs/heads/'.length), isRemote: false }
+  }
+  if (refname.startsWith('refs/remotes/')) {
+    const rest = refname.slice('refs/remotes/'.length)
+    if (rest.endsWith('/HEAD')) return null
+    return { name: rest, isRemote: true }
+  }
+  return null
+}
+
+export function parseBranchOutput(stdout: string): GitBranch[] {
+  if (!stdout) return []
+  const records = stdout.split(BRANCH_RECORD_SEP)
+  const out: GitBranch[] = []
+  for (const rec of records) {
+    if (!rec) continue
+    const trimmed = rec.startsWith('\n') ? rec.slice(1) : rec
+    if (!trimmed) continue
+    const parts = trimmed.split('\x00')
+    if (parts.length < 8) continue
+    const ref = shortRefName(parts[0])
+    if (!ref) continue
+    const upstream = parts[2]
+      ? parts[2].startsWith('refs/remotes/')
+        ? parts[2].slice('refs/remotes/'.length)
+        : parts[2]
+      : null
+    const { ahead, behind } = parseTrack(parts[3])
+    out.push({
+      name: ref.name,
+      isRemote: ref.isRemote,
+      isCurrent: parts[1] === '*',
+      upstream: ref.isRemote ? null : upstream,
+      ahead,
+      behind,
+      lastCommitSha: parts[4],
+      lastCommitAuthor: parts[5],
+      lastCommitDate: Number(parts[6]) || 0,
+      lastCommitSubject: parts[7],
+    })
+  }
+  return out
+}
+
+export async function gitListBranches(cwd: string): Promise<GitBranch[]> {
+  const r = await runGit(
+    [
+      'for-each-ref',
+      `--format=${BRANCH_FORMAT}${BRANCH_RECORD_SEP}`,
+      'refs/heads',
+      'refs/remotes',
+    ],
+    { cwd },
+  )
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git for-each-ref failed')
+  return parseBranchOutput(r.stdout)
+}
+
+export interface CheckoutOptions {
+  createNew?: boolean
+  newName?: string
+}
+
+export async function gitCheckout(
+  cwd: string,
+  ref: string,
+  opts: CheckoutOptions = {},
+): Promise<void> {
+  ensureSafeRef(ref)
+  const args: string[] = ['checkout']
+  if (opts.createNew) {
+    if (!opts.newName) throw new Error('newName required when createNew is true')
+    ensureRefName(opts.newName)
+    args.push('-b', opts.newName, ref)
+  } else if (ref.includes('/') && !opts.newName) {
+    const localName = ref.split('/').slice(1).join('/')
+    if (localName && isValidRefName(localName)) {
+      args.push('--track', '-b', localName, ref)
+    } else {
+      args.push(ref)
+    }
+  } else {
+    args.push(ref)
+  }
+  const r = await runGit(args, { cwd })
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git checkout failed')
+}
+
+export async function gitBranchCreate(
+  cwd: string,
+  name: string,
+  fromRef?: string,
+  checkout?: boolean,
+): Promise<void> {
+  ensureRefName(name)
+  if (fromRef !== undefined) ensureSafeRef(fromRef)
+  if (checkout) {
+    const args = ['checkout', '-b', name]
+    if (fromRef) args.push(fromRef)
+    const r = await runGit(args, { cwd })
+    if (r.code !== 0) throw new Error(r.stderr.trim() || 'git checkout -b failed')
+    return
+  }
+  const args = ['branch', name]
+  if (fromRef) args.push(fromRef)
+  const r = await runGit(args, { cwd })
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git branch failed')
+}
+
+export async function gitBranchDelete(
+  cwd: string,
+  name: string,
+  force: boolean,
+): Promise<void> {
+  ensureRefName(name)
+  const r = await runGit(['branch', force ? '-D' : '-d', name], { cwd })
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git branch -d failed')
+}
+
+export async function gitBranchDeleteRemote(
+  cwd: string,
+  remote: string,
+  name: string,
+): Promise<void> {
+  ensureRefName(name)
+  if (!remote || remote.startsWith('-')) throw new Error(`invalid remote: ${remote}`)
+  const r = await runGit(['push', remote, '--delete', name], {
+    cwd,
+    timeout: NETWORK_TIMEOUT,
+  })
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git push --delete failed')
+}
+
+export async function gitBranchRename(
+  cwd: string,
+  oldName: string,
+  newName: string,
+): Promise<void> {
+  ensureRefName(oldName)
+  ensureRefName(newName)
+  const r = await runGit(['branch', '-m', oldName, newName], { cwd })
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git branch -m failed')
+}
+
+export interface LogOptions {
+  ref?: string
+  limit?: number
+  skip?: number
+  all?: boolean
+}
+
+export async function gitLog(
+  cwd: string,
+  opts: LogOptions = {},
+): Promise<GitLogEntry[]> {
+  const limit = Math.max(1, Math.min(2000, opts.limit ?? 200))
+  const skip = Math.max(0, opts.skip ?? 0)
+  const args = [
+    'log',
+    `--pretty=format:${LOG_FORMAT}${LOG_RECORD_SEP}`,
+    '--decorate=short',
+    `--max-count=${limit}`,
+  ]
+  if (skip > 0) args.push(`--skip=${skip}`)
+  if (opts.all) args.push('--all')
+  if (opts.ref) {
+    ensureSafeRef(opts.ref)
+    args.push(opts.ref)
+  }
+  const r = await runGit(args, { cwd, maxBuffer: DIFF_MAX_BUFFER + 1024 })
+  if (r.code !== 0) {
+    const msg = r.stderr.trim() || `git log exited with code ${r.code}`
+    if (/does not have any commits|unknown revision|bad revision|ambiguous argument/i.test(msg)) {
+      return []
+    }
+    throw new Error(msg)
+  }
+  return parseLogOutput(r.stdout)
+}
+
+export function parseShowOutput(stdout: string): GitCommitDetail | null {
+  if (!stdout) return null
+  const sepIdx = stdout.indexOf('\x1e')
+  if (sepIdx < 0) return null
+  const headerPart = stdout.slice(0, sepIdx)
+  let filesPart = stdout.slice(sepIdx + 1)
+  while (filesPart.length > 0 && (filesPart[0] === '\x00' || filesPart[0] === '\n')) {
+    filesPart = filesPart.slice(1)
+  }
+  const parts = headerPart.split('\x00')
+  if (parts.length < 8) return null
+  const sha = parts[0]
+  if (!sha) return null
+  const parentsRaw = parts[2].trim()
+  const subject = parts[6]
+  const body = parts[7] ?? ''
+  const files: GitCommitFile[] = []
+  const tokens = filesPart.split('\x00')
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]
+    if (!t) continue
+    if (t.startsWith('R') || t.startsWith('C')) {
+      const oldPath = tokens[i + 1] ?? ''
+      const newPath = tokens[i + 2] ?? ''
+      i += 2
+      if (newPath) files.push({ path: newPath, oldPath, status: t[0] })
+    } else if (t.length === 1 && /[A-Z]/.test(t)) {
+      const p = tokens[i + 1] ?? ''
+      i += 1
+      if (p) files.push({ path: p, status: t })
+    }
+  }
+  return {
+    sha,
+    parents: parentsRaw ? parentsRaw.split(/\s+/).filter((s) => s.length > 0) : [],
+    author: parts[3],
+    authorEmail: parts[4],
+    date: Number(parts[5]) || 0,
+    subject,
+    body,
+    files,
+  }
+}
+
+export async function gitShow(cwd: string, sha: string): Promise<GitCommitDetail> {
+  ensureSafeRef(sha)
+  const fmt = '%H%x00%h%x00%P%x00%an%x00%ae%x00%at%x00%s%x00%b%x1e'
+  const r = await runGit(
+    ['log', '-1', '--name-status', '-z', `--format=${fmt}`, sha],
+    { cwd, maxBuffer: DIFF_MAX_BUFFER + 1024 },
+  )
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git show failed')
+  const parsed = parseShowOutput(r.stdout)
+  if (!parsed) throw new Error('failed to parse commit')
+  return parsed
+}
+
+export async function gitDiffCommit(
+  cwd: string,
+  sha: string,
+  relPath: string,
+  context?: number,
+): Promise<{ text: string; truncated: boolean }> {
+  ensureSafeRef(sha)
+  if (!relPath || relPath.startsWith('-')) throw new Error(`invalid path: ${relPath}`)
+  const args = ['show', '--no-color']
+  if (typeof context === 'number' && Number.isFinite(context) && context >= 0) {
+    args.push(`-U${Math.floor(context)}`)
+  }
+  args.push('--format=', sha, '--', relPath)
+  const r = await runGit(args, { cwd, maxBuffer: DIFF_MAX_BUFFER + 1024 })
+  if (r.code !== 0 && !r.stdout) {
+    throw new Error(r.stderr.trim() || `git show exited with code ${r.code}`)
+  }
+  const truncated = r.stdout.length >= DIFF_MAX_BUFFER
+  return { text: truncated ? r.stdout.slice(0, DIFF_MAX_BUFFER) : r.stdout, truncated }
+}
+
+export async function gitIncoming(cwd: string): Promise<GitLogEntry[]> {
+  const upstreamProbe = await runGit(
+    ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+    { cwd, timeout: 5_000 },
+  )
+  if (upstreamProbe.code !== 0) return []
+  const r = await runGit(
+    [
+      'log',
+      `--pretty=format:${LOG_FORMAT}${LOG_RECORD_SEP}`,
+      '--decorate=short',
+      'HEAD..@{u}',
+    ],
+    { cwd, maxBuffer: DIFF_MAX_BUFFER + 1024 },
+  )
+  if (r.code !== 0) {
+    const msg = r.stderr.trim() || `git log exited with code ${r.code}`
+    if (/unknown revision|bad revision/i.test(msg)) return []
+    throw new Error(msg)
+  }
+  return parseLogOutput(r.stdout)
+}
+
+export async function gitOutgoing(cwd: string): Promise<GitLogEntry[]> {
+  const upstreamProbe = await runGit(
+    ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+    { cwd, timeout: 5_000 },
+  )
+  let args: string[]
+  if (upstreamProbe.code === 0) {
+    args = [
+      'log',
+      `--pretty=format:${LOG_FORMAT}${LOG_RECORD_SEP}`,
+      '--decorate=short',
+      '@{u}..HEAD',
+    ]
+  } else {
+    args = [
+      'log',
+      `--pretty=format:${LOG_FORMAT}${LOG_RECORD_SEP}`,
+      '--decorate=short',
+      '--max-count=200',
+      'HEAD',
+      '--not',
+      '--remotes',
+    ]
+  }
+  const r = await runGit(args, { cwd, maxBuffer: DIFF_MAX_BUFFER + 1024 })
+  if (r.code !== 0) {
+    const msg = r.stderr.trim() || `git log exited with code ${r.code}`
+    if (/unknown revision|bad revision|does not have any commits/i.test(msg)) return []
+    throw new Error(msg)
+  }
+  return parseLogOutput(r.stdout)
+}
+
+export async function gitPullStrategy(
+  cwd: string,
+  strategy: GitPullStrategyOption,
+): Promise<{ stdout: string; stderr: string }> {
+  let flag: string
+  if (strategy === 'ff-only') flag = '--ff-only'
+  else if (strategy === 'merge') flag = '--no-rebase'
+  else if (strategy === 'rebase') flag = '--rebase'
+  else throw new Error(`invalid strategy: ${strategy}`)
+  const r = await runGit(['pull', flag], { cwd, timeout: NETWORK_TIMEOUT })
+  if (r.code !== 0) {
+    throw new Error(r.stderr.trim() || r.stdout.trim() || 'git pull failed')
+  }
+  return { stdout: r.stdout, stderr: r.stderr }
+}
+
 function ensurePathArray(paths: unknown): string[] {
   if (!Array.isArray(paths)) throw new Error('paths must be an array')
   const out: string[] = []
@@ -388,4 +866,117 @@ export function registerGitHandlers(): void {
     const cwd = ensureCwd(args?.cwd)
     return gitFetch(cwd)
   })
+
+  ipcMain.handle('git:branches', async (_e, args: { cwd: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    return gitListBranches(cwd)
+  })
+
+  ipcMain.handle(
+    'git:checkout',
+    async (
+      _e,
+      args: { cwd: string; ref: string; createNew?: boolean; newName?: string },
+    ) => {
+      const cwd = ensureCwd(args?.cwd)
+      const ref = ensureSafeRef(args?.ref)
+      await gitCheckout(cwd, ref, {
+        createNew: !!args?.createNew,
+        newName: args?.newName,
+      })
+    },
+  )
+
+  ipcMain.handle(
+    'git:branch-create',
+    async (
+      _e,
+      args: { cwd: string; name: string; fromRef?: string; checkout?: boolean },
+    ) => {
+      const cwd = ensureCwd(args?.cwd)
+      await gitBranchCreate(cwd, args?.name, args?.fromRef, !!args?.checkout)
+    },
+  )
+
+  ipcMain.handle(
+    'git:branch-delete',
+    async (_e, args: { cwd: string; name: string; force?: boolean }) => {
+      const cwd = ensureCwd(args?.cwd)
+      await gitBranchDelete(cwd, args?.name, !!args?.force)
+    },
+  )
+
+  ipcMain.handle(
+    'git:branch-delete-remote',
+    async (_e, args: { cwd: string; remote: string; name: string }) => {
+      const cwd = ensureCwd(args?.cwd)
+      if (typeof args?.remote !== 'string') throw new Error('remote is required')
+      await gitBranchDeleteRemote(cwd, args.remote, args?.name)
+    },
+  )
+
+  ipcMain.handle(
+    'git:branch-rename',
+    async (_e, args: { cwd: string; oldName: string; newName: string }) => {
+      const cwd = ensureCwd(args?.cwd)
+      await gitBranchRename(cwd, args?.oldName, args?.newName)
+    },
+  )
+
+  ipcMain.handle(
+    'git:log',
+    async (
+      _e,
+      args: { cwd: string; ref?: string; limit?: number; skip?: number; all?: boolean },
+    ) => {
+      const cwd = ensureCwd(args?.cwd)
+      return gitLog(cwd, {
+        ref: args?.ref,
+        limit: args?.limit,
+        skip: args?.skip,
+        all: args?.all,
+      })
+    },
+  )
+
+  ipcMain.handle('git:show', async (_e, args: { cwd: string; sha: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    if (typeof args?.sha !== 'string') throw new Error('sha is required')
+    return gitShow(cwd, args.sha)
+  })
+
+  ipcMain.handle(
+    'git:diff-commit',
+    async (
+      _e,
+      args: { cwd: string; sha: string; path: string; context?: number },
+    ) => {
+      const cwd = ensureCwd(args?.cwd)
+      if (typeof args?.sha !== 'string') throw new Error('sha is required')
+      if (typeof args?.path !== 'string') throw new Error('path is required')
+      const ctx =
+        typeof args.context === 'number' && Number.isFinite(args.context) && args.context >= 0
+          ? Math.min(args.context, 1_000_000)
+          : undefined
+      return gitDiffCommit(cwd, args.sha, args.path, ctx)
+    },
+  )
+
+  ipcMain.handle('git:incoming', async (_e, args: { cwd: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    return gitIncoming(cwd)
+  })
+
+  ipcMain.handle('git:outgoing', async (_e, args: { cwd: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    return gitOutgoing(cwd)
+  })
+
+  ipcMain.handle(
+    'git:pull-strategy',
+    async (_e, args: { cwd: string; strategy: GitPullStrategyOption }) => {
+      const cwd = ensureCwd(args?.cwd)
+      return gitPullStrategy(cwd, args?.strategy)
+    },
+  )
 }

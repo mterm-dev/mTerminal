@@ -251,6 +251,67 @@ const api = {
       ipcRenderer.invoke('git:pull', { cwd }),
     fetch: (cwd: string): Promise<{ stdout: string; stderr: string }> =>
       ipcRenderer.invoke('git:fetch', { cwd }),
+    branches: (cwd: string): Promise<unknown> =>
+      ipcRenderer.invoke('git:branches', { cwd }),
+    checkout: (
+      cwd: string,
+      ref: string,
+      opts?: { createNew?: boolean; newName?: string }
+    ): Promise<void> =>
+      ipcRenderer.invoke('git:checkout', {
+        cwd,
+        ref,
+        createNew: opts?.createNew,
+        newName: opts?.newName,
+      }),
+    branchCreate: (
+      cwd: string,
+      name: string,
+      fromRef?: string,
+      checkout?: boolean
+    ): Promise<void> =>
+      ipcRenderer.invoke('git:branch-create', { cwd, name, fromRef, checkout }),
+    branchDelete: (
+      cwd: string,
+      name: string,
+      force?: boolean
+    ): Promise<void> =>
+      ipcRenderer.invoke('git:branch-delete', { cwd, name, force }),
+    branchDeleteRemote: (
+      cwd: string,
+      remote: string,
+      name: string
+    ): Promise<void> =>
+      ipcRenderer.invoke('git:branch-delete-remote', { cwd, remote, name }),
+    branchRename: (
+      cwd: string,
+      oldName: string,
+      newName: string
+    ): Promise<void> =>
+      ipcRenderer.invoke('git:branch-rename', { cwd, oldName, newName }),
+    log: (
+      cwd: string,
+      opts?: { ref?: string; limit?: number; skip?: number; all?: boolean }
+    ): Promise<unknown> =>
+      ipcRenderer.invoke('git:log', { cwd, ...opts }),
+    show: (cwd: string, sha: string): Promise<unknown> =>
+      ipcRenderer.invoke('git:show', { cwd, sha }),
+    diffCommit: (
+      cwd: string,
+      sha: string,
+      path: string,
+      context?: number
+    ): Promise<{ text: string; truncated: boolean }> =>
+      ipcRenderer.invoke('git:diff-commit', { cwd, sha, path, context }),
+    incoming: (cwd: string): Promise<unknown> =>
+      ipcRenderer.invoke('git:incoming', { cwd }),
+    outgoing: (cwd: string): Promise<unknown> =>
+      ipcRenderer.invoke('git:outgoing', { cwd }),
+    pullStrategy: (
+      cwd: string,
+      strategy: 'ff-only' | 'merge' | 'rebase'
+    ): Promise<{ stdout: string; stderr: string }> =>
+      ipcRenderer.invoke('git:pull-strategy', { cwd, strategy }),
   },
   settings: {
     loadSync: (): string | null => {

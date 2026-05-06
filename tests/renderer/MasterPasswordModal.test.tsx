@@ -158,7 +158,8 @@ describe("MasterPasswordModal - unlock mode", () => {
     );
     const pw = getInputByLabel("master password");
     fireEvent.change(pw, { target: { value: "secret123" } });
-    fireEvent.keyDown(pw, { key: "Enter" });
+    const form = pw.closest("form")!;
+    fireEvent.submit(form);
     await waitFor(() => {
       expect(onUnlock).toHaveBeenCalledWith("secret123");
     });
