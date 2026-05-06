@@ -10,6 +10,8 @@ import {
   parseBranchOutput,
   parseShowOutput,
   isValidRefName,
+  isLocalChangesPullConflict,
+  parseConflictMarkers,
 } from '../../electron/main/git'
 
 const TEST_TIMEOUT = 30000
@@ -793,6 +795,398 @@ describe('git branches/log/checkout IPC', () => {
         await invoke('git:pull-strategy', { cwd: repo, strategy: 'ff-only' })
         const head = git(repo, 'log', '-1', '--format=%s').trim()
         expect(head).toBe('remote-side')
+      } finally {
+        try {
+          fs.rmSync(upstream, { recursive: true, force: true })
+        } catch {}
+        try {
+          fs.rmSync(other, { recursive: true, force: true })
+        } catch {}
+      }
+    },
+    TEST_TIMEOUT,
+  )
+})
+
+describe('isLocalChangesPullConflict', () => {
+  it('matches "would be overwritten by merge"', () => {
+    const msg =
+      'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/App.tsx\nPlease commit your changes or stash them before you merge.\nAborting'
+    expect(isLocalChangesPullConflict(msg)).toBe(true)
+  })
+
+  it('matches "would be overwritten by checkout"', () => {
+    expect(
+      isLocalChangesPullConflict('error: Your local changes would be overwritten by checkout'),
+    ).toBe(true)
+  })
+
+  it('matches untracked-file overwrite warning', () => {
+    expect(
+      isLocalChangesPullConflict(
+        'error: The following untracked working tree files would be overwritten by merge:\n\tnew.txt\nPlease move or remove them before you merge.',
+      ),
+    ).toBe(true)
+  })
+
+  it('does not match unrelated errors', () => {
+    expect(isLocalChangesPullConflict('fatal: refusing to merge unrelated histories')).toBe(false)
+    expect(isLocalChangesPullConflict('')).toBe(false)
+    expect(isLocalChangesPullConflict('CONFLICT (content): Merge conflict in foo')).toBe(false)
+  })
+})
+
+describe('git stash + discard IPC', () => {
+  let repo: string
+
+  beforeEach(() => {
+    repo = freshTmpDir('git-stash')
+  })
+
+  afterEach(() => {
+    try {
+      fs.rmSync(repo, { recursive: true, force: true })
+    } catch {}
+  })
+
+  it(
+    'git:stash creates a stash with tracked changes and stash-pop restores them',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'one\nlocal\n')
+
+      await loadModule()
+      const r = (await invoke('git:stash', { cwd: repo, message: 'mt' })) as {
+        created: boolean
+      }
+      expect(r.created).toBe(true)
+      expect(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8')).toBe('one\n')
+
+      const pop = (await invoke('git:stash-pop', { cwd: repo })) as {
+        conflict: boolean
+      }
+      expect(pop.conflict).toBe(false)
+      expect(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8')).toBe('one\nlocal\n')
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:stash includes untracked files',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      fs.writeFileSync(path.join(repo, 'untracked.txt'), 'new\n')
+
+      await loadModule()
+      const r = (await invoke('git:stash', { cwd: repo })) as { created: boolean }
+      expect(r.created).toBe(true)
+      expect(fs.existsSync(path.join(repo, 'untracked.txt'))).toBe(false)
+
+      await invoke('git:stash-pop', { cwd: repo })
+      expect(fs.readFileSync(path.join(repo, 'untracked.txt'), 'utf8')).toBe('new\n')
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:stash returns created=false on a clean repo',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+
+      await loadModule()
+      const r = (await invoke('git:stash', { cwd: repo })) as { created: boolean }
+      expect(r.created).toBe(false)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:discard-all resets tracked changes and removes untracked files',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
+      git(repo, 'add', 'a.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'one\nlocal\n')
+      fs.writeFileSync(path.join(repo, 'untracked.txt'), 'x\n')
+
+      await loadModule()
+      await invoke('git:discard-all', { cwd: repo })
+
+      expect(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8')).toBe('one\n')
+      expect(fs.existsSync(path.join(repo, 'untracked.txt'))).toBe(false)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it.skip('placeholder for next test', () => {})
+})
+
+describe('parseConflictMarkers', () => {
+  it('returns single common segment when no markers', () => {
+    const r = parseConflictMarkers('a\nb\nc\n')
+    expect(r.hasConflicts).toBe(false)
+    expect(r.segments).toHaveLength(1)
+    expect(r.segments[0]).toEqual({ kind: 'common', lines: ['a', 'b', 'c', ''] })
+  })
+
+  it('parses a single conflict block', () => {
+    const text = [
+      'pre',
+      '<<<<<<< HEAD',
+      'ours-1',
+      'ours-2',
+      '=======',
+      'theirs-1',
+      '>>>>>>> branch',
+      'post',
+    ].join('\n')
+    const r = parseConflictMarkers(text)
+    expect(r.hasConflicts).toBe(true)
+    expect(r.segments).toHaveLength(3)
+    expect(r.segments[0]).toEqual({ kind: 'common', lines: ['pre'] })
+    const blk = r.segments[1] as Extract<ReturnType<typeof parseConflictMarkers>['segments'][number], { kind: 'conflict' }>
+    expect(blk.kind).toBe('conflict')
+    expect(blk.ours).toEqual(['ours-1', 'ours-2'])
+    expect(blk.theirs).toEqual(['theirs-1'])
+    expect(blk.labelOurs).toBe('HEAD')
+    expect(blk.labelTheirs).toBe('branch')
+    expect(blk.base).toBeUndefined()
+    expect(r.segments[2]).toEqual({ kind: 'common', lines: ['post'] })
+  })
+
+  it('parses diff3-style conflict with base', () => {
+    const text = [
+      '<<<<<<< HEAD',
+      'ours',
+      '||||||| merged-common-ancestor',
+      'base-line',
+      '=======',
+      'theirs',
+      '>>>>>>> br',
+    ].join('\n')
+    const r = parseConflictMarkers(text)
+    expect(r.hasConflicts).toBe(true)
+    expect(r.segments).toHaveLength(1)
+    const blk = r.segments[0] as Extract<ReturnType<typeof parseConflictMarkers>['segments'][number], { kind: 'conflict' }>
+    expect(blk.ours).toEqual(['ours'])
+    expect(blk.base).toEqual(['base-line'])
+    expect(blk.theirs).toEqual(['theirs'])
+    expect(blk.labelBase).toBe('merged-common-ancestor')
+  })
+
+  it('parses two consecutive conflicts', () => {
+    const text = [
+      'a',
+      '<<<<<<< HEAD',
+      'o1',
+      '=======',
+      't1',
+      '>>>>>>> br',
+      'mid',
+      '<<<<<<< HEAD',
+      'o2',
+      '=======',
+      't2',
+      '>>>>>>> br',
+      'z',
+    ].join('\n')
+    const r = parseConflictMarkers(text)
+    expect(r.segments.filter((s) => s.kind === 'conflict')).toHaveLength(2)
+    const conflicts = r.segments.filter((s) => s.kind === 'conflict') as Array<
+      Extract<ReturnType<typeof parseConflictMarkers>['segments'][number], { kind: 'conflict' }>
+    >
+    expect(conflicts[0].id).not.toBe(conflicts[1].id)
+  })
+
+  it('handles empty ours and empty theirs blocks', () => {
+    const text = ['<<<<<<< HEAD', '=======', '>>>>>>> br'].join('\n')
+    const r = parseConflictMarkers(text)
+    const blk = r.segments[0] as Extract<ReturnType<typeof parseConflictMarkers>['segments'][number], { kind: 'conflict' }>
+    expect(blk.ours).toEqual([])
+    expect(blk.theirs).toEqual([])
+  })
+
+  it('does not match marker-like text inside content (wrong char count)', () => {
+    const text = '<<<<<< nope\n======\n>>>>>> nope'
+    const r = parseConflictMarkers(text)
+    expect(r.hasConflicts).toBe(false)
+  })
+
+  it('treats unclosed markers as plain text', () => {
+    const text = '<<<<<<< HEAD\nours\nno-closer'
+    const r = parseConflictMarkers(text)
+    expect(r.hasConflicts).toBe(false)
+  })
+})
+
+describe('git conflict IPC', () => {
+  let repo: string
+
+  beforeEach(() => {
+    repo = freshTmpDir('git-conflict')
+  })
+
+  afterEach(() => {
+    try {
+      fs.rmSync(repo, { recursive: true, force: true })
+    } catch {}
+  })
+
+  function setupConflict(): void {
+    initRepo(repo)
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
+    git(repo, 'add', 'a.txt')
+    git(repo, 'commit', '-m', 'first', '--quiet')
+    git(repo, 'checkout', '-b', 'feat', '--quiet')
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'feat-line\n')
+    git(repo, 'commit', '-am', 'feat', '--quiet')
+    git(repo, 'checkout', 'main', '--quiet')
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'main-line\n')
+    git(repo, 'commit', '-am', 'main', '--quiet')
+    try {
+      git(repo, 'merge', 'feat', '--no-ff')
+    } catch {}
+  }
+
+  it(
+    'git:list-conflicts returns unmerged file from a real merge conflict',
+    async () => {
+      setupConflict()
+      await loadModule()
+      const list = (await invoke('git:list-conflicts', { cwd: repo })) as Array<{
+        path: string
+        indexStatus: string
+        worktreeStatus: string
+      }>
+      expect(list.map((c) => c.path)).toContain('a.txt')
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:read-conflict-file returns parsed segments with markers',
+    async () => {
+      setupConflict()
+      await loadModule()
+      const r = (await invoke('git:read-conflict-file', { cwd: repo, path: 'a.txt' })) as {
+        hasConflicts: boolean
+        segments: Array<{ kind: string }>
+      }
+      expect(r.hasConflicts).toBe(true)
+      expect(r.segments.some((s) => s.kind === 'conflict')).toBe(true)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:resolve-file writes resolved content and stages it',
+    async () => {
+      setupConflict()
+      await loadModule()
+      await invoke('git:resolve-file', {
+        cwd: repo,
+        path: 'a.txt',
+        content: 'resolved\n',
+      })
+      expect(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8')).toBe('resolved\n')
+      const list = (await invoke('git:list-conflicts', { cwd: repo })) as Array<unknown>
+      expect(list).toHaveLength(0)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:resolve-file rejects content that still has conflict markers',
+    async () => {
+      setupConflict()
+      await loadModule()
+      await expect(
+        invoke('git:resolve-file', {
+          cwd: repo,
+          path: 'a.txt',
+          content: '<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> br\n',
+        }),
+      ).rejects.toThrow(/conflict markers/)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:merge-state reports "merge" during a conflict and merge-abort clears it',
+    async () => {
+      setupConflict()
+      await loadModule()
+      const state = await invoke('git:merge-state', { cwd: repo })
+      expect(state).toBe('merge')
+      await invoke('git:merge-abort', { cwd: repo })
+      const after = await invoke('git:merge-state', { cwd: repo })
+      expect(after).toBeNull()
+    },
+    TEST_TIMEOUT,
+  )
+
+  it.skip('placeholder', () => {})
+})
+
+describe('git misc legacy', () => {
+  let repo: string
+
+  beforeEach(() => {
+    repo = freshTmpDir('git-legacy')
+  })
+
+  afterEach(() => {
+    try {
+      fs.rmSync(repo, { recursive: true, force: true })
+    } catch {}
+  })
+
+  it(
+    'git:pull-strategy throws a "would be overwritten" error when local changes conflict',
+    async () => {
+      const upstream = freshTmpDir('git-up')
+      const other = freshTmpDir('git-other')
+      try {
+        execFileSync('git', ['init', '--bare', '--initial-branch=main', '--quiet'], {
+          cwd: upstream,
+        })
+        initRepo(repo)
+        fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
+        git(repo, 'add', 'a.txt')
+        git(repo, 'commit', '-m', 'first', '--quiet')
+        git(repo, 'remote', 'add', 'origin', upstream)
+        git(repo, 'push', '-u', 'origin', 'main', '--quiet')
+
+        execFileSync('git', ['clone', '--quiet', upstream, other])
+        execFileSync('git', ['config', 'user.email', 'o@x'], { cwd: other })
+        execFileSync('git', ['config', 'user.name', 'O'], { cwd: other })
+        execFileSync('git', ['config', 'commit.gpgsign', 'false'], { cwd: other })
+        fs.writeFileSync(path.join(other, 'a.txt'), 'remote-content\n')
+        execFileSync('git', ['commit', '-am', 'remote-edit', '--quiet'], { cwd: other })
+        execFileSync('git', ['push', '--quiet'], { cwd: other })
+
+        fs.writeFileSync(path.join(repo, 'a.txt'), 'local-content\n')
+        git(repo, 'fetch', '--quiet')
+
+        await loadModule()
+        let err: Error | null = null
+        try {
+          await invoke('git:pull-strategy', { cwd: repo, strategy: 'merge' })
+        } catch (e) {
+          err = e as Error
+        }
+        expect(err).not.toBeNull()
+        expect(isLocalChangesPullConflict(err!.message)).toBe(true)
       } finally {
         try {
           fs.rmSync(upstream, { recursive: true, force: true })

@@ -687,6 +687,266 @@ export async function gitPullStrategy(
   return { stdout: r.stdout, stderr: r.stderr }
 }
 
+export function isLocalChangesPullConflict(message: string): boolean {
+  if (typeof message !== 'string' || message.length === 0) return false
+  if (/would be overwritten by (merge|checkout|reset)/i.test(message)) return true
+  if (/please commit your changes or stash them before/i.test(message)) return true
+  if (/please move or remove them before/i.test(message)) return true
+  return false
+}
+
+export async function gitStash(
+  cwd: string,
+  message?: string,
+): Promise<{ created: boolean; stdout: string }> {
+  const args = ['stash', 'push', '--include-untracked']
+  if (typeof message === 'string' && message.trim().length > 0) {
+    args.push('-m', message.trim())
+  }
+  const r = await runGit(args, { cwd })
+  if (r.code !== 0) {
+    throw new Error(r.stderr.trim() || r.stdout.trim() || 'git stash failed')
+  }
+  const created = !/No local changes to save/i.test(r.stdout + r.stderr)
+  return { created, stdout: r.stdout }
+}
+
+export async function gitStashPop(
+  cwd: string,
+): Promise<{ stdout: string; stderr: string; conflict: boolean }> {
+  const r = await runGit(['stash', 'pop'], { cwd })
+  if (r.code !== 0) {
+    const text = (r.stderr + r.stdout).trim()
+    if (/conflict/i.test(text)) {
+      return { stdout: r.stdout, stderr: r.stderr, conflict: true }
+    }
+    throw new Error(text || 'git stash pop failed')
+  }
+  const conflict = /CONFLICT/.test(r.stdout) || /CONFLICT/.test(r.stderr)
+  return { stdout: r.stdout, stderr: r.stderr, conflict }
+}
+
+export type ConflictSegment =
+  | { kind: 'common'; lines: string[] }
+  | {
+      kind: 'conflict'
+      id: number
+      ours: string[]
+      theirs: string[]
+      base?: string[]
+      labelOurs?: string
+      labelTheirs?: string
+      labelBase?: string
+    }
+
+const MARKER_OURS = /^<{7}(?:\s(.*))?$/
+const MARKER_BASE = /^\|{7}(?:\s(.*))?$/
+const MARKER_SEP = /^={7}\s*$/
+const MARKER_THEIRS = /^>{7}(?:\s(.*))?$/
+
+export function parseConflictMarkers(content: string): {
+  segments: ConflictSegment[]
+  hasConflicts: boolean
+} {
+  const lines = content.split('\n')
+  const segments: ConflictSegment[] = []
+  let common: string[] = []
+  let nextId = 1
+  let i = 0
+  let hasConflicts = false
+
+  const flushCommon = () => {
+    if (common.length > 0) {
+      segments.push({ kind: 'common', lines: common })
+      common = []
+    }
+  }
+
+  while (i < lines.length) {
+    const line = lines[i]
+    const startMatch = line.match(MARKER_OURS)
+    if (!startMatch) {
+      common.push(line)
+      i++
+      continue
+    }
+    flushCommon()
+    const labelOurs = startMatch[1] ?? undefined
+    const ours: string[] = []
+    const base: string[] = []
+    let theirs: string[] = []
+    let labelBase: string | undefined
+    let labelTheirs: string | undefined
+    let inBase = false
+    let inTheirs = false
+    let closed = false
+    i++
+    while (i < lines.length) {
+      const l = lines[i]
+      const baseMatch = l.match(MARKER_BASE)
+      const sepMatch = l.match(MARKER_SEP)
+      const endMatch = l.match(MARKER_THEIRS)
+      if (!inTheirs && !inBase && baseMatch) {
+        labelBase = baseMatch[1] ?? undefined
+        inBase = true
+        i++
+        continue
+      }
+      if (!inTheirs && sepMatch) {
+        inTheirs = true
+        inBase = false
+        i++
+        continue
+      }
+      if (inTheirs && endMatch) {
+        labelTheirs = endMatch[1] ?? undefined
+        closed = true
+        i++
+        break
+      }
+      if (inTheirs) theirs.push(l)
+      else if (inBase) base.push(l)
+      else ours.push(l)
+      i++
+    }
+    if (!closed) {
+      common.push(line)
+      for (const o of ours) common.push(o)
+      if (inBase || base.length > 0) {
+        common.push('||||||| ' + (labelBase ?? ''))
+        for (const b of base) common.push(b)
+      }
+      if (inTheirs || theirs.length > 0) {
+        common.push('=======')
+        for (const t of theirs) common.push(t)
+      }
+      continue
+    }
+    hasConflicts = true
+    segments.push({
+      kind: 'conflict',
+      id: nextId++,
+      ours,
+      theirs,
+      base: base.length > 0 || inBase ? base : undefined,
+      labelOurs,
+      labelTheirs,
+      labelBase,
+    })
+  }
+  flushCommon()
+  return { segments, hasConflicts }
+}
+
+export interface ConflictFileEntry {
+  path: string
+  indexStatus: string
+  worktreeStatus: string
+}
+
+export async function gitListConflicts(cwd: string): Promise<ConflictFileEntry[]> {
+  const r = await runGit(
+    ['status', '--porcelain=v2', '--untracked-files=no', '-z'],
+    { cwd },
+  )
+  if (r.code !== 0) {
+    throw new Error(r.stderr.trim() || `git status exited with code ${r.code}`)
+  }
+  const out: ConflictFileEntry[] = []
+  const tokens = r.stdout.split('\0')
+  for (const t of tokens) {
+    if (!t || !t.startsWith('u ')) continue
+    const rest = t.slice(2)
+    const xy = rest.slice(0, 2)
+    const p = pathAfterFields(rest, 9)
+    if (!p) continue
+    out.push({ path: p, indexStatus: xy[0] ?? '.', worktreeStatus: xy[1] ?? '.' })
+  }
+  return out
+}
+
+export async function gitReadConflictFile(
+  cwd: string,
+  relPath: string,
+): Promise<{
+  path: string
+  content: string
+  segments: ConflictSegment[]
+  hasConflicts: boolean
+  binary: boolean
+}> {
+  if (!relPath || relPath.startsWith('-')) throw new Error(`invalid path: ${relPath}`)
+  const abs = path.join(cwd, relPath)
+  const buf = await fsp.readFile(abs)
+  if (buf.includes(0)) {
+    return { path: relPath, content: '', segments: [], hasConflicts: false, binary: true }
+  }
+  const content = buf.toString('utf8')
+  const { segments, hasConflicts } = parseConflictMarkers(content)
+  return { path: relPath, content, segments, hasConflicts, binary: false }
+}
+
+export async function gitResolveFile(
+  cwd: string,
+  relPath: string,
+  content: string,
+): Promise<void> {
+  if (!relPath || relPath.startsWith('-')) throw new Error(`invalid path: ${relPath}`)
+  if (typeof content !== 'string') throw new Error('content must be a string')
+  const { hasConflicts } = parseConflictMarkers(content)
+  if (hasConflicts) {
+    throw new Error('content still contains conflict markers; resolve all conflicts before saving')
+  }
+  const abs = path.join(cwd, relPath)
+  await fsp.writeFile(abs, content, 'utf8')
+  const r = await runGit(['add', '--', relPath], { cwd })
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git add failed')
+}
+
+export type MergeStateKind = 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'stash' | null
+
+export async function gitMergeState(cwd: string): Promise<MergeStateKind> {
+  const gitDirRes = await runGit(['rev-parse', '--git-dir'], { cwd, timeout: 5_000 })
+  if (gitDirRes.code !== 0) return null
+  const rel = gitDirRes.stdout.trim()
+  const gitDir = path.isAbsolute(rel) ? rel : path.join(cwd, rel)
+  const exists = (p: string) => {
+    try {
+      fs.accessSync(path.join(gitDir, p))
+      return true
+    } catch {
+      return false
+    }
+  }
+  if (exists('MERGE_HEAD')) return 'merge'
+  if (exists('rebase-merge') || exists('rebase-apply') || exists('REBASE_HEAD')) return 'rebase'
+  if (exists('CHERRY_PICK_HEAD')) return 'cherry-pick'
+  if (exists('REVERT_HEAD')) return 'revert'
+  return null
+}
+
+export async function gitMergeAbort(cwd: string): Promise<void> {
+  const state = await gitMergeState(cwd)
+  let args: string[]
+  if (state === 'merge') args = ['merge', '--abort']
+  else if (state === 'rebase') args = ['rebase', '--abort']
+  else if (state === 'cherry-pick') args = ['cherry-pick', '--abort']
+  else if (state === 'revert') args = ['revert', '--abort']
+  else throw new Error('no merge/rebase/cherry-pick/revert in progress')
+  const r = await runGit(args, { cwd })
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git abort failed')
+}
+
+export async function gitDiscardAll(cwd: string): Promise<void> {
+  const headProbe = await runGit(['rev-parse', '--verify', 'HEAD'], { cwd, timeout: 5_000 })
+  if (headProbe.code === 0) {
+    const r1 = await runGit(['reset', '--hard', 'HEAD'], { cwd })
+    if (r1.code !== 0) throw new Error(r1.stderr.trim() || 'git reset --hard failed')
+  }
+  const r2 = await runGit(['clean', '-fd'], { cwd })
+  if (r2.code !== 0) throw new Error(r2.stderr.trim() || 'git clean failed')
+}
+
 function ensurePathArray(paths: unknown): string[] {
   if (!Array.isArray(paths)) throw new Error('paths must be an array')
   const out: string[] = []
@@ -979,4 +1239,56 @@ export function registerGitHandlers(): void {
       return gitPullStrategy(cwd, args?.strategy)
     },
   )
+
+  ipcMain.handle(
+    'git:stash',
+    async (_e, args: { cwd: string; message?: string }) => {
+      const cwd = ensureCwd(args?.cwd)
+      return gitStash(cwd, args?.message)
+    },
+  )
+
+  ipcMain.handle('git:stash-pop', async (_e, args: { cwd: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    return gitStashPop(cwd)
+  })
+
+  ipcMain.handle('git:discard-all', async (_e, args: { cwd: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    await gitDiscardAll(cwd)
+  })
+
+  ipcMain.handle('git:list-conflicts', async (_e, args: { cwd: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    return gitListConflicts(cwd)
+  })
+
+  ipcMain.handle(
+    'git:read-conflict-file',
+    async (_e, args: { cwd: string; path: string }) => {
+      const cwd = ensureCwd(args?.cwd)
+      if (typeof args?.path !== 'string') throw new Error('path is required')
+      return gitReadConflictFile(cwd, args.path)
+    },
+  )
+
+  ipcMain.handle(
+    'git:resolve-file',
+    async (_e, args: { cwd: string; path: string; content: string }) => {
+      const cwd = ensureCwd(args?.cwd)
+      if (typeof args?.path !== 'string') throw new Error('path is required')
+      if (typeof args?.content !== 'string') throw new Error('content is required')
+      await gitResolveFile(cwd, args.path, args.content)
+    },
+  )
+
+  ipcMain.handle('git:merge-state', async (_e, args: { cwd: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    return gitMergeState(cwd)
+  })
+
+  ipcMain.handle('git:merge-abort', async (_e, args: { cwd: string }) => {
+    const cwd = ensureCwd(args?.cwd)
+    await gitMergeAbort(cwd)
+  })
 }
