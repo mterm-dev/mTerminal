@@ -38,6 +38,7 @@ export interface Settings {
   gitPanelCollapsed: boolean;
   gitPanelTreeView: boolean;
   gitPanelHeight: number;
+  gitCommitMsgHeight: number;
   gitCommitProvider: AiProviderId;
   gitCommitAnthropicModel: string;
   gitCommitOpenaiModel: string;
@@ -99,6 +100,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gitPanelCollapsed: false,
   gitPanelTreeView: true,
   gitPanelHeight: 340,
+  gitCommitMsgHeight: 72,
   gitCommitProvider: "anthropic",
   gitCommitAnthropicModel: "",
   gitCommitOpenaiModel: "",

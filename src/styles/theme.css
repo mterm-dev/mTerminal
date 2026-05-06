@@ -1169,21 +1169,43 @@ body.resizing-git-panel * {
 }
 .term-side-git-msg textarea {
   width: 100%;
-  resize: vertical;
-  min-height: 56px;
-  max-height: 160px;
+  resize: none;
   font-family: var(--font-mono);
   font-size: var(--t-sm);
   background: var(--bg-muted);
   color: var(--fg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-sm);
-  padding: 6px 28px 6px 8px;
+  padding: 6px 30px 6px 8px;
   outline: none;
   transition: border-color 0.12s;
+  box-sizing: border-box;
+  display: block;
 }
 .term-side-git-msg textarea:focus {
   border-color: var(--border-strong);
+}
+.git-msg-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: ns-resize;
+  background: transparent;
+  touch-action: none;
+  z-index: 2;
+}
+.term-side-git-msg:hover > textarea,
+body.resizing-git-msg .term-side-git-msg textarea {
+  border-top-color: var(--border-strong);
+}
+body.resizing-git-msg {
+  cursor: ns-resize !important;
+  user-select: none;
+}
+body.resizing-git-msg * {
+  cursor: ns-resize !important;
 }
 .term-side-git-msg textarea::-webkit-scrollbar {
   width: 8px;
@@ -1204,10 +1226,11 @@ body.resizing-git-panel * {
 }
 .git-msg-ai-btn {
   position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 22px;
-  height: 22px;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;

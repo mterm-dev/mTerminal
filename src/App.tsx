@@ -695,6 +695,8 @@ export default function App() {
                 settings={settings}
                 height={settings.gitPanelHeight}
                 onResizeHeight={(h) => update("gitPanelHeight", h)}
+                msgHeight={settings.gitCommitMsgHeight}
+                onResizeMsgHeight={(h) => update("gitCommitMsgHeight", h)}
                 onUpdatePullStrategy={(s) => update("gitPullStrategy", s)}
                 onEnsureVaultUnlocked={ensureVaultUnlocked}
               />

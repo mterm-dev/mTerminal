@@ -65,6 +65,8 @@ interface Props {
   settings: Settings;
   height: number;
   onResizeHeight: (h: number) => void;
+  msgHeight: number;
+  onResizeMsgHeight: (h: number) => void;
   onUpdatePullStrategy?: (s: "ff-only" | "merge" | "rebase") => void;
   onEnsureVaultUnlocked?: (after: () => void) => boolean;
 }
@@ -85,6 +87,8 @@ export function GitPanel({
   settings,
   height,
   onResizeHeight,
+  msgHeight,
+  onResizeMsgHeight,
   onUpdatePullStrategy,
   onEnsureVaultUnlocked,
 }: Props) {
@@ -431,6 +435,30 @@ export function GitPanel({
     document.addEventListener("pointerup", up);
   };
 
+  const onResizeMsgStart = (e: RPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = msgHeight;
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const max = Math.max(120, Math.floor(window.innerHeight * 0.7));
+      const next = Math.max(48, Math.min(max, startH + (startY - ev.clientY)));
+      onResizeMsgHeight(next);
+    };
+    const up = (ev: PointerEvent) => {
+      try {
+        target.releasePointerCapture(ev.pointerId);
+      } catch {}
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing-git-msg");
+    };
+    document.body.classList.add("resizing-git-msg");
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+  };
+
   const showResize = !collapsed;
   const panelStyle = !collapsed ? { height } : undefined;
 
@@ -689,8 +717,17 @@ export function GitPanel({
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="commit message…"
-              rows={3}
               spellCheck={false}
+              style={{ height: msgHeight }}
+            />
+            <div
+              className="git-msg-resize"
+              onPointerDown={onResizeMsgStart}
+              onDoubleClick={() => onResizeMsgHeight(72)}
+              title="drag to resize · double-click to reset"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="resize commit message"
             />
             <button
               type="button"
