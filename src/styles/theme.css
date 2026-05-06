@@ -1398,6 +1398,41 @@ body.resizing-git-panel * {
   min-height: 0;
 }
 
+.git-diff-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+.git-diff-minimap {
+  position: relative;
+  flex-shrink: 0;
+  width: 10px;
+  background: var(--bg-muted);
+  border-left: 1px solid var(--border-subtle);
+  cursor: pointer;
+  overflow: hidden;
+}
+.git-diff-minimap-marker {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  min-height: 2px;
+  border-radius: 1px;
+  pointer-events: none;
+}
+.git-diff-minimap-marker.add {
+  background: color-mix(in oklch, var(--ok) 80%, transparent);
+}
+.git-diff-minimap-marker.del {
+  background: color-mix(in oklch, var(--err) 80%, transparent);
+}
+.git-diff-minimap-marker.change {
+  background: color-mix(in oklch, var(--accent) 75%, transparent);
+}
+
 .git-diff-cols {
   flex: 1;
   overflow: auto;

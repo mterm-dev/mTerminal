@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useRef } from "react";
 import hljs from "highlight.js/lib/common";
 import {
   parseUnifiedDiffSideBySide,
@@ -16,6 +16,13 @@ interface Props {
   emptyText?: string;
 }
 
+type MarkerType = "add" | "del" | "change";
+interface Marker {
+  type: MarkerType;
+  start: number;
+  end: number;
+}
+
 export function DiffView({
   text,
   view,
@@ -31,26 +38,151 @@ export function DiffView({
 
   const isEmpty = !error && !loading && text.trim().length === 0;
 
+  const sideMarkers = useMemo<Marker[]>(
+    () => (view === "side" ? markersFromRows(rows) : []),
+    [view, rows],
+  );
+  const unifiedMarkers = useMemo<Marker[]>(
+    () => (view === "unified" && text ? markersFromUnified(text) : []),
+    [view, text],
+  );
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const preRef = useRef<HTMLPreElement | null>(null);
+
   return (
     <>
       {error && <div className="git-diff-error">{error}</div>}
       {!error && loading && <div className="git-diff-loading">loading…</div>}
       {isEmpty && <div className="git-diff-empty">{emptyText}</div>}
       {!error && !loading && !isEmpty && view === "side" && (
-        <div className="git-diff-cols" role="presentation">
-          {rows.map((row, i) => (
-            <SideRow key={i} row={row} />
-          ))}
+        <div className="git-diff-wrap">
+          <div className="git-diff-cols" role="presentation" ref={scrollRef}>
+            {rows.map((row, i) => (
+              <SideRow key={i} row={row} />
+            ))}
+          </div>
+          <DiffMinimap
+            markers={sideMarkers}
+            onJump={(frac) => scrollTo(scrollRef.current, frac)}
+          />
         </div>
       )}
       {!error && !loading && !isEmpty && view === "unified" && (
-        <UnifiedView text={text} />
+        <div className="git-diff-wrap">
+          <UnifiedView text={text} preRef={preRef} />
+          <DiffMinimap
+            markers={unifiedMarkers}
+            onJump={(frac) => scrollTo(preRef.current, frac)}
+          />
+        </div>
       )}
       {truncated && (
         <div className="git-diff-truncated">diff truncated (size limit reached)</div>
       )}
     </>
   );
+}
+
+function scrollTo(el: HTMLElement | null, frac: number) {
+  if (!el) return;
+  const max = el.scrollHeight - el.clientHeight;
+  if (max <= 0) return;
+  el.scrollTo({ top: max * frac, behavior: "smooth" });
+}
+
+function DiffMinimap({
+  markers,
+  onJump,
+}: {
+  markers: Marker[];
+  onJump: (frac: number) => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  if (markers.length === 0) {
+    return <div className="git-diff-minimap" aria-hidden="true" />;
+  }
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const node = ref.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    onJump(frac);
+  };
+  return (
+    <div
+      className="git-diff-minimap"
+      ref={ref}
+      onClick={handleClick}
+      role="presentation"
+      aria-hidden="true"
+    >
+      {markers.map((m, i) => {
+        const top = m.start * 100;
+        const height = Math.max(0.4, (m.end - m.start) * 100);
+        return (
+          <div
+            key={i}
+            className={`git-diff-minimap-marker ${m.type}`}
+            style={{ top: `${top}%`, height: `${height}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function markersFromRows(rows: DiffRow[]): Marker[] {
+  const total = rows.length;
+  if (total === 0) return [];
+  const out: Marker[] = [];
+  let i = 0;
+  while (i < total) {
+    const t = rowMarkerType(rows[i]!);
+    if (!t) {
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    while (j < total && rowMarkerType(rows[j]!) === t) j++;
+    out.push({ type: t, start: i / total, end: j / total });
+    i = j;
+  }
+  return out;
+}
+
+function rowMarkerType(row: DiffRow): MarkerType | null {
+  if (row.type === "add" || row.type === "del" || row.type === "change") {
+    return row.type;
+  }
+  return null;
+}
+
+function markersFromUnified(text: string): Marker[] {
+  const lines = text.split("\n");
+  const total = lines.length;
+  if (total === 0) return [];
+  const out: Marker[] = [];
+  let i = 0;
+  while (i < total) {
+    const t = lineMarkerType(lines[i]!);
+    if (!t) {
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    while (j < total && lineMarkerType(lines[j]!) === t) j++;
+    out.push({ type: t, start: i / total, end: j / total });
+    i = j;
+  }
+  return out;
+}
+
+function lineMarkerType(line: string): MarkerType | null {
+  if (line.startsWith("+++") || line.startsWith("---")) return null;
+  if (line.startsWith("+")) return "add";
+  if (line.startsWith("-")) return "del";
+  return null;
 }
 
 function SideRow({ row }: { row: DiffRow }) {
@@ -146,7 +278,13 @@ function highlightSafe(code: string, lang: string | undefined): string | null {
   return null;
 }
 
-function UnifiedView({ text }: { text: string }) {
+function UnifiedView({
+  text,
+  preRef,
+}: {
+  text: string;
+  preRef: React.MutableRefObject<HTMLPreElement | null>;
+}) {
   const items = useMemo(() => {
     const out: { line: string; cls: string; lang?: string }[] = [];
     let currentFile: string | undefined;
@@ -181,7 +319,7 @@ function UnifiedView({ text }: { text: string }) {
   }, [text]);
 
   return (
-    <pre className="git-diff-modal-pre">
+    <pre className="git-diff-modal-pre" ref={preRef}>
       {items.map((it, i) => {
         const sign = it.line.charAt(0);
         const isBody =
