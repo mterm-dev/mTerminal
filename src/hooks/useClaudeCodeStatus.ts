@@ -4,7 +4,7 @@ import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
-} from "../lib/tauri-shim";
+} from "../lib/ipc";
 
 export type CcState = "none" | "idle" | "thinking" | "awaitingInput";
 

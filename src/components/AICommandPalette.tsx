@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAI } from "../hooks/useAI";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 import type { AiUsage } from "../hooks/useAI";
 
@@ -57,13 +58,7 @@ export function AICommandPalette({
     };
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const submit = async () => {
     const q = prompt.trim();

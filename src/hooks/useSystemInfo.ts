@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "../lib/tauri-shim";
+import { invoke } from "../lib/ipc";
 
 interface SystemInfo {
   user: string;

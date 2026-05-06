@@ -1,4 +1,11 @@
-import { Fragment, type ReactNode, useRef, useState } from "react";
+import {
+  Fragment,
+  type DragEvent as RDragEvent,
+  type PointerEvent as RPointerEvent,
+  type ReactNode,
+  useRef,
+  useState,
+} from "react";
 import type { Group, Tab } from "../hooks/useWorkspace";
 import type { CcStatus } from "../hooks/useClaudeCodeStatus";
 import { InlineEdit } from "./InlineEdit";
@@ -109,7 +116,7 @@ export function Sidebar(props: Props) {
     ccStatuses,
   } = props;
 
-  const onResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onResizeStart = (e: RPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startX = e.clientX;
     const startW = width;
@@ -189,7 +196,7 @@ export function Sidebar(props: Props) {
   };
 
   const handleTabDragOver = (
-    e: React.DragEvent,
+    e: RDragEvent,
     t: Tab,
     sectionTabs: Tab[],
   ) => {
@@ -217,7 +224,7 @@ export function Sidebar(props: Props) {
   };
 
   const handleSectionDragOver = (
-    e: React.DragEvent,
+    e: RDragEvent,
     groupId: string | null,
     sectionTabs: Tab[],
   ) => {
@@ -229,7 +236,7 @@ export function Sidebar(props: Props) {
     }
   };
 
-  const handleGroupDragOver = (e: React.DragEvent, g: Group) => {
+  const handleGroupDragOver = (e: RDragEvent, g: Group) => {
     const drag = dragGroupRef.current;
     if (drag == null) return;
     e.preventDefault();
@@ -252,7 +259,7 @@ export function Sidebar(props: Props) {
     );
   };
 
-  const commitDrop = (e: React.DragEvent) => {
+  const commitDrop = (e: RDragEvent) => {
     const drag = dragTabRef.current;
     const mark = dropMarkRef.current;
     const groupDrag = dragGroupRef.current;

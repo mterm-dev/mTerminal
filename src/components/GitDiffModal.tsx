@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { parseUnifiedDiffSideBySide, type DiffRow, type DiffSpan } from "../lib/diff-parse";
+import { getGitApi } from "../lib/git-api";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 interface Props {
   cwd: string;
@@ -7,21 +9,6 @@ interface Props {
   staged: boolean;
   status?: { indexStatus: string; worktreeStatus: string; untracked: boolean };
   onClose: () => void;
-}
-
-interface MtGit {
-  diff: (
-    cwd: string,
-    path: string,
-    staged: boolean,
-    context?: number,
-  ) => Promise<{ text: string; truncated: boolean }>;
-}
-
-function gitApi(): MtGit | null {
-  if (typeof window === "undefined") return null;
-  const mt = (window as unknown as { mt?: { git?: MtGit } }).mt;
-  return mt?.git ?? null;
 }
 
 const FULL_CONTEXT = 1_000_000;
@@ -44,7 +31,7 @@ export function GitDiffModal({ cwd, path, staged, status, onClose }: Props) {
 
   useEffect(() => {
     let active = true;
-    const api = gitApi();
+    const api = getGitApi();
     if (!api) {
       setError("git api unavailable");
       setLoading(false);
@@ -72,13 +59,7 @@ export function GitDiffModal({ cwd, path, staged, status, onClose }: Props) {
     };
   }, [cwd, path, staged, view]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const rows = useMemo<DiffRow[]>(
     () => (view === "side" && text ? parseUnifiedDiffSideBySide(text) : []),

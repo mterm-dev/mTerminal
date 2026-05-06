@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "../lib/tauri-shim";
+import { invoke } from "../lib/ipc";
 import { useAI, type AiMessage, type AiUsage } from "../hooks/useAI";
 
 interface Props {

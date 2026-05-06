@@ -1,4 +1,4 @@
-import { invoke } from "./tauri-shim";
+import { invoke } from "./ipc";
 
 export type DictationTarget = "input" | "pty" | "none";
 

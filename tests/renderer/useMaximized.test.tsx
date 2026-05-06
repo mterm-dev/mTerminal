@@ -31,7 +31,7 @@ function makeFakeWindow(): FakeWindow {
   };
 }
 
-vi.mock("../../src/lib/tauri-shim", () => ({
+vi.mock("../../src/lib/ipc", () => ({
   getCurrentWindow: () => fakeWin,
 }));
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "../lib/tauri-shim";
+import { invoke } from "../lib/ipc";
 
 export interface McpStatus {
   running: boolean;

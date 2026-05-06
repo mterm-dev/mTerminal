@@ -1,4 +1,4 @@
-import { getCurrentWindow } from "../lib/tauri-shim";
+import { getCurrentWindow } from "../lib/ipc";
 import { useMaximized } from "../hooks/useMaximized";
 
 interface Props {
@@ -12,7 +12,7 @@ export function Titlebar({ title, sidebarCollapsed, onToggleSidebar }: Props) {
   const maximized = useMaximized();
 
   return (
-    <div className="term-titlebar" data-tauri-drag-region>
+    <div className="term-titlebar" data-app-drag>
       <div className="term-titlebar-lead">
         <button
           className="titlebar-toggle"
@@ -50,7 +50,7 @@ export function Titlebar({ title, sidebarCollapsed, onToggleSidebar }: Props) {
           </svg>
         </button>
       </div>
-      <div className="term-title" data-tauri-drag-region>
+      <div className="term-title" data-app-drag>
         {title}
       </div>
       <div className="term-winctl">

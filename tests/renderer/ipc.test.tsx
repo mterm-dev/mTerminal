@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   invoke,
   Channel,
-  listen,
   getCurrentWindow,
   isPermissionGranted,
   requestPermission,
@@ -12,7 +11,7 @@ import {
   readText,
   writeText,
   open,
-} from "../../src/lib/tauri-shim";
+} from "../../src/lib/ipc";
 
 type MtMock = ReturnType<typeof makeMt>;
 
@@ -287,14 +286,6 @@ describe("Channel", () => {
     ch.onmessage = (n) => (got = n);
     ch.onmessage(42);
     expect(got).toBe(42);
-  });
-});
-
-describe("listen()", () => {
-  it("rejects with helpful error (no Electron handler)", async () => {
-    await expect(listen("foo", () => {})).rejects.toThrow(
-      /listen.*no Electron handler|tauri-shim/,
-    );
   });
 });
 

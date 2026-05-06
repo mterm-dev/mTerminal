@@ -7,6 +7,7 @@ import {
   ModelInfo,
   estimateCost,
 } from './provider'
+import { consumeServerSentEvents } from './sse'
 
 const ANTHROPIC_VERSION = '2023-06-01'
 const BASE = 'https://api.anthropic.com/v1'
@@ -60,9 +61,6 @@ export class AnthropicProvider implements AiProvider {
 
     let inTokens = 0
     let outTokens = 0
-    const reader = resp.body.getReader()
-    const decoder = new TextDecoder('utf-8')
-    let buf = ''
     let donned = false
 
     const emitDone = () => {
@@ -72,65 +70,39 @@ export class AnthropicProvider implements AiProvider {
       sink({ kind: 'done', value: { inTokens, outTokens, costUsd: cost } })
     }
 
-    try {
-      while (true) {
-        if (signal.aborted) {
-          try { await reader.cancel() } catch {}
-          return
-        }
-        let chunk: { done: boolean; value?: Uint8Array }
-        try {
-          chunk = await reader.read()
-        } catch (e) {
-          if (signal.aborted) return
-          throw new Error(`read sse: ${e instanceof Error ? e.message : String(e)}`)
-        }
-        if (chunk.done) break
-        if (!chunk.value) continue
-        buf += decoder.decode(chunk.value, { stream: true })
-
-        let nl: number
-        while ((nl = buf.indexOf('\n')) >= 0) {
-          const rawLine = buf.slice(0, nl)
-          buf = buf.slice(nl + 1)
-          const line = rawLine.replace(/\r$/, '')
-          if (!line.startsWith('data: ')) continue
-          const payload = line.slice(6)
-          if (payload.length === 0) continue
-          let v: { [k: string]: JsonValue }
-          try {
-            v = JSON.parse(payload) as { [k: string]: JsonValue }
-          } catch {
-            continue
+    await consumeServerSentEvents({
+      body: resp.body,
+      signal,
+      errorPrefix: 'read sse',
+      onEvent: (event) => {
+        if (event.kind !== 'json') return
+        const v = event.value
+        const t = typeof v.type === 'string' ? (v.type as string) : ''
+        if (t === 'content_block_delta') {
+          const delta = v.delta as { [k: string]: JsonValue } | undefined
+          const text = delta?.text
+          if (typeof text === 'string') {
+            const ev: AiEvent = { kind: 'delta', value: text }
+            sink(ev)
           }
-          const t = typeof v.type === 'string' ? (v.type as string) : ''
-          if (t === 'content_block_delta') {
-            const delta = v.delta as { [k: string]: JsonValue } | undefined
-            const text = delta?.text
-            if (typeof text === 'string') {
-              const ev: AiEvent = { kind: 'delta', value: text }
-              sink(ev)
-            }
-          } else if (t === 'message_start') {
-            const msg = v.message as { [k: string]: JsonValue } | undefined
-            const u = msg?.usage as { [k: string]: JsonValue } | undefined
-            if (u) {
-              if (typeof u.input_tokens === 'number') inTokens = u.input_tokens as number
-              if (typeof u.output_tokens === 'number') outTokens = u.output_tokens as number
-            }
-          } else if (t === 'message_delta') {
-            const u = v.usage as { [k: string]: JsonValue } | undefined
-            if (u && typeof u.output_tokens === 'number') {
-              outTokens = u.output_tokens as number
-            }
-          } else if (t === 'message_stop') {
-            emitDone()
-            return
+        } else if (t === 'message_start') {
+          const msg = v.message as { [k: string]: JsonValue } | undefined
+          const u = msg?.usage as { [k: string]: JsonValue } | undefined
+          if (u) {
+            if (typeof u.input_tokens === 'number') inTokens = u.input_tokens as number
+            if (typeof u.output_tokens === 'number') outTokens = u.output_tokens as number
           }
+        } else if (t === 'message_delta') {
+          const u = v.usage as { [k: string]: JsonValue } | undefined
+          if (u && typeof u.output_tokens === 'number') {
+            outTokens = u.output_tokens as number
+          }
+        } else if (t === 'message_stop') {
+          emitDone()
+          return true
         }
-      }
-    } finally {
-    }
+      },
+    })
 
     emitDone()
   }

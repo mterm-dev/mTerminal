@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { open as openDialog } from "../lib/tauri-shim";
+import { open as openDialog } from "../lib/ipc";
 import {
   type HostMeta,
   type SshKey,
@@ -7,6 +7,7 @@ import {
   getToolAvailability,
   listSshKeys,
 } from "../hooks/useRemoteHosts";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 interface Props {
   initial?: HostMeta | null;
@@ -46,13 +47,7 @@ export function RemoteHostModal({
     getToolAvailability().then(setTools);
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, busy]);
+  useEscapeKey(onClose, { enabled: !busy });
 
   const isEdit = !!initial?.id;
 

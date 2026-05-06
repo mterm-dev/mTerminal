@@ -3,11 +3,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 
-vi.mock("../../src/lib/tauri-shim", () => ({
+vi.mock("../../src/lib/ipc", () => ({
   invoke: vi.fn(),
 }));
 
-import { invoke } from "../../src/lib/tauri-shim";
+import { invoke } from "../../src/lib/ipc";
 import {
   useRemoteHosts,
   listSshKeys,

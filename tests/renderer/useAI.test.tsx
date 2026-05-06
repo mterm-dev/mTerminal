@@ -11,7 +11,7 @@ const { invokeMock, MockChannel } = vi.hoisted(() => {
   return { invokeMock: vi.fn(), MockChannel };
 });
 
-vi.mock("../../src/lib/tauri-shim", () => ({
+vi.mock("../../src/lib/ipc", () => ({
   invoke: (cmd: string, args?: Record<string, unknown>) => invokeMock(cmd, args),
   Channel: MockChannel,
 }));

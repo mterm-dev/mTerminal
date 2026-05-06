@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "../lib/tauri-shim";
+import { invoke } from "../lib/ipc";
 
 interface VaultStatus {
   exists: boolean;

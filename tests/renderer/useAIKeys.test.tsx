@@ -5,7 +5,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 
 const invokeMock = vi.fn();
 
-vi.mock("../../src/lib/tauri-shim", () => ({
+vi.mock("../../src/lib/ipc", () => ({
   invoke: (cmd: string, args?: Record<string, unknown>) => invokeMock(cmd, args),
 }));
 

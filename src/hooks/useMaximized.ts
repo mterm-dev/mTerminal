@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getCurrentWindow } from "../lib/tauri-shim";
+import { getCurrentWindow } from "../lib/ipc";
 
 export function useMaximized(): boolean {
   const [maximized, setMaximized] = useState(false);

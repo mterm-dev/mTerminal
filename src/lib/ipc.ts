@@ -155,19 +155,11 @@ export async function invoke<T = unknown>(
       return (await api.mcp.stop()) as T
 
     default:
-      throw new Error(`tauri-shim: unknown command "${cmd}"`)
+      throw new Error(`ipc: unknown command "${cmd}"`)
   }
 }
 
 export type UnlistenFn = () => void
-
-export async function listen<T = unknown>(
-  eventName: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _cb: (event: { payload: T }) => void,
-): Promise<UnlistenFn> {
-  throw new Error(`tauri-shim: listen('${eventName}') has no Electron handler`)
-}
 
 export interface ShimWindow {
   minimize(): Promise<void>

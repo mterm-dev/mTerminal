@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export type MasterPasswordMode = "init" | "unlock" | "change";
 
@@ -17,16 +18,7 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (!busy) onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, busy]);
+  useEscapeKey(onClose, { enabled: !busy, preventDefault: true });
 
   const submit = async () => {
     setError(null);

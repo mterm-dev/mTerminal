@@ -1,3 +1,4 @@
+import { app, ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -23,4 +24,37 @@ export function saveJsonFileAtomic(file: string, json: string): void {
   try {
     fs.chmodSync(file, 0o600)
   } catch {}
+}
+
+export interface JsonStore {
+  load: () => string | null
+  save: (json: string) => void
+  setFilePathForTests: (p: string | null) => void
+  registerHandlers: () => void
+}
+
+export function createJsonStore(channel: string, fileName: string): JsonStore {
+  let cachedFilePath: string | null = null
+  const filePath = (): string => {
+    if (cachedFilePath) return cachedFilePath
+    cachedFilePath = path.join(app.getPath('userData'), fileName)
+    return cachedFilePath
+  }
+  const load = (): string | null => loadJsonFile(filePath())
+  const save = (json: string): void => saveJsonFileAtomic(filePath(), json)
+  return {
+    load,
+    save,
+    setFilePathForTests: (p) => {
+      cachedFilePath = p
+    },
+    registerHandlers: () => {
+      ipcMain.on(`${channel}:load:sync`, (e) => {
+        e.returnValue = load()
+      })
+      ipcMain.handle(`${channel}:save`, (_e, json: string) => {
+        save(json)
+      })
+    },
+  }
 }

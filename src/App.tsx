@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getCurrentWindow } from "./lib/tauri-shim";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { getCurrentWindow } from "./lib/ipc";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TerminalTab } from "./components/TerminalTab";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { RemoteWorkspace } from "./components/RemoteWorkspace";
 import {
   MasterPasswordModal,
@@ -22,7 +23,7 @@ import { AICommandPalette } from "./components/AICommandPalette";
 import { ExplainPopover } from "./components/ExplainPopover";
 import { AIPanel } from "./components/AIPanel";
 import { GitPanel } from "./components/GitPanel";
-import { invoke, open as openDialog } from "./lib/tauri-shim";
+import { invoke, open as openDialog } from "./lib/ipc";
 import type { AiUsage } from "./hooks/useAI";
 import {
   useRemoteHosts,
@@ -33,8 +34,9 @@ import { useSettings } from "./settings/useSettings";
 import { findTheme } from "./settings/themes";
 import { SettingsModal } from "./settings/SettingsModal";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
+import { useThemeVars } from "./hooks/useThemeVars";
+import { useGlobalHotkeys } from "./hooks/useGlobalHotkeys";
 import { insertDictation } from "./lib/insertDictation";
-import { matchHotkey } from "./lib/hotkey";
 
 interface CtxState {
   x: number;
@@ -197,42 +199,7 @@ export default function App() {
     (window as unknown as { __MT_HOME?: string }).__MT_HOME = `/home/${sys.user}`;
   }, [sys.user]);
 
-  useEffect(() => {
-    const root = document.documentElement.style;
-    for (const [k, v] of Object.entries(theme.cssVars)) {
-      root.setProperty(k, v);
-    }
-    root.setProperty("--ui-font-size", `${settings.uiFontSize}px`);
-    document.body.style.fontSize = `${settings.uiFontSize}px`;
-  }, [theme, settings.uiFontSize]);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--window-opacity",
-      String(settings.windowOpacity),
-    );
-  }, [settings.windowOpacity]);
-
-  useEffect(() => {
-    const w = Math.max(200, Math.min(600, settings.sidebarWidth || 300));
-    document.documentElement.style.setProperty("--side-w", `${w}px`);
-  }, [settings.sidebarWidth]);
-
-  useEffect(() => {
-    const apply = () => {
-      const overflow = Math.max(
-        0,
-        window.outerHeight - window.screen.availHeight,
-      );
-      document.documentElement.style.setProperty(
-        "--safe-bottom",
-        `${overflow}px`,
-      );
-    };
-    apply();
-    window.addEventListener("resize", apply);
-    return () => window.removeEventListener("resize", apply);
-  }, []);
+  useThemeVars(theme, settings);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -530,75 +497,17 @@ export default function App() {
   const toggleAIPanelRef = useRef(toggleAIPanel);
   toggleAIPanelRef.current = toggleAIPanel;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-
-      const w = wsRef.current;
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-        if (e.key === "t" || e.key === "T") {
-          e.preventDefault();
-          setGridGroupId(null);
-          w.addTab();
-          return;
-        }
-        if (e.key === "w" || e.key === "W") {
-          if (w.activeId != null) {
-            e.preventDefault();
-            w.closeTab(w.activeId);
-          }
-          return;
-        }
-        if (e.key === "b" || e.key === "B") {
-          e.preventDefault();
-          updateRef.current(
-            "sidebarCollapsed",
-            !settingsRef.current.sidebarCollapsed,
-          );
-          return;
-        }
-        if (e.key >= "1" && e.key <= "9") {
-          const idx = Number(e.key) - 1;
-          e.preventDefault();
-          setGridGroupId(null);
-          w.selectIndex(idx);
-          return;
-        }
-      }
-      if (e.ctrlKey && e.shiftKey && (e.key === "G" || e.key === "g")) {
-        e.preventDefault();
-        w.addGroup();
-      }
-      if (e.ctrlKey && e.shiftKey && (e.key === "L" || e.key === "l")) {
-        e.preventDefault();
-        spawnClaudeTabRef.current();
-      }
-      if (e.ctrlKey && e.shiftKey && (e.key === "P" || e.key === "p")) {
-        e.preventDefault();
-        openPaletteRef.current();
-      }
-      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
-        e.preventDefault();
-        toggleAIPanelRef.current();
-      }
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ",") {
-        e.preventDefault();
-        setShowSettings(true);
-      }
-      const s = settingsRef.current;
-      if (
-        s.voiceEnabled &&
-        s.voiceHotkey &&
-        matchHotkey(e, s.voiceHotkey)
-      ) {
-        e.preventDefault();
-        voiceRef.current.toggle();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useGlobalHotkeys({
+    wsRef,
+    settingsRef,
+    updateRef,
+    voiceRef,
+    spawnClaudeTabRef,
+    openPaletteRef,
+    toggleAIPanelRef,
+    setGridGroupId,
+    setShowSettings,
+  });
 
   const openTabMenu = (id: number, x: number, y: number) => {
     const tab = ws.tabs.find((t) => t.id === id);
@@ -788,7 +697,7 @@ export default function App() {
                 ? ({
                     ["--grid-cols" as never]: gridDims.cols,
                     ["--grid-rows" as never]: gridDims.rows,
-                  } as React.CSSProperties)
+                  } as CSSProperties)
                 : undefined
             }
           >
@@ -986,63 +895,6 @@ export default function App() {
           onChange={(oldPw, newPw) => vault.changePassword(oldPw, newPw)}
         />
       )}
-    </div>
-  );
-}
-
-interface ConfirmDialogProps {
-  message: string;
-  confirmLabel: string;
-  cancelLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-function ConfirmDialog({
-  message,
-  confirmLabel,
-  cancelLabel,
-  onConfirm,
-  onCancel,
-}: ConfirmDialogProps) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCancel();
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        onConfirm();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onConfirm, onCancel]);
-
-  return (
-    <div
-      className="confirm-overlay"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
-    >
-      <div className="confirm-dialog">
-        <div className="confirm-message">{message}</div>
-        <div className="confirm-actions">
-          <button className="confirm-btn" onClick={onCancel}>
-            {cancelLabel}
-          </button>
-          <button
-            className="confirm-btn confirm-btn-primary"
-            onClick={onConfirm}
-            autoFocus
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

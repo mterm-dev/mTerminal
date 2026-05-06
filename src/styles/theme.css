@@ -121,7 +121,7 @@ html, body {
 }
 
 /* ── titlebar ────────────────────────────────────────────── */
-[data-tauri-drag-region] {
+[data-app-drag] {
   -webkit-app-region: drag;
   app-region: drag;
 }

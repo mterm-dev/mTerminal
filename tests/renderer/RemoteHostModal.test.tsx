@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   getToolAvailability: vi.fn(),
 }));
 
-vi.mock("../../src/lib/tauri-shim", () => ({
+vi.mock("../../src/lib/ipc", () => ({
   open: mocks.openDialog,
 }));
 

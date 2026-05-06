@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 
-vi.mock("../../src/lib/tauri-shim", () => ({
+vi.mock("../../src/lib/ipc", () => ({
   invoke: vi.fn(),
   isPermissionGranted: vi.fn(),
   requestPermission: vi.fn(),
@@ -15,7 +15,7 @@ import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
-} from "../../src/lib/tauri-shim";
+} from "../../src/lib/ipc";
 import { useClaudeCodeStatus } from "../../src/hooks/useClaudeCodeStatus";
 
 const mInvoke = invoke as unknown as ReturnType<typeof vi.fn>;

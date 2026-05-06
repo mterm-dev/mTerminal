@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { Channel, invoke, writeText } from "../lib/tauri-shim";
+import { Channel, invoke, writeText } from "../lib/ipc";
 import type { CursorStyle } from "../settings/useSettings";
 
 type TabKind = "local" | "remote";
@@ -317,7 +317,7 @@ export function TerminalTab({
   }, [fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink, scrollback, theme]);
 
   const inGrid = typeof gridSlot === "number" && gridSlot >= 0;
-  const hostStyle: React.CSSProperties | undefined = inGrid
+  const hostStyle: CSSProperties | undefined = inGrid
     ? { order: gridSlot }
     : undefined;
   return (

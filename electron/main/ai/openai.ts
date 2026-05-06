@@ -6,6 +6,7 @@ import {
   ModelInfo,
   estimateCost,
 } from './provider'
+import { consumeServerSentEvents } from './sse'
 
 export class OpenAiProvider implements AiProvider {
   private apiKey: string | null
@@ -70,73 +71,42 @@ export class OpenAiProvider implements AiProvider {
 
     let inTokens = 0
     let outTokens = 0
-    const reader = resp.body.getReader()
-    const decoder = new TextDecoder('utf-8')
-    let buf = ''
+    let stopped = false
 
-    try {
-      while (true) {
-        if (signal.aborted) {
-          try { await reader.cancel() } catch {}
+    await consumeServerSentEvents({
+      body: resp.body,
+      signal,
+      errorPrefix: 'read sse',
+      onEvent: (event) => {
+        if (event.kind === 'data') {
+          if (event.payload === '[DONE]') {
+            const cost = estimateCost(this.costLabel, req.model, inTokens, outTokens)
+            sink({ kind: 'done', value: { inTokens, outTokens, costUsd: cost } })
+            stopped = true
+            return true
+          }
           return
         }
-        let chunk: { done: boolean; value?: Uint8Array }
-        try {
-          chunk = await reader.read()
-        } catch (e) {
-          if (signal.aborted) return
-          throw new Error(`read sse: ${e instanceof Error ? e.message : String(e)}`)
-        }
-        if (chunk.done) break
-        if (!chunk.value) continue
-        buf += decoder.decode(chunk.value, { stream: true })
-
-        let nl: number
-        while ((nl = buf.indexOf('\n')) >= 0) {
-          const rawLine = buf.slice(0, nl)
-          buf = buf.slice(nl + 1)
-          const line = rawLine.replace(/\r$/, '')
-          if (!line.startsWith('data: ')) continue
-          const payload = line.slice(6)
-          if (payload === '[DONE]') {
-            const cost = estimateCost(
-              this.costLabel,
-              req.model,
-              inTokens,
-              outTokens
-            )
-            sink({
-              kind: 'done',
-              value: { inTokens, outTokens, costUsd: cost },
-            })
-            return
-          }
-          let v: { [k: string]: JsonValue }
-          try {
-            v = JSON.parse(payload) as { [k: string]: JsonValue }
-          } catch {
-            continue
-          }
-          const choices = v.choices as Array<{ [k: string]: JsonValue }> | undefined
-          if (Array.isArray(choices)) {
-            for (const choice of choices) {
-              const delta = choice.delta as { [k: string]: JsonValue } | undefined
-              const text = delta?.content
-              if (typeof text === 'string' && text.length > 0) {
-                sink({ kind: 'delta', value: text })
-              }
+        const v = event.value
+        const choices = v.choices as Array<{ [k: string]: JsonValue }> | undefined
+        if (Array.isArray(choices)) {
+          for (const choice of choices) {
+            const delta = choice.delta as { [k: string]: JsonValue } | undefined
+            const text = delta?.content
+            if (typeof text === 'string' && text.length > 0) {
+              sink({ kind: 'delta', value: text })
             }
           }
-          const u = v.usage as { [k: string]: JsonValue } | undefined
-          if (u) {
-            if (typeof u.prompt_tokens === 'number') inTokens = u.prompt_tokens as number
-            if (typeof u.completion_tokens === 'number') outTokens = u.completion_tokens as number
-          }
         }
-      }
-    } finally {
-    }
+        const u = v.usage as { [k: string]: JsonValue } | undefined
+        if (u) {
+          if (typeof u.prompt_tokens === 'number') inTokens = u.prompt_tokens as number
+          if (typeof u.completion_tokens === 'number') outTokens = u.completion_tokens as number
+        }
+      },
+    })
 
+    if (stopped) return
     const cost = estimateCost(this.costLabel, req.model, inTokens, outTokens)
     sink({ kind: 'done', value: { inTokens, outTokens, costUsd: cost } })
   }

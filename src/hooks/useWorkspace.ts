@@ -375,41 +375,39 @@ export function useWorkspace() {
     return id;
   }, []);
 
-  const setGroupAccent = useCallback((id: string, accent: string) => {
-    setState((s) => ({
-      ...s,
-      groups: s.groups.map((g) => (g.id === id ? { ...g, accent } : g)),
-    }));
-  }, []);
+  const updateGroup = useCallback(
+    (id: string, patch: (g: Group) => Partial<Group>) => {
+      setState((s) => ({
+        ...s,
+        groups: s.groups.map((g) => (g.id === id ? { ...g, ...patch(g) } : g)),
+      }));
+    },
+    [],
+  );
 
-  const setGroupCwd = useCallback((id: string, cwd: string | null) => {
-    setState((s) => ({
-      ...s,
-      groups: s.groups.map((g) =>
-        g.id === id
-          ? { ...g, defaultCwd: cwd && cwd.trim() ? cwd : undefined }
-          : g,
-      ),
-    }));
-  }, []);
+  const setGroupAccent = useCallback(
+    (id: string, accent: string) => updateGroup(id, () => ({ accent })),
+    [updateGroup],
+  );
 
-  const renameGroup = useCallback((id: string, name: string) => {
-    setState((s) => ({
-      ...s,
-      groups: s.groups.map((g) =>
-        g.id === id ? { ...g, name: name.trim() || g.name } : g,
-      ),
-    }));
-  }, []);
+  const setGroupCwd = useCallback(
+    (id: string, cwd: string | null) =>
+      updateGroup(id, () => ({
+        defaultCwd: cwd && cwd.trim() ? cwd : undefined,
+      })),
+    [updateGroup],
+  );
 
-  const toggleGroup = useCallback((id: string) => {
-    setState((s) => ({
-      ...s,
-      groups: s.groups.map((g) =>
-        g.id === id ? { ...g, collapsed: !g.collapsed } : g,
-      ),
-    }));
-  }, []);
+  const renameGroup = useCallback(
+    (id: string, name: string) =>
+      updateGroup(id, (g) => ({ name: name.trim() || g.name })),
+    [updateGroup],
+  );
+
+  const toggleGroup = useCallback(
+    (id: string) => updateGroup(id, (g) => ({ collapsed: !g.collapsed })),
+    [updateGroup],
+  );
 
   const reorderGroup = useCallback((id: string, beforeId: string | null) => {
     setState((s) => {

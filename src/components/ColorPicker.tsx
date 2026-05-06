@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type PointerEvent as RPointerEvent,
 } from "react";
 import { DEFAULT_ACCENTS, isHexAccent } from "../utils/accent";
 
@@ -151,7 +152,7 @@ export function ColorPicker({ value, onChange }: Props) {
   );
 
   const handleSvPointer = useCallback(
-    (e: React.PointerEvent<HTMLCanvasElement>) => {
+    (e: RPointerEvent<HTMLCanvasElement>) => {
       const cvs = svRef.current;
       if (!cvs) return;
       const rect = cvs.getBoundingClientRect();
@@ -167,7 +168,7 @@ export function ColorPicker({ value, onChange }: Props) {
   );
 
   const handleHuePointer = useCallback(
-    (e: React.PointerEvent<HTMLCanvasElement>) => {
+    (e: RPointerEvent<HTMLCanvasElement>) => {
       const cvs = hueRef.current;
       if (!cvs) return;
       const rect = cvs.getBoundingClientRect();

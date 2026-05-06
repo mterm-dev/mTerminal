@@ -16,7 +16,7 @@ const { winMock, maximizedRef } = vi.hoisted(() => {
   return { winMock, maximizedRef: { current: false } };
 });
 
-vi.mock("../../src/lib/tauri-shim", () => ({
+vi.mock("../../src/lib/ipc", () => ({
   getCurrentWindow: () => winMock,
 }));
 
@@ -44,7 +44,7 @@ describe("Titlebar", () => {
     );
     expect(screen.getByText("user@host")).toBeTruthy();
     
-    const drag = container.querySelector("[data-tauri-drag-region]");
+    const drag = container.querySelector("[data-app-drag]");
     expect(drag).not.toBeNull();
   });
 

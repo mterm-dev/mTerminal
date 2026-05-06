@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { useGitStatus, type GitFile } from "../hooks/useGitStatus";
 import { GitDiffModal } from "./GitDiffModal";
 import { useAI } from "../hooks/useAI";
@@ -12,6 +12,24 @@ import {
   type CheckState,
   type TreeNode,
 } from "../lib/git-tree";
+import { Checkbox } from "./git-panel/Checkbox";
+import { FileRow, renderTree } from "./git-panel/FileTree";
+import {
+  ChevronToggle,
+  ChevronsDownIcon,
+  ChevronsUpIcon,
+  CloseIcon,
+  CommitIcon,
+  CommitPushIcon,
+  FetchIcon,
+  ListIcon,
+  PullIcon,
+  PushIcon,
+  RefreshIcon,
+  SparklesIcon,
+  SpinnerIcon,
+  TreeIcon,
+} from "./git-panel/icons";
 
 interface Props {
   cwd: string | undefined;
@@ -30,239 +48,6 @@ interface DiffTarget {
   status: { indexStatus: string; worktreeStatus: string; untracked: boolean };
 }
 
-function fileBadge(f: GitFile): { letter: string; cls: string; title: string } {
-  if (f.untracked) return { letter: "?", cls: "untracked", title: "untracked" };
-  const idx = f.indexStatus;
-  const wt = f.worktreeStatus;
-  const code = idx !== "." ? idx : wt;
-  switch (code) {
-    case "A": return { letter: "A", cls: "added", title: "added" };
-    case "M": return { letter: "M", cls: "modified", title: "modified" };
-    case "D": return { letter: "D", cls: "deleted", title: "deleted" };
-    case "R": return { letter: "R", cls: "modified", title: "renamed" };
-    case "C": return { letter: "C", cls: "modified", title: "copied" };
-    case "T": return { letter: "T", cls: "modified", title: "type changed" };
-    case "U": return { letter: "U", cls: "deleted", title: "unmerged" };
-    default: return { letter: code || "·", cls: "modified", title: "changed" };
-  }
-}
-
-interface CheckboxProps {
-  state: CheckState;
-  onChange: () => void;
-  disabled?: boolean;
-  ariaLabel: string;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-function Checkbox({ state, onChange, disabled, ariaLabel, onClick }: CheckboxProps) {
-  return (
-    <span
-      className={`git-checkbox ${state}`}
-      data-state={state}
-      role="checkbox"
-      aria-checked={state === "indeterminate" ? "mixed" : state === "checked"}
-      aria-label={ariaLabel}
-      aria-disabled={disabled || undefined}
-      tabIndex={disabled ? -1 : 0}
-      onClick={(e) => {
-        if (disabled) return;
-        onClick?.(e);
-        if (e.defaultPrevented) return;
-        e.stopPropagation();
-        onChange();
-      }}
-      onKeyDown={(e) => {
-        if (disabled) return;
-        if (e.key === " " || e.key === "Enter") {
-          e.preventDefault();
-          onChange();
-        }
-      }}
-    >
-      <svg viewBox="0 0 12 12" aria-hidden="true">
-        {state === "checked" && (
-          <path
-            d="M2.5 6.2 L4.8 8.5 L9.5 3.7"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-        {state === "indeterminate" && (
-          <path
-            d="M3 6 H9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-        )}
-      </svg>
-    </span>
-  );
-}
-
-function ChevronToggle({ collapsed }: { collapsed: boolean }) {
-  return (
-    <span className={`git-chevron ${collapsed ? "collapsed" : ""}`} aria-hidden="true">
-      <svg width="10" height="10" viewBox="0 0 10 10">
-        <path
-          d="M2.5 3.5 L5 6 L7.5 3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </span>
-  );
-}
-
-const ICON_PROPS = {
-  width: 13,
-  height: 13,
-  viewBox: "0 0 24 24",
-  fill: "none" as const,
-  stroke: "currentColor",
-  strokeWidth: 1.6,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-  "aria-hidden": true,
-};
-
-function RefreshIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <path d="M21 12a9 9 0 1 1-3-6.7" />
-      <polyline points="21 3 21 9 15 9" />
-    </svg>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <line x1="8" y1="6" x2="20" y2="6" />
-      <line x1="8" y1="12" x2="20" y2="12" />
-      <line x1="8" y1="18" x2="20" y2="18" />
-      <circle cx="4" cy="6" r="1" />
-      <circle cx="4" cy="12" r="1" />
-      <circle cx="4" cy="18" r="1" />
-    </svg>
-  );
-}
-
-function TreeIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <rect x="3" y="3" width="8" height="6" rx="1" />
-      <rect x="13" y="15" width="8" height="6" rx="1" />
-      <rect x="3" y="15" width="8" height="6" rx="1" />
-      <path d="M7 9v3h10v3" />
-      <path d="M7 12v3" />
-    </svg>
-  );
-}
-
-function ChevronsDownIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <polyline points="7 6 12 11 17 6" />
-      <polyline points="7 13 12 18 17 13" />
-    </svg>
-  );
-}
-
-function ChevronsUpIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <polyline points="17 11 12 6 7 11" />
-      <polyline points="17 18 12 13 7 18" />
-    </svg>
-  );
-}
-
-function FetchIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <path d="M17 18a4 4 0 1 0-1-7.9 6 6 0 0 0-11 1.9A3.5 3.5 0 0 0 6 19h1" />
-      <line x1="12" y1="11" x2="12" y2="20" />
-      <polyline points="8.5 16.5 12 20 15.5 16.5" />
-    </svg>
-  );
-}
-
-function PullIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <line x1="12" y1="3" x2="12" y2="17" />
-      <polyline points="6 12 12 18 18 12" />
-      <line x1="5" y1="21" x2="19" y2="21" />
-    </svg>
-  );
-}
-
-function PushIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <line x1="5" y1="3" x2="19" y2="3" />
-      <line x1="12" y1="7" x2="12" y2="21" />
-      <polyline points="6 12 12 6 18 12" />
-    </svg>
-  );
-}
-
-function SparklesIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
-      <path d="M19 15l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <line x1="6" y1="6" x2="18" y2="18" />
-      <line x1="18" y1="6" x2="6" y2="18" />
-    </svg>
-  );
-}
-
-function CommitIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <circle cx="12" cy="12" r="3.5" />
-      <line x1="3" y1="12" x2="8.5" y2="12" />
-      <line x1="15.5" y1="12" x2="21" y2="12" />
-    </svg>
-  );
-}
-
-function CommitPushIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <circle cx="12" cy="14.5" r="3" />
-      <line x1="3" y1="14.5" x2="9" y2="14.5" />
-      <line x1="15" y1="14.5" x2="21" y2="14.5" />
-      <polyline points="8.5 6 12 2.5 15.5 6" />
-      <line x1="12" y1="2.5" x2="12" y2="9" />
-    </svg>
-  );
-}
-
-function SpinnerIcon() {
-  return (
-    <svg {...ICON_PROPS} className="git-spin">
-      <path d="M21 12a9 9 0 1 1-9-9" />
-    </svg>
-  );
-}
 
 export function GitPanel({
   cwd,
@@ -572,7 +357,7 @@ export function GitPanel({
     }
   };
 
-  const onResizeHeightStart = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onResizeHeightStart = (e: RPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startY = e.clientY;
     const startH = height;
@@ -917,142 +702,3 @@ export function GitPanel({
   );
 }
 
-interface RenderCtx {
-  checked: Set<string>;
-  collapsedDirs: Set<string>;
-  busy: boolean;
-  onToggleFile: (f: GitFile) => void;
-  onToggleDir: (n: TreeNode) => void;
-  onToggleDirCollapse: (path: string) => void;
-  onOpenDiff: (f: GitFile) => void;
-}
-
-function renderTree(
-  node: TreeNode,
-  depth: number,
-  isRoot: boolean,
-  ctx: RenderCtx,
-): ReactNode {
-  if (isRoot) {
-    return node.children.map((c) => (
-      <Fragment key={c.fullPath}>{renderTree(c, 0, false, ctx)}</Fragment>
-    ));
-  }
-  if (node.isDir) {
-    const isCollapsed = ctx.collapsedDirs.has(node.fullPath);
-    const state = dirCheckState(node, ctx.checked);
-    const fileCount = collectFilePaths(node).length;
-    return (
-      <Fragment>
-        <div
-          className="git-tree-row dir"
-          style={{ paddingLeft: depth * 14 + 4 }}
-          onClick={(e) => {
-            if ((e.target as HTMLElement).closest(".git-checkbox")) return;
-            ctx.onToggleDirCollapse(node.fullPath);
-          }}
-          role="treeitem"
-          aria-expanded={!isCollapsed}
-        >
-          <ChevronToggle collapsed={isCollapsed} />
-          <Checkbox
-            state={state}
-            onChange={() => ctx.onToggleDir(node)}
-            disabled={ctx.busy}
-            ariaLabel={`stage ${node.fullPath}`}
-          />
-          <FolderIcon open={!isCollapsed} />
-          <span className="git-tree-dir-name" title={node.fullPath}>
-            {node.name}
-          </span>
-          <span className="git-tree-dir-count">{fileCount}</span>
-        </div>
-        {!isCollapsed &&
-          node.children.map((c) => (
-            <Fragment key={c.fullPath}>{renderTree(c, depth + 1, false, ctx)}</Fragment>
-          ))}
-      </Fragment>
-    );
-  }
-  const f = node.file!;
-  return (
-    <FileRow
-      file={f}
-      depth={depth}
-      checked={ctx.checked.has(f.path)}
-      busy={ctx.busy}
-      onToggle={() => ctx.onToggleFile(f)}
-      onOpenDiff={() => ctx.onOpenDiff(f)}
-      displayName={node.name}
-      withChevronSpacer
-    />
-  );
-}
-
-function FolderIcon({ open }: { open: boolean }) {
-  return (
-    <span className="git-folder-icon" aria-hidden="true">
-      <svg width="12" height="12" viewBox="0 0 16 16">
-        {open ? (
-          <path
-            d="M2 4 V12 H14 L15 6 H4 L3 4 Z"
-            fill="currentColor"
-            opacity="0.85"
-          />
-        ) : (
-          <path
-            d="M2 4 V12 H14 V5 H8 L7 4 Z"
-            fill="currentColor"
-            opacity="0.85"
-          />
-        )}
-      </svg>
-    </span>
-  );
-}
-
-interface FileRowProps {
-  file: GitFile;
-  depth: number;
-  checked: boolean;
-  busy: boolean;
-  onToggle: () => void;
-  onOpenDiff: () => void;
-  displayName?: string;
-  withChevronSpacer?: boolean;
-}
-
-function FileRow({
-  file,
-  depth,
-  checked,
-  busy,
-  onToggle,
-  onOpenDiff,
-  displayName,
-  withChevronSpacer,
-}: FileRowProps) {
-  const badge = fileBadge(file);
-  return (
-    <div
-      className="git-tree-row file"
-      style={{ paddingLeft: depth * 14 + 4 }}
-      role="listitem"
-      title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
-    >
-      {withChevronSpacer && <span className="git-chevron-spacer" aria-hidden="true" />}
-      <Checkbox
-        state={checked ? "checked" : "unchecked"}
-        onChange={onToggle}
-        disabled={busy}
-        ariaLabel={`stage ${file.path}`}
-      />
-      <span className={`badge ${badge.cls}`} title={badge.title} aria-label={badge.title}>
-        {badge.letter}
-      </span>
-      <span className="git-file-path" onClick={onOpenDiff}>
-        {displayName ?? file.path}
-      </span>
-    </div>
-  );
-}

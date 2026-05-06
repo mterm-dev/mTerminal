@@ -165,7 +165,7 @@ vi.mock("@xterm/addon-web-links", () => ({
   },
 }));
 
-vi.mock("../../src/lib/tauri-shim", () => shimMock);
+vi.mock("../../src/lib/ipc", () => shimMock);
 
 
 class FakeResizeObserver {

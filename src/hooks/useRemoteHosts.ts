@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "../lib/tauri-shim";
+import { invoke } from "../lib/ipc";
 import { normalizeAccent, pickDefaultAccent } from "../utils/accent";
 
 export interface HostMeta {
@@ -128,31 +128,28 @@ export function useRemoteHosts(enabled: boolean, vaultUnlocked: boolean) {
     [groups.length, saveGroup],
   );
 
-  const renameGroup = useCallback(
-    async (id: string, name: string) => {
+  const updateGroup = useCallback(
+    async (id: string, patch: (g: HostGroup) => Partial<HostGroup>) => {
       const g = groups.find((x) => x.id === id);
       if (!g) return;
-      await saveGroup({ ...g, name });
+      await saveGroup({ ...g, ...patch(g) });
     },
     [groups, saveGroup],
+  );
+
+  const renameGroup = useCallback(
+    (id: string, name: string) => updateGroup(id, () => ({ name })),
+    [updateGroup],
   );
 
   const toggleGroup = useCallback(
-    async (id: string) => {
-      const g = groups.find((x) => x.id === id);
-      if (!g) return;
-      await saveGroup({ ...g, collapsed: !g.collapsed });
-    },
-    [groups, saveGroup],
+    (id: string) => updateGroup(id, (g) => ({ collapsed: !g.collapsed })),
+    [updateGroup],
   );
 
   const setGroupAccent = useCallback(
-    async (id: string, accent: string) => {
-      const g = groups.find((x) => x.id === id);
-      if (!g) return;
-      await saveGroup({ ...g, accent });
-    },
-    [groups, saveGroup],
+    (id: string, accent: string) => updateGroup(id, () => ({ accent })),
+    [updateGroup],
   );
 
   return {

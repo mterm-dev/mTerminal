@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useRef, useState, type DragEvent } from "react";
 import type { HostGroup, HostMeta } from "../hooks/useRemoteHosts";
 import { InlineEdit } from "./InlineEdit";
 
@@ -119,7 +119,7 @@ export function RemoteWorkspace({
   };
 
   const onSectionDragOver = (
-    e: React.DragEvent,
+    e: DragEvent,
     groupId: string | null,
   ) => {
     if (!dragHostRef.current) return;
@@ -129,7 +129,7 @@ export function RemoteWorkspace({
     setDropMark({ kind: "into", groupId });
   };
 
-  const commitDrop = (e: React.DragEvent) => {
+  const commitDrop = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const dragId = dragHostRef.current;

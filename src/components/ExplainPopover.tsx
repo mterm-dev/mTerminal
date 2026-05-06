@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAI, type AiUsage } from "../hooks/useAI";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 interface Props {
   selection: string;
@@ -77,13 +78,7 @@ export function ExplainPopover({
     };
   }, [selection]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   return (
     <div className="ai-explain" role="dialog" aria-label="AI explain">
