@@ -16,6 +16,10 @@
     "url": "https://github.com/arthurr0/mTerminal/issues"
   },
   "scripts": {
+    "build:extensions": "pnpm --filter \"./extensions/**\" --if-present run build",
+    "predev": "pnpm run build:extensions",
+    "prebuild": "pnpm run build:extensions",
+    "prepackage": "pnpm run build:extensions",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron .",
