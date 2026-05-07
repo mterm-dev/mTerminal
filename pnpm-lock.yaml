@@ -203,10 +203,10 @@ importers:
         version: 19.2.6(react@19.2.6)
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.13)(typescript@5.9.3)
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.13)(typescript@6.0.3)
       typescript:
-        specifier: ^5.5.0
-        version: 5.9.3
+        specifier: ^6.0.0
+        version: 6.0.3
 
   extensions/git-panel:
     devDependencies:
@@ -227,10 +227,10 @@ importers:
         version: 19.2.6(react@19.2.6)
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.13)(typescript@5.9.3)
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.13)(typescript@6.0.3)
       typescript:
-        specifier: ^5.5.0
-        version: 5.9.3
+        specifier: ^6.0.0
+        version: 6.0.3
 
   extensions/git-status-mini: {}
 
@@ -2624,11 +2624,6 @@ packages:
   type-fest@0.13.1:
     resolution: {integrity: sha512-34R7HTnG0XIJcBSn5XhDd7nNFPRcXYRZrBB2O2jdKqYODldSzBAqzsWoZYYvduky73toYS/ESqxPvkDf/F0XMg==}
     engines: {node: '>=10'}
-
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
-    engines: {node: '>=14.17'}
-    hasBin: true
 
   typescript@6.0.3:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
@@ -5359,7 +5354,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  tsup@8.5.1(jiti@2.6.1)(postcss@8.5.13)(typescript@5.9.3):
+  tsup@8.5.1(jiti@2.6.1)(postcss@8.5.13)(typescript@6.0.3):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.7)
       cac: 6.7.14
@@ -5380,7 +5375,7 @@ snapshots:
       tree-kill: 1.2.2
     optionalDependencies:
       postcss: 8.5.13
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - jiti
       - supports-color
@@ -5391,8 +5386,6 @@ snapshots:
 
   type-fest@0.13.1:
     optional: true
-
-  typescript@5.9.3: {}
 
   typescript@6.0.3: {}
 
