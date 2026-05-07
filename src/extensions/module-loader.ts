@@ -24,15 +24,8 @@ export async function loadPluginRendererModule(
 ): Promise<PluginModule | null> {
   if (!rendererRelPath) return null
   const url = `mt-ext://${extId}/${rendererRelPath.replace(/^\.?\/?/, '')}?v=${cacheBust}`
-  try {
-    // Vite's static analyzer can't see this URL, so it doesn't try to bundle
-    // anything — the runtime fetches via the custom protocol.
-    const mod = await dynamicImport(url)
-    return normalizePluginModule(mod)
-  } catch (err) {
-    console.error(`[ext] failed to load renderer for "${extId}" from ${url}:`, err)
-    return null
-  }
+  const mod = await dynamicImport(url)
+  return normalizePluginModule(mod)
 }
 
 function dynamicImport(url: string): Promise<unknown> {

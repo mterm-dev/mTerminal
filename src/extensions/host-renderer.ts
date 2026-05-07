@@ -95,6 +95,7 @@ export class ExtensionHostRenderer {
   private snapshots = new Map<string, ManifestSnapshot>()
   private active = new Map<string, ActiveEntry>()
   private listeners = new Set<() => void>()
+  private loadErrorNotified = new Set<string>()
 
   async boot(): Promise<void> {
     await this.loadManifests()
@@ -277,17 +278,23 @@ export class ExtensionHostRenderer {
     }
     const { ctx, dispose: ctxDispose } = createRendererCtx(normalized)
 
-    // Load and run renderer module
     const activationToken = String(Date.now())
     if (m.rendererEntry) {
-      // Renderer entry path is absolute on the host; convert to a relative
-      // path under the extension directory for the mt-ext:// URL.
       const rel = relativizeToExtPath(m.extensionPath, m.rendererEntry)
-      const mod = await loadPluginRendererModule(m.id, rel, activationToken)
+      let mod: Awaited<ReturnType<typeof loadPluginRendererModule>>
+      try {
+        mod = await loadPluginRendererModule(m.id, rel, activationToken)
+      } catch (err) {
+        await ctxDispose()
+        const e = err instanceof Error ? err : new Error(String(err))
+        console.error(`[ext] failed to load renderer for "${m.id}":`, e)
+        await this.reportLoadFailure(snap, e.message, e.stack)
+        await this.refreshSnapshots()
+        throw e
+      }
       if (mod && typeof mod.activate === 'function') {
         try {
           const result = await mod.activate(ctx)
-          // If activate returned a Disposable, let ctx track it.
           if (result && typeof result === 'object' && typeof (result as { dispose?: unknown }).dispose === 'function') {
             ctx.subscribe(result as { dispose: () => void })
           }
@@ -305,11 +312,34 @@ export class ExtensionHostRenderer {
         this.fire()
         return
       }
-      // No module or no activate — still register snapshot as active so the
-      // user sees it as running (declarative-only plugin).
     }
     this.active.set(id, { manifest: m, ctxDispose, activationToken })
     this.fire()
+  }
+
+  private async reportLoadFailure(
+    snap: ManifestSnapshot,
+    message: string,
+    stack?: string,
+  ): Promise<void> {
+    const id = snap.manifest.id
+    try {
+      await window.mt.ext.reportLoadError(id, message, stack)
+    } catch (err) {
+      console.error(`[ext] reportLoadError failed for "${id}":`, err)
+    }
+    if (!this.loadErrorNotified.has(id)) {
+      this.loadErrorNotified.add(id)
+      const displayName = snap.manifest.displayName ?? id
+      try {
+        await window.mt.notification.send({
+          title: 'Extension failed to load',
+          body: `${displayName}: ${message}`,
+        })
+      } catch (err) {
+        console.error(`[ext] notification.send failed for "${id}":`, err)
+      }
+    }
   }
 
   async deactivate(id: string): Promise<void> {

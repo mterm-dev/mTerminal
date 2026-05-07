@@ -103,6 +103,23 @@ export function registerExtensionsBridge(deps: BridgeDeps): void {
     return true
   })
 
+  ipcMain.handle(
+    'ext:report-load-error',
+    async (_e, payload: { id: string; message: string; stack?: string }) => {
+      if (!payload || typeof payload.id !== 'string' || typeof payload.message !== 'string') {
+        throw new Error('ext:report-load-error requires { id, message }')
+      }
+      const rec = registry.get(payload.id)
+      if (!rec) return { ok: true }
+      const err = new Error(payload.message)
+      if (typeof payload.stack === 'string') {
+        Object.assign(err, { stack: payload.stack })
+      }
+      registry.setError(payload.id, err)
+      return { ok: true }
+    },
+  )
+
   ipcMain.handle('ext:secrets:get', async (_e, payload: { extId: string; key: string }) => {
     requireSecretArgs(payload)
     return secretsGet(payload.extId, payload.key)

@@ -386,6 +386,12 @@ const api = {
     reload: (id: string): Promise<boolean> =>
       ipcRenderer.invoke('ext:reload', id),
     reloadAll: (): Promise<boolean> => ipcRenderer.invoke('ext:reload-all'),
+    reportLoadError: (
+      id: string,
+      message: string,
+      stack?: string,
+    ): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('ext:report-load-error', { id, message, stack }),
     install: (source: 'npm' | 'url' | 'folder', ref: string): Promise<unknown> =>
       ipcRenderer.invoke('ext:install', { source, ref }),
     uninstall: (id: string): Promise<boolean> =>
