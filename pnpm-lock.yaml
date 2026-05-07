@@ -47,9 +47,6 @@ importers:
       react-dom:
         specifier: ^19.2.5
         version: 19.2.6(react@19.2.6)
-      ssh2:
-        specifier: ^1.17.0
-        version: 1.17.0
     devDependencies:
       '@electron/rebuild':
         specifier: ^4.0.0
@@ -179,9 +176,6 @@ importers:
       codemirror:
         specifier: ^6.0.1
         version: 6.0.2
-      ssh2:
-        specifier: ^1.16.0
-        version: 1.17.0
     devDependencies:
       '@mterminal/extension-api':
         specifier: workspace:*
@@ -195,9 +189,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
-      '@types/ssh2':
-        specifier: ^1.15.0
-        version: 1.15.5
       react:
         specifier: ^19.2.5
         version: 19.2.6
@@ -275,13 +266,13 @@ importers:
         version: 19.2.6(react@19.2.6)
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.13)(typescript@6.0.3)
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.14)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.0
         version: 6.0.3
       vitest:
         specifier: ^4.0.0
-        version: 4.1.5(@types/node@24.12.2)(@vitest/coverage-v8@4.1.5)(jsdom@29.1.1(@noble/hashes@1.8.0))(vite@8.0.10(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1))
+        version: 4.1.5(@types/node@24.12.2)(@vitest/coverage-v8@4.1.5)(jsdom@29.1.1(@noble/hashes@1.8.0))(vite@8.0.11(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1))
 
   extensions/theme-pack-extra: {}
 
