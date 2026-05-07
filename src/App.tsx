@@ -1109,6 +1109,7 @@ export default function App() {
                   onInfo={ws.updateTabInfo}
                   onPtyReady={handlePtyReady}
                   onPtyClose={handlePtyClose}
+                  onActivate={ws.setActive}
                   initialCommand={pendingCommandsRef.current.get(t.id) ?? null}
                   onSelectionMenu={openExplain}
                   toolbar={

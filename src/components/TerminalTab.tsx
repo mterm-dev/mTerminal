@@ -25,6 +25,7 @@ interface Props {
   onInfo?: (tabId: number, info: { cwd: string | null; cmd: string | null }) => void;
   onPtyReady?: (tabId: number, ptyId: number) => void;
   onPtyClose?: (tabId: number) => void;
+  onActivate?: (tabId: number) => void;
   initialCommand?: string | null;
   onSelectionMenu?: (
     tabId: number,
@@ -66,6 +67,7 @@ export function TerminalTab({
   onInfo,
   onPtyReady,
   onPtyClose,
+  onActivate,
   initialCommand,
   onSelectionMenu,
   fontFamily,
@@ -103,6 +105,8 @@ export function TerminalTab({
   const initialCommandRef = useRef(initialCommand);
   const onSelectionMenuRef = useRef(onSelectionMenu);
   onSelectionMenuRef.current = onSelectionMenu;
+  const onActivateRef = useRef(onActivate);
+  onActivateRef.current = onActivate;
   const mouseDownTargetRef = useRef<EventTarget | null>(null);
 
   useEffect(() => {
@@ -371,6 +375,7 @@ export function TerminalTab({
         className="term-pane-host"
         onMouseDown={(e) => {
           mouseDownTargetRef.current = e.target;
+          onActivateRef.current?.(tabId);
         }}
         onMouseUp={(e) => {
           if (mouseDownTargetRef.current === e.target) {
