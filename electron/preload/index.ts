@@ -441,6 +441,39 @@ const api = {
       },
     },
   },
+  marketplace: {
+    search: (req?: unknown): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:search', req ?? {}),
+    details: (id: string): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:details', { id }),
+    install: (id: string, version?: string): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:install', { id, version }),
+    uninstall: (id: string): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:uninstall', { id }),
+    update: (id: string): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:update', { id }),
+    checkUpdates: (): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:check-updates'),
+    getUpdates: (): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:get-updates'),
+    listInstalledWithMeta: (): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:list-installed-with-marketplace-meta'),
+    submitRating: (req: {
+      extensionId: string
+      stars: number
+      comment?: string
+    }): Promise<unknown> => ipcRenderer.invoke('marketplace:rating:submit', req),
+    isFirstRun: (): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:is-first-run'),
+    markOnboardingDone: (): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:mark-onboarding-done'),
+    installRecommended: (ids: string[]): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:install-recommended', { ids }),
+    setEndpoint: (url: string | null): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:set-endpoint', { url }),
+    getEndpoint: (): Promise<unknown> =>
+      ipcRenderer.invoke('marketplace:get-endpoint'),
+  },
 }
 
 contextBridge.exposeInMainWorld('mt', api)

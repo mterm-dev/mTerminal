@@ -57,10 +57,7 @@ export interface Settings {
   voiceOpenaiModel: string;
   voiceOpenaiBaseUrl: string;
   vaultIdleLockMs: number;
-  /**
-   * Extension namespace. Each plugin's settings live under
-   * `extensions[<extensionId>]`. Plugins read/write via `ctx.settings.*`.
-   */
+  marketplaceEndpoint?: string;
   extensions?: Record<string, Record<string, unknown>>;
 }
 

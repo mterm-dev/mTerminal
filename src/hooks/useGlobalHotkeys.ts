@@ -24,6 +24,7 @@ interface Args {
   toggleAIPanelRef: RefObject<() => void>;
   setGridGroupId: (id: string | null) => void;
   setShowSettings: (b: boolean) => void;
+  setShowMarketplace?: (b: boolean) => void;
 }
 
 export function useGlobalHotkeys({
@@ -36,6 +37,7 @@ export function useGlobalHotkeys({
   toggleAIPanelRef,
   setGridGroupId,
   setShowSettings,
+  setShowMarketplace,
 }: Args) {
   useEffect(() => {
     const onVoiceKey = (e: KeyboardEvent) => {
@@ -110,6 +112,10 @@ export function useGlobalHotkeys({
       if (modShift(e) && (e.key === "A" || e.key === "a")) {
         e.preventDefault();
         toggleAIPanelRef.current?.();
+      }
+      if (modShift(e) && (e.key === "X" || e.key === "x")) {
+        e.preventDefault();
+        setShowMarketplace?.(true);
       }
       if (modOnly(e) && e.key === ",") {
         e.preventDefault();

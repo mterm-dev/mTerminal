@@ -25,6 +25,8 @@ import {
   registerExtensionsHost,
   registerMtExtProtocolPrivileges,
 } from './extensions'
+import { registerMarketplaceHandlers } from './marketplace'
+import { runOneShotMarketplaceMigrations } from './extensions/migrations-marketplace'
 
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('disable-features', 'WaylandWpColorManagerV1')
@@ -115,6 +117,28 @@ app
     // so plugin contributions are visible by the time the renderer asks for
     // them via `ext:list-manifests`.
     await registerExtensionsHost()
+
+    const marketplace = registerMarketplaceHandlers(getExtensionHost)
+
+    void runOneShotMarketplaceMigrations({
+      installer: marketplace.installer,
+      store: marketplace.store,
+      currentAppVersion: app.getVersion(),
+    }).catch((err) => {
+      console.warn('[marketplace] migrations failed:', err)
+    })
+
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
+    void marketplace.store.load().then((state) => {
+      const last = state.lastUpdateCheck ?? 0
+      if (Date.now() - last > TWENTY_FOUR_HOURS_MS) {
+        setImmediate(() => {
+          marketplace.updates.refresh().catch((err) => {
+            console.warn('[marketplace] auto update check failed:', err)
+          })
+        })
+      }
+    })
 
     const win = createWindow()
     setPtyWindow(win)

@@ -55,6 +55,9 @@ import {
 import { PluginUiHost } from "./extensions/components/PluginUiHost";
 import { PluginManager } from "./extensions/components/PluginManager";
 import { PluginTabHost } from "./extensions/components/PluginTabHost";
+import { MarketplaceModal } from "./marketplace/components/MarketplaceModal";
+import { OnboardingModal } from "./marketplace/components/OnboardingModal";
+import { marketplaceApi } from "./marketplace/api";
 
 interface CtxState {
   x: number;
@@ -120,6 +123,28 @@ function AppInner({
   const [closeConfirm, setCloseConfirm] = useState<{ count: number } | null>(null);
   const [gridGroupId, setGridGroupId] = useState<string | null>(null);
   const [soloTabId, setSoloTabId] = useState<number | null>(null);
+  const [showMarketplace, setShowMarketplace] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const mp = (window as unknown as {
+      mt?: { marketplace?: { setEndpoint?: (url: string | null) => Promise<unknown> } };
+    }).mt?.marketplace;
+    if (mp?.setEndpoint) {
+      const value = settings.marketplaceEndpoint;
+      void mp.setEndpoint(value && value.length > 0 ? value : null).catch(() => {});
+    }
+    marketplaceApi
+      .isFirstRun()
+      .then((first) => {
+        if (!cancelled && first) setShowOnboarding(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.marketplaceEndpoint]);
 
   const vault = useVaultGate();
 
@@ -855,6 +880,7 @@ function AppInner({
     toggleAIPanelRef,
     setGridGroupId,
     setShowSettings,
+    setShowMarketplace,
   });
 
   const openTabMenu = (id: number, x: number, y: number) => {
@@ -1285,6 +1311,9 @@ function AppInner({
       )}
 
       <VaultModalHost />
+
+      <MarketplaceModal open={showMarketplace} onClose={() => setShowMarketplace(false)} />
+      <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
 
       {/* Extension system: pending modals/toasts/trust prompts. */}
       <PluginUiHost />
