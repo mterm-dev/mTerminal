@@ -1,5 +1,6 @@
 import React from 'react'
-import { IconChevronDown, IconChevronRight, IconFile, IconFolder, IconLink } from './icons'
+import { IconChevronDown, IconChevronRight, IconFolder, IconLink } from './icons'
+import { getFileIcon } from '../lib/file-icons'
 import type { FileNode } from '../shared/types'
 
 interface NodeProps {
@@ -7,6 +8,8 @@ interface NodeProps {
   depth: number
   selected: boolean
   childNodes: FileNode[]
+  displayName?: string
+  togglePath?: string
   onToggle: (path: string) => void
   onSelect: (path: string) => void
   onActivate: (node: FileNode) => void
@@ -15,11 +18,35 @@ interface NodeProps {
 }
 
 function FileTreeNodeImpl(props: NodeProps): React.JSX.Element {
-  const { node, depth, selected, onToggle, onSelect, onActivate, onContextMenu, renderChildren } = props
+  const {
+    node,
+    depth,
+    selected,
+    displayName,
+    togglePath,
+    onToggle,
+    onSelect,
+    onActivate,
+    onContextMenu,
+    renderChildren,
+  } = props
   const looksDir = node.kind === 'dir'
   const indent = depth * 12
+  const toggleTarget = togglePath ?? node.path
 
-  const icon = looksDir ? <IconFolder /> : node.kind === 'symlink' ? <IconLink /> : <IconFile />
+  let iconNode: React.JSX.Element
+  let iconColor: string | undefined
+  if (looksDir) {
+    iconNode = <IconFolder />
+    iconColor = 'var(--c-amber)'
+  } else if (node.kind === 'symlink') {
+    iconNode = <IconLink />
+    iconColor = 'var(--fg-dim)'
+  } else {
+    const def = getFileIcon(node.name)
+    iconNode = <def.Icon />
+    iconColor = def.color
+  }
 
   return (
     <>
@@ -47,14 +74,16 @@ function FileTreeNodeImpl(props: NodeProps): React.JSX.Element {
           onClick={(e) => {
             if (!looksDir) return
             e.stopPropagation()
-            onToggle(node.path)
+            onToggle(toggleTarget)
           }}
           aria-hidden
         >
           {looksDir ? (node.expanded ? <IconChevronDown /> : <IconChevronRight />) : null}
         </span>
-        <span className="fb-icon" aria-hidden>{icon}</span>
-        <span className="fb-name">{node.name}</span>
+        <span className="fb-icon" style={{ color: iconColor }} aria-hidden>
+          {iconNode}
+        </span>
+        <span className="fb-name">{displayName ?? node.name}</span>
         {node.loading && <span className="fb-spinner">…</span>}
       </div>
       {looksDir && node.expanded && (

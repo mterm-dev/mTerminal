@@ -22,6 +22,21 @@ export interface FileListResult {
   truncated?: boolean
 }
 
+export interface FileTreeDir {
+  entries: FileEntry[]
+  truncated?: boolean
+  error?: string
+}
+
+export interface FileTreeResult {
+  cwd: string
+  parent: string | null
+  dirs: Record<string, FileTreeDir>
+  reachedCap: boolean
+  capDepth: number
+  capNodes: number
+}
+
 export interface FileStat extends FileEntry {
   exists: boolean
 }

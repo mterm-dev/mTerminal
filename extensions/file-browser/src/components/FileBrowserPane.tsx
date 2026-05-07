@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FileBrowserToolbar } from './FileBrowserToolbar'
 import { FileTreeNode } from './FileTreeNode'
 import { useFileBrowser, parentOf } from '../hooks/useFileBrowser'
+import { computeCompactView } from '../lib/tree-compact'
 import type {
   FileBackend,
   FileBrowserClipboard,
@@ -390,12 +391,15 @@ export function FileBrowserPane(props: PaneProps): React.JSX.Element {
       return parent.childPaths.map((p) => {
         const child = fb.tree.nodes[p]
         if (!child) return null
+        const view = computeCompactView(child, fb.tree.nodes)
         return (
           <FileTreeNode
-            key={child.path}
-            node={child}
-            depth={depthOf(child.path, fb.tree.rootPath)}
-            selected={state.selectedPath === child.path}
+            key={view.headPath}
+            node={view.tail}
+            displayName={view.displayName}
+            togglePath={view.togglePath}
+            depth={depthOf(view.headPath, fb.tree.rootPath)}
+            selected={state.selectedPath === view.tail.path}
             childNodes={[]}
             onToggle={(x) => void onToggleNode(x)}
             onSelect={onSelect}
@@ -414,12 +418,15 @@ export function FileBrowserPane(props: PaneProps): React.JSX.Element {
     return fb.tree.rootChildPaths.map((p) => {
       const node = fb.tree.nodes[p]
       if (!node) return null
+      const view = computeCompactView(node, fb.tree.nodes)
       return (
         <FileTreeNode
-          key={node.path}
-          node={node}
+          key={view.headPath}
+          node={view.tail}
+          displayName={view.displayName}
+          togglePath={view.togglePath}
           depth={0}
-          selected={state.selectedPath === node.path}
+          selected={state.selectedPath === view.tail.path}
           childNodes={[]}
           onToggle={(x) => void onToggleNode(x)}
           onSelect={onSelect}
@@ -446,6 +453,8 @@ export function FileBrowserPane(props: PaneProps): React.JSX.Element {
         onCdTerminalHere={handleCdTerminalHere}
         onRefresh={() => void fb.refreshRoot()}
         onToggleHidden={handleToggleHidden}
+        onExpandAll={() => fb.expandAll()}
+        onCollapseAll={() => fb.collapseAll()}
         onNewFolder={() => void handleNewFolder()}
         onNewFile={() => void handleNewFile()}
         onNavigate={handleNavigate}

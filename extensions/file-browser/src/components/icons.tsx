@@ -45,6 +45,24 @@ export function IconChevronDown(): React.JSX.Element {
   )
 }
 
+export function IconChevronsDown(): React.JSX.Element {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 5l5 5 5-5" />
+      <path d="M3 9l5 5 5-5" />
+    </svg>
+  )
+}
+
+export function IconChevronsUp(): React.JSX.Element {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 11l5-5 5 5" />
+      <path d="M3 7l5-5 5 5" />
+    </svg>
+  )
+}
+
 export function IconRefresh(): React.JSX.Element {
   return (
     <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden>

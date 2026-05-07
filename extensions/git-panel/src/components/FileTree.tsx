@@ -5,6 +5,7 @@ import {
   dirCheckState,
   type TreeNode,
 } from "../lib/git-tree";
+import { getFileIcon } from "../lib/file-icons";
 import { Checkbox } from "./Checkbox";
 import { ChevronToggle, FolderIcon } from "./icons";
 
@@ -119,6 +120,9 @@ export function FileRow({
   withChevronSpacer,
 }: FileRowProps) {
   const badge = fileBadge(file);
+  const baseName = displayName ?? file.path.split("/").pop() ?? file.path;
+  const fileIcon = getFileIcon(baseName);
+  const FileIconComp = fileIcon.Icon;
   return (
     <div
       className="git-tree-row file"
@@ -135,6 +139,9 @@ export function FileRow({
       />
       <span className={`badge ${badge.cls}`} title={badge.title} aria-label={badge.title}>
         {badge.letter}
+      </span>
+      <span className="git-file-icon" style={{ color: fileIcon.color }} aria-hidden="true">
+        <FileIconComp />
       </span>
       <span className="git-file-path" onClick={onOpenDiff}>
         {displayName ?? file.path}

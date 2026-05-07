@@ -42,6 +42,7 @@ interface ExtCtx {
   ipc: {
     invoke<T = unknown>(channel: string, args?: unknown): Promise<T>
   }
+  services: Record<string, { available: boolean; impl: unknown }>
   ui: {
     confirm(opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string }): Promise<boolean>
     prompt(opts: { title: string; message?: string; placeholder?: string; defaultValue?: string }): Promise<string | undefined>
@@ -214,7 +215,6 @@ const CSS = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--fg-dim);
   flex-shrink: 0;
 }
 .fb-icon svg { display: block; }
@@ -390,7 +390,9 @@ export function activate(ctx: ExtCtx): void {
         return {
           mount(host: HTMLElement) {
             root = createRoot(host)
-            root.render(<TabBody ctx={ctx} tabId={tabId} initial={(props ?? {}) as InitialProps} />)
+            root.render(
+              <TabBody ctx={ctx} tabId={tabId} initial={(props ?? {}) as InitialProps} />,
+            )
           },
           unmount() {
             try {

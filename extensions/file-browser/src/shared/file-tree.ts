@@ -1,6 +1,7 @@
 import type {
   FileEntry,
   FileNode,
+  FileTreeDir,
   FileTreeState,
 } from './types'
 
@@ -9,8 +10,15 @@ export type TreeAction =
   | { type: 'load-root-start' }
   | { type: 'load-root-error'; error: string }
   | { type: 'set-entries'; parentPath: string | null; entries: FileEntry[] }
+  | {
+      type: 'set-tree'
+      rootPath: string
+      dirs: Record<string, FileTreeDir>
+    }
   | { type: 'expand'; path: string }
   | { type: 'collapse'; path: string }
+  | { type: 'expand-all' }
+  | { type: 'collapse-all' }
   | { type: 'mark-loading'; path: string; loading: boolean }
   | { type: 'mark-error'; path: string; error: string | null }
   | { type: 'invalidate'; path: string | null }
@@ -95,6 +103,53 @@ export function reduceTree(state: FileTreeState, action: TreeAction): FileTreeSt
       }
       return { ...state, nodes }
     }
+    case 'set-tree': {
+      const nodes: Record<string, FileNode> = {}
+      let rootChildPaths: string[] | null = null
+      for (const [dirPath, dir] of Object.entries(action.dirs)) {
+        const sorted = [...dir.entries].sort(sortEntries)
+        const childPaths = sorted.map((e) => e.path)
+        for (const e of sorted) {
+          const existing = nodes[e.path]
+          if (existing) {
+            nodes[e.path] = {
+              ...existing,
+              kind: e.resolvedKind ?? e.kind,
+              size: e.size,
+              mtimeMs: e.mtimeMs,
+              isHidden: e.isHidden,
+            }
+          } else {
+            nodes[e.path] = entryToNode(e)
+          }
+        }
+        if (dirPath === action.rootPath) {
+          rootChildPaths = childPaths
+        }
+      }
+      for (const [dirPath, dir] of Object.entries(action.dirs)) {
+        if (dirPath === action.rootPath) continue
+        const sorted = [...dir.entries].sort(sortEntries)
+        const childPaths = sorted.map((e) => e.path)
+        const node = nodes[dirPath]
+        if (!node) continue
+        nodes[dirPath] = {
+          ...node,
+          childPaths,
+          loaded: true,
+          loading: false,
+          error: dir.error ?? null,
+          expanded: false,
+        }
+      }
+      return {
+        rootPath: action.rootPath,
+        nodes,
+        rootChildPaths,
+        loadingRoot: false,
+        rootError: null,
+      }
+    }
     case 'expand': {
       const node = state.nodes[action.path]
       if (!node) return state
@@ -112,6 +167,32 @@ export function reduceTree(state: FileTreeState, action: TreeAction): FileTreeSt
         ...state,
         nodes: { ...state.nodes, [action.path]: { ...node, expanded: false } },
       }
+    }
+    case 'expand-all': {
+      const nodes: Record<string, FileNode> = {}
+      let changed = false
+      for (const [p, n] of Object.entries(state.nodes)) {
+        if (n.kind === 'dir' && !n.expanded) {
+          nodes[p] = { ...n, expanded: true }
+          changed = true
+        } else {
+          nodes[p] = n
+        }
+      }
+      return changed ? { ...state, nodes } : state
+    }
+    case 'collapse-all': {
+      const nodes: Record<string, FileNode> = {}
+      let changed = false
+      for (const [p, n] of Object.entries(state.nodes)) {
+        if (n.kind === 'dir' && n.expanded) {
+          nodes[p] = { ...n, expanded: false }
+          changed = true
+        } else {
+          nodes[p] = n
+        }
+      }
+      return changed ? { ...state, nodes } : state
     }
     case 'mark-loading': {
       const node = state.nodes[action.path]

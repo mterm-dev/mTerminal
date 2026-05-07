@@ -5,6 +5,8 @@ import {
   type FileBackend,
   type FileEntry,
   type FileListResult,
+  type FileTreeDir,
+  type FileTreeResult,
   type FileTreeState,
   type FileStat,
 } from '../shared/types'
@@ -25,6 +27,8 @@ interface UseFileBrowserResult {
   refreshRoot: () => Promise<void>
   expand: (path: string) => Promise<void>
   collapse: (path: string) => void
+  expandAll: () => void
+  collapseAll: () => void
   refreshDir: (path: string) => Promise<void>
   list: (cwd: string) => Promise<FileListResult>
   stat: (p: string) => Promise<FileStat>
@@ -73,20 +77,94 @@ export function useFileBrowser(args: Args): UseFileBrowserResult {
     [backend, ipc, showHidden],
   )
 
+  const callTreeLocal = useCallback(
+    async (target: string): Promise<FileTreeResult> => {
+      return ipc.invoke<FileTreeResult>('fs:tree', {
+        cwd: target,
+        showHidden,
+      })
+    },
+    [ipc, showHidden],
+  )
+
+  const callTreeSftp = useCallback(
+    async (target: string, hostId: string): Promise<FileTreeResult> => {
+      const dirs: Record<string, FileTreeDir> = {}
+      let nodeCount = 0
+      let reachedCap = false
+      const maxDepth = 8
+      const maxNodes = 5000
+      const walk = async (dirPath: string, depth: number): Promise<void> => {
+        if (dirs[dirPath]) return
+        let entries: FileEntry[] = []
+        let error: string | undefined
+        try {
+          const r = await ipc.invoke<FileListResult>('sftp:list', {
+            hostId,
+            cwd: dirPath,
+            showHidden,
+          })
+          entries = r.entries
+        } catch (err) {
+          error = (err as Error).message
+        }
+        dirs[dirPath] = { entries, error }
+        nodeCount += entries.length
+        if (nodeCount >= maxNodes) {
+          reachedCap = true
+          return
+        }
+        if (depth >= maxDepth) {
+          reachedCap = true
+          return
+        }
+        const subdirs = entries.filter(
+          (e) => e.kind === 'dir' || (e.kind === 'symlink' && e.resolvedKind === 'dir'),
+        )
+        for (const sd of subdirs) {
+          if (nodeCount >= maxNodes) {
+            reachedCap = true
+            break
+          }
+          await walk(sd.path, depth + 1)
+        }
+      }
+      await walk(target, 0)
+      const idx = target.lastIndexOf('/')
+      const parent = idx > 0 ? target.slice(0, idx) : target === '/' ? null : '/'
+      return {
+        cwd: target,
+        parent,
+        dirs,
+        reachedCap,
+        capDepth: maxDepth,
+        capNodes: maxNodes,
+      }
+    },
+    [ipc, showHidden],
+  )
+
   const refreshRoot = useCallback(async () => {
     if (!backend || !cwd) return
     cwdRef.current = cwd
     dispatch({ type: 'set-root', rootPath: cwd } as TreeAction)
     dispatch({ type: 'load-root-start' } as TreeAction)
     try {
-      const res = await callList(cwd)
+      const res =
+        backend.kind === 'sftp'
+          ? await callTreeSftp(cwd, backend.hostId)
+          : await callTreeLocal(cwd)
       if (cwdRef.current !== cwd) return
-      dispatch({ type: 'set-entries', parentPath: null, entries: res.entries } as TreeAction)
+      dispatch({
+        type: 'set-tree',
+        rootPath: cwd,
+        dirs: res.dirs,
+      } as TreeAction)
     } catch (err) {
       if (cwdRef.current !== cwd) return
       dispatch({ type: 'load-root-error', error: (err as Error).message } as TreeAction)
     }
-  }, [backend, callList, cwd])
+  }, [backend, callTreeLocal, callTreeSftp, cwd])
 
   useEffect(() => {
     void refreshRoot()
@@ -112,6 +190,14 @@ export function useFileBrowser(args: Args): UseFileBrowserResult {
 
   const collapse = useCallback((p: string) => {
     dispatch({ type: 'collapse', path: p } as TreeAction)
+  }, [])
+
+  const expandAll = useCallback(() => {
+    dispatch({ type: 'expand-all' } as TreeAction)
+  }, [])
+
+  const collapseAll = useCallback(() => {
+    dispatch({ type: 'collapse-all' } as TreeAction)
   }, [])
 
   const refreshDir = useCallback(
@@ -252,6 +338,8 @@ export function useFileBrowser(args: Args): UseFileBrowserResult {
     refreshRoot,
     expand,
     collapse,
+    expandAll,
+    collapseAll,
     refreshDir,
     list,
     stat,

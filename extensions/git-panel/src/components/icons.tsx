@@ -217,15 +217,20 @@ export function CheckIcon() {
   );
 }
 
-export function FolderIcon({ open }: { open: boolean }) {
+export function FolderIcon(_: { open: boolean }) {
   return (
     <span className="git-folder-icon" aria-hidden="true">
-      <svg width="12" height="12" viewBox="0 0 16 16">
-        {open ? (
-          <path d="M2 4 V12 H14 L15 6 H4 L3 4 Z" fill="currentColor" opacity="0.85" />
-        ) : (
-          <path d="M2 4 V12 H14 V5 H8 L7 4 Z" fill="currentColor" opacity="0.85" />
-        )}
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.7l1.5 1.5h5.3A1.5 1.5 0 0 1 14.5 6v6.5A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.5z" />
       </svg>
     </span>
   );

@@ -2,6 +2,8 @@ import React from 'react'
 import {
   IconArrowDown,
   IconArrowRight,
+  IconChevronsDown,
+  IconChevronsUp,
   IconEye,
   IconEyeOff,
   IconPlus,
@@ -19,6 +21,8 @@ interface Props {
   onCdTerminalHere: () => void
   onRefresh: () => void
   onToggleHidden: () => void
+  onExpandAll: () => void
+  onCollapseAll: () => void
   onNewFolder: () => void
   onNewFile: () => void
   onNavigate: (path: string) => void
@@ -87,6 +91,24 @@ export function FileBrowserToolbar(props: Props): React.JSX.Element {
           aria-label="toggle hidden"
         >
           {showHidden ? <IconEye /> : <IconEyeOff />}
+        </button>
+        <button
+          className="ghost-btn small"
+          onClick={props.onExpandAll}
+          disabled={!cwd}
+          title="expand all directories"
+          aria-label="expand all directories"
+        >
+          <IconChevronsDown />
+        </button>
+        <button
+          className="ghost-btn small"
+          onClick={props.onCollapseAll}
+          disabled={!cwd}
+          title="collapse all directories"
+          aria-label="collapse all directories"
+        >
+          <IconChevronsUp />
         </button>
         <span className="fb-spacer" />
         <button
