@@ -45,13 +45,17 @@ interface PanelMountProps {
 }
 
 function PanelMount({ panel }: PanelMountProps) {
-  const hostRef = useRef<HTMLDivElement | null>(null)
-  const cleanupRef = useRef<(() => void) | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const [hidden] = useState(panel.initialCollapsed ?? false)
 
   useEffect(() => {
-    const host = hostRef.current
-    if (!host || hidden) return
+    const container = containerRef.current
+    if (!container || hidden) return
+    const host = document.createElement('div')
+    host.className = 'ext-panel'
+    host.dataset.extPanel = panel.id
+    host.dataset.extSource = panel.source
+    container.appendChild(host)
     let cleanup: void | (() => void) = undefined
     try {
       cleanup = panel.render(host, {
@@ -65,28 +69,21 @@ function PanelMount({ panel }: PanelMountProps) {
     } catch (err) {
       console.error(`[ext panel "${panel.id}"]`, err)
     }
-    if (typeof cleanup === 'function') cleanupRef.current = cleanup
     return () => {
-      if (cleanupRef.current) {
+      if (typeof cleanup === 'function') {
         try {
-          cleanupRef.current()
+          cleanup()
         } catch {
           /* ignore */
         }
-        cleanupRef.current = null
       }
-      while (host.firstChild) host.removeChild(host.firstChild)
+      if (host.parentNode === container) {
+        container.removeChild(host)
+      }
     }
   }, [panel, hidden])
 
   if (hidden) return null
 
-  return (
-    <div
-      ref={hostRef}
-      className="ext-panel"
-      data-ext-panel={panel.id}
-      data-ext-source={panel.source}
-    />
-  )
+  return <div ref={containerRef} className="ext-panel-container" />
 }

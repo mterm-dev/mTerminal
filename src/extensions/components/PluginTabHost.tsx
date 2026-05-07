@@ -33,13 +33,21 @@ export function PluginTabHost({
   isDragging,
   toolbar,
 }: Props): React.JSX.Element {
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const instanceRef = useRef<TabInstance | null>(null)
   const [missing, setMissing] = useState(false)
 
   useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
+    const container = containerRef.current
+    if (!container) return
+    const host = document.createElement('div')
+    host.className = 'plugin-tab-mount'
+    host.style.position = 'absolute'
+    host.style.inset = '0'
+    container.appendChild(host)
+    hostRef.current = host
+
     const reg = getTabTypeRegistry()
     const findAndMount = (): boolean => {
       const entry = reg.get(customType)
@@ -60,17 +68,20 @@ export function PluginTabHost({
       return Boolean(inst)
     }
 
+    const cleanupHost = (): void => {
+      try {
+        instanceRef.current?.unmount()
+      } catch {
+        /* ignore */
+      }
+      instanceRef.current = null
+      if (host.parentNode === container) container.removeChild(host)
+      hostRef.current = null
+    }
+
     if (findAndMount()) {
       setMissing(false)
-      return () => {
-        try {
-          instanceRef.current?.unmount()
-        } catch {
-          /* ignore */
-        }
-        instanceRef.current = null
-        while (host.firstChild) host.removeChild(host.firstChild)
-      }
+      return cleanupHost
     }
 
     setMissing(true)
@@ -81,13 +92,7 @@ export function PluginTabHost({
     })
     return () => {
       off.dispose()
-      try {
-        instanceRef.current?.unmount()
-      } catch {
-        /* ignore */
-      }
-      instanceRef.current = null
-      if (host) while (host.firstChild) host.removeChild(host.firstChild)
+      cleanupHost()
     }
   }, [tabId, customType, customProps, active])
 
@@ -128,13 +133,16 @@ export function PluginTabHost({
   return (
     <div className={cellCls} style={cellStyle} data-tab-id={tabId} data-custom-type={customType}>
       {toolbar}
-      <div ref={hostRef} className="term-pane-host plugin-tab-host" role="region">
-        {missing && (
-          <div className="plugin-tab-missing">
-            extension for tab type “{customType}” not loaded
-          </div>
-        )}
-      </div>
+      <div
+        ref={containerRef}
+        className="term-pane-host plugin-tab-host"
+        role="region"
+      />
+      {missing && (
+        <div className="plugin-tab-missing">
+          extension for tab type “{customType}” not loaded
+        </div>
+      )}
     </div>
   )
 }
