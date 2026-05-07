@@ -1,0 +1,94 @@
+name: Marketplace integration (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      marketplace_ref:
+        description: ref of mterminal-marketplace to check out
+        required: false
+        default: main
+      extensions_ref:
+        description: ref of mterminal-extensions to check out
+        required: false
+        default: main
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MARKETPLACE_E2E: '1'
+      MTX_ENDPOINT: http://127.0.0.1:8787
+    steps:
+      - name: Checkout mTerminal
+        uses: actions/checkout@v4
+        with:
+          path: mTerminal
+
+      - name: Checkout marketplace
+        uses: actions/checkout@v4
+        with:
+          repository: arthurr0/mterminal-marketplace
+          ref: ${{ github.event.inputs.marketplace_ref }}
+          path: mterminal-marketplace
+          token: ${{ secrets.GH_INTEGRATION_TOKEN }}
+
+      - name: Checkout extensions
+        uses: actions/checkout@v4
+        with:
+          repository: arthurr0/mterminal-extensions
+          ref: ${{ github.event.inputs.extensions_ref }}
+          path: mterminal-extensions
+          token: ${{ secrets.GH_INTEGRATION_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install marketplace deps
+        working-directory: mterminal-marketplace
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply local D1 migrations
+        working-directory: mterminal-marketplace/apps/worker
+        run: pnpm exec wrangler d1 migrations apply mterminal --local
+
+      - name: Start worker (background)
+        working-directory: mterminal-marketplace/apps/worker
+        run: |
+          pnpm exec wrangler dev --local --persist-to .wrangler/state &
+          echo $! > /tmp/worker.pid
+
+      - name: Wait for worker healthz
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/healthz; then exit 0; fi
+            sleep 2
+          done
+          echo "worker did not become healthy" >&2
+          exit 1
+
+      - name: Run smoke (publishes test extension)
+        working-directory: mterminal-marketplace
+        run: pnpm smoke
+
+      - name: Install mTerminal deps
+        working-directory: mTerminal
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild node-pty for Electron
+        working-directory: mTerminal
+        run: pnpm exec electron-rebuild -f -w node-pty
+
+      - name: Run integration tests
+        working-directory: mTerminal
+        run: pnpm test tests/integration
+
+      - name: Stop worker
+        if: always()
+        run: |
+          if [ -f /tmp/worker.pid ]; then kill "$(cat /tmp/worker.pid)" || true; fi

@@ -11,3 +11,26 @@ jobs:
 
   windows-check:
     uses: ./.github/workflows/windows-check.yml
+
+  test:
+    name: Build & test (Linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/install-linux-deps
+
+      - uses: ./.github/actions/setup-build
+
+      - name: Rebuild native modules for Electron
+        run: pnpm exec electron-rebuild -f -w node-pty
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+        continue-on-error: true
+
+      - name: Build
+        run: pnpm build
