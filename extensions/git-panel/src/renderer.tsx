@@ -9,11 +9,21 @@ import {
 /**
  * Renderer entry for the git-panel extension.
  *
- * Plugin keeps the original GitPanel.tsx component shape (props-based) — the
- * wrapper here adapts ctx → props so the panel itself doesn't have to be
- * rewritten field-by-field. AI credentials flow through `ctx.secrets`
- * (separate from regular settings).
+ * The panel stays props-shaped. The wrapper here adapts ctx → props so the
+ * panel itself doesn't have to be rewritten field-by-field. AI provider
+ * config flows through the `ai.binding.commit` settings entry, populated by
+ * the host's auto-rendered AI binding card. Custom-mode keys come from
+ * `ctx.secrets`. Core-mode requests go through `window.mt.ai`.
  */
+
+export type AiProviderId = "anthropic" | "openai" | "ollama";
+
+export interface AiBindingConfig {
+  source: "core" | "custom";
+  provider: AiProviderId;
+  model: string;
+  baseUrl?: string;
+}
 
 export interface SecretsApiLite {
   get(key: string): Promise<string | null>;
@@ -57,20 +67,31 @@ interface ExtCtx {
   subscribe(d: { dispose: () => void } | (() => void)): void;
 }
 
+const DEFAULT_AI_BINDING: AiBindingConfig = {
+  source: "core",
+  provider: "anthropic",
+  model: "claude-sonnet-4-5",
+};
+
 function readSettings(ctx: ExtCtx): GitPanelSettings {
   const get = <K extends keyof GitPanelSettings>(key: K): GitPanelSettings[K] => {
     const v = ctx.settings.get<GitPanelSettings[K]>(key);
     return v !== undefined ? v : DEFAULT_GIT_PANEL_SETTINGS[key];
   };
   return {
-    commitProvider: get("commitProvider"),
-    anthropicModel: get("anthropicModel"),
-    openaiModel: get("openaiModel"),
-    openaiBaseUrl: get("openaiBaseUrl"),
-    ollamaModel: get("ollamaModel"),
-    ollamaBaseUrl: get("ollamaBaseUrl"),
     commitSystemPrompt: get("commitSystemPrompt"),
     pullStrategy: get("pullStrategy"),
+  };
+}
+
+function readBinding(ctx: ExtCtx): AiBindingConfig {
+  const cfg = ctx.settings.get<AiBindingConfig>("ai.binding.commit");
+  if (!cfg || typeof cfg !== "object") return DEFAULT_AI_BINDING;
+  return {
+    source: cfg.source === "custom" ? "custom" : "core",
+    provider: cfg.provider ?? DEFAULT_AI_BINDING.provider,
+    model: cfg.model || DEFAULT_AI_BINDING.model,
+    baseUrl: cfg.baseUrl,
   };
 }
 
@@ -89,6 +110,7 @@ function GitPanelMount({ ctx }: { ctx: ExtCtx }) {
     () => (ctx.settings.get<number>("messageHeight") ?? 60),
   );
   const [settings, setSettings] = useState<GitPanelSettings>(() => readSettings(ctx));
+  const [binding, setBinding] = useState<AiBindingConfig>(() => readBinding(ctx));
 
   useEffect(() => {
     const offCwd = ctx.events.on("app:cwd:changed", () => {
@@ -96,6 +118,7 @@ function GitPanelMount({ ctx }: { ctx: ExtCtx }) {
     });
     const offSettings = ctx.settings.onChange(() => {
       setSettings(readSettings(ctx));
+      setBinding(readBinding(ctx));
       setCollapsed(ctx.settings.get<boolean>("collapsed") ?? false);
       setTreeView(ctx.settings.get<boolean>("treeView") ?? true);
       setHeight(ctx.settings.get<number>("panelHeight") ?? 240);
@@ -121,6 +144,7 @@ function GitPanelMount({ ctx }: { ctx: ExtCtx }) {
         void ctx.settings.set("treeView", b);
       }}
       settings={settings}
+      binding={binding}
       secrets={ctx.secrets}
       height={height}
       onResizeHeight={(h) => {

@@ -6,6 +6,13 @@ import {
 } from "../../extensions/registries/settings-schema";
 import { getRendererHost, type ManifestSnapshot } from "../../extensions";
 import { ContextMenu, type MenuItem } from "../../components/ContextMenu";
+import {
+  AiBindingCard,
+  defaultConfigFor,
+  settingsKeyFor,
+  type AiBindingConfig,
+  type AiBindingSpec,
+} from "../../extensions/components/AiBindingCard";
 
 /**
  * Two views in one file:
@@ -60,6 +67,7 @@ export function ExtensionsOverview({
     const ids = new Set(getSettingsSchemaRegistry().list().map((e) => e.extId));
     for (const s of snaps) {
       if (s.manifest.contributes.secrets.length > 0) ids.add(s.manifest.id);
+      if (s.manifest.contributes.aiBindings.length > 0) ids.add(s.manifest.id);
     }
     return ids;
   }, [snaps]);
@@ -273,12 +281,15 @@ export function ExtensionSettingsForm({
   }, [reg, host, extId]);
 
   const declaredSecrets = snap?.manifest.contributes.secrets ?? [];
+  const declaredBindings = (snap?.manifest.contributes.aiBindings ?? []) as AiBindingSpec[];
   const schema = (entry?.schema ?? {}) as ObjectSchema;
   const props = Object.entries(schema.properties ?? {});
   const displayName =
     entry?.displayName ?? snap?.manifest.displayName ?? snap?.manifest.id ?? extId;
 
-  if (!entry && declaredSecrets.length === 0) {
+  const nothingToShow =
+    !entry && declaredSecrets.length === 0 && declaredBindings.length === 0;
+  if (nothingToShow) {
     return (
       <Field label="No settings available">
         <span className="ext-explainer">
@@ -295,7 +306,7 @@ export function ExtensionSettingsForm({
         <span className="ext-explainer">
           Settings declared by the extension manifest. Saved under{" "}
           <code>extensions[&quot;{extId}&quot;]</code>.
-          {declaredSecrets.length > 0 && (
+          {(declaredSecrets.length > 0 || declaredBindings.length > 0) && (
             <>
               {" "}
               Secrets are stored separately under{" "}
@@ -305,6 +316,15 @@ export function ExtensionSettingsForm({
           )}
         </span>
       </Field>
+
+      {declaredBindings.length > 0 && (
+        <AiBindingsSection
+          extId={extId}
+          bindings={declaredBindings}
+          settings={settings}
+          update={update}
+        />
+      )}
 
       {declaredSecrets.length > 0 && (
         <SecretsSection extId={extId} secrets={declaredSecrets} />
@@ -328,6 +348,36 @@ export function ExtensionSettingsForm({
             onChange={(v) => writeValue(settings, update, extId, key, v)}
           />
         ))}
+    </>
+  );
+}
+
+function AiBindingsSection({
+  extId,
+  bindings,
+  settings,
+  update,
+}: {
+  extId: string;
+  bindings: AiBindingSpec[];
+} & SectionProps) {
+  return (
+    <>
+      {bindings.map((spec) => {
+        const key = settingsKeyFor(spec.id);
+        const value = readValue(settings, extId, key, undefined) as
+          | AiBindingConfig
+          | undefined;
+        return (
+          <AiBindingCard
+            key={spec.id}
+            extId={extId}
+            spec={spec}
+            value={value ?? defaultConfigFor(spec)}
+            onChange={(next) => writeValue(settings, update, extId, key, next)}
+          />
+        );
+      })}
     </>
   );
 }

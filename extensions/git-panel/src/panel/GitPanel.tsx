@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { useGitStatus, type GitFile } from "../hooks/useGitStatus";
 import { GitDiffModal } from "../components/GitDiffModal";
-import { streamComplete } from "../lib/ai-client";
+import { streamComplete, streamCompleteCore } from "../lib/ai-client";
 import type { GitPanelSettings as Settings } from "../types";
-import type { SecretsApiLite } from "../renderer";
+import type { AiBindingConfig, SecretsApiLite } from "../renderer";
 import {
   buildTree,
   collectDirPaths,
@@ -66,6 +66,7 @@ interface Props {
   treeView: boolean;
   onToggleTreeView: (b: boolean) => void;
   settings: Settings;
+  binding: AiBindingConfig;
   secrets: SecretsApiLite;
   height: number;
   onResizeHeight: (h: number) => void;
@@ -88,6 +89,7 @@ export function GitPanel({
   treeView,
   onToggleTreeView,
   settings,
+  binding,
   secrets,
   height,
   onResizeHeight,
@@ -314,28 +316,16 @@ export function GitPanel({
       return;
     }
 
-    const provider = settings.commitProvider;
-    const model =
-      provider === "anthropic"
-        ? settings.anthropicModel
-        : provider === "openai"
-          ? settings.openaiModel
-          : settings.ollamaModel;
+    const { source, provider, model, baseUrl } = binding;
     if (!model.trim()) {
       setAiError("pick a model in settings → extensions → git panel");
       return;
     }
-    const baseUrl =
-      provider === "openai"
-        ? settings.openaiBaseUrl
-        : provider === "ollama"
-          ? settings.ollamaBaseUrl
-          : undefined;
 
     let apiKey: string | null = null;
-    if (provider === "anthropic" || provider === "openai") {
+    if (source === "custom" && (provider === "anthropic" || provider === "openai")) {
       try {
-        apiKey = await secrets.get(`${provider}.apiKey`);
+        apiKey = await secrets.get(`ai.commit.${provider}.apiKey`);
       } catch (e) {
         setAiError((e as Error).message);
         return;
@@ -374,34 +364,37 @@ export function GitPanel({
 
     setAiBusy(true);
     setMessage("");
-    const handle = streamComplete({
+    const common = {
       provider,
       model,
       baseUrl,
-      apiKey: apiKey ?? undefined,
       system: settings.commitSystemPrompt,
       messages: [
-        { role: "user", content: FEW_SHOT_DIFF },
-        { role: "assistant", content: FEW_SHOT_COMMIT },
+        { role: "user" as const, content: FEW_SHOT_DIFF },
+        { role: "assistant" as const, content: FEW_SHOT_COMMIT },
         {
-          role: "user",
+          role: "user" as const,
           content: `Generate a commit message for the following staged changes:\n\n${payload}`,
         },
       ],
       maxTokens: 500,
       temperature: 0,
       topP: 0.1,
-      onDelta: (d) => setMessage((prev) => prev + d),
+      onDelta: (d: string) => setMessage((prev) => prev + d),
       onDone: () => {
         aiCancelRef.current = null;
         setAiBusy(false);
       },
-      onError: (e) => {
+      onError: (e: string) => {
         aiCancelRef.current = null;
         setAiBusy(false);
         setAiError(e);
       },
-    });
+    };
+    const handle =
+      source === "core"
+        ? streamCompleteCore(common)
+        : streamComplete({ ...common, apiKey: apiKey ?? undefined });
     aiCancelRef.current = handle.cancel;
   };
 

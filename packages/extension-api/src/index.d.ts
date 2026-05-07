@@ -126,6 +126,30 @@ export interface ProviderContribution {
   label: string
 }
 
+export type AiProviderId = 'anthropic' | 'openai' | 'ollama'
+
+/**
+ * Declares an AI workflow an extension needs configured (e.g. one binding
+ * per "feature that calls an LLM"). The host renders a polished card per
+ * binding in Settings → Extensions → <ext> with:
+ *   - segmented control: "Use mTerminal AI" (vault-backed) vs "Custom keys"
+ *   - provider dropdown / model input / base URL
+ *   - password input for the API key (custom mode), wired to `ctx.secrets`
+ *
+ * At runtime the extension reads the chosen config via `ctx.settings.get`
+ * (key `ai.binding.<id>`) and the secret via `ctx.secrets.get`.
+ */
+export interface AiBindingContribution {
+  id: string
+  label: string
+  description?: string
+  /** Default true. When false the binding is "custom keys only". */
+  supportsCore?: boolean
+  providers?: AiProviderId[]
+  defaultProvider?: AiProviderId
+  defaultModels?: Partial<Record<AiProviderId, string>>
+}
+
 /**
  * Declares a secret an extension needs (API key, token, …). The host renders
  * a password input for each entry under Settings → Extensions → <ext>, and
@@ -169,6 +193,7 @@ export interface ExtensionManifest {
     themes?: ThemeContribution[]
     providers?: ProviderContribution[]
     secrets?: SecretContribution[]
+    aiBindings?: AiBindingContribution[]
   }
 }
 

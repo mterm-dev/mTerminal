@@ -57,6 +57,77 @@ export function streamComplete(req: StreamRequest): StreamHandle {
   return { cancel: () => controller.abort() };
 }
 
+/**
+ * Core-side streamer — delegates to `window.mt.ai`, which holds keys behind
+ * the host vault. Exposes the same callbacks shape so callers can swap
+ * between this and `streamComplete` based on the binding's source.
+ */
+interface MtAi {
+  streamComplete: (args: {
+    provider: string;
+    model: string;
+    messages: AiMessage[];
+    system?: string;
+    maxTokens?: number;
+    temperature?: number;
+    topP?: number;
+    baseUrl?: string;
+  }) => Promise<number>;
+  onEvent: (
+    taskId: number,
+    cb: (
+      ev:
+        | { kind: "delta"; value: string }
+        | { kind: "done"; value: AiUsage }
+        | { kind: "error"; value: string },
+    ) => void,
+  ) => () => void;
+  cancel: (taskId: number) => Promise<void>;
+}
+
+export function streamCompleteCore(req: Omit<StreamRequest, "apiKey">): StreamHandle {
+  const mt = (window as unknown as { mt?: { ai?: MtAi } }).mt;
+  if (!mt?.ai) {
+    req.onError?.("window.mt.ai is not available — core AI is disabled in this build");
+    return { cancel: () => undefined };
+  }
+  let cancelled = false;
+  let taskId: number | null = null;
+  let off: (() => void) | null = null;
+  void (async () => {
+    try {
+      taskId = await mt.ai!.streamComplete({
+        provider: req.provider,
+        model: req.model,
+        messages: req.messages,
+        system: req.system,
+        maxTokens: req.maxTokens,
+        temperature: req.temperature,
+        topP: req.topP,
+        baseUrl: req.baseUrl,
+      });
+      if (cancelled) {
+        await mt.ai!.cancel(taskId);
+        return;
+      }
+      off = mt.ai!.onEvent(taskId, (ev) => {
+        if (ev.kind === "delta") req.onDelta?.(ev.value);
+        else if (ev.kind === "done") req.onDone?.(ev.value);
+        else if (ev.kind === "error") req.onError?.(ev.value);
+      });
+    } catch (err) {
+      req.onError?.(err instanceof Error ? err.message : String(err));
+    }
+  })();
+  return {
+    cancel: () => {
+      cancelled = true;
+      if (taskId !== null) void mt.ai!.cancel(taskId);
+      off?.();
+    },
+  };
+}
+
 async function run(req: StreamRequest, controller: AbortController): Promise<void> {
   if (req.provider === "anthropic") return runAnthropic(req, controller);
   if (req.provider === "openai") return runOpenAi(req, controller);

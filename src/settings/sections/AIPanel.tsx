@@ -4,6 +4,7 @@ import { useAIKeys } from "../../hooks/useAIKeys";
 import { listModels, type ModelInfo } from "../../hooks/useAI";
 import { Field, Toggle, type VaultSectionProps } from "./_shared";
 import { ProviderBlock } from "./ProviderBlock";
+import { ModelPicker } from "../../extensions/components/ModelPicker";
 
 interface Props extends VaultSectionProps {
   mcpStatus?: { running: boolean; socketPath: string | null };
@@ -69,18 +70,43 @@ export function AIPanel({
             </div>
           )}
 
-          <Field label="Default provider" hint="Used by command palette + chat panel by default">
-            <div className="seg-control">
-              {(["anthropic", "openai", "ollama"] as AiProviderId[]).map((p) => (
-                <button
-                  key={p}
-                  className={settings.aiDefaultProvider === p ? "active" : ""}
-                  onClick={() => update("aiDefaultProvider", p)}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
+          <Field
+            label="Default provider"
+            hint="Picks the provider + model used by command palette and the chat panel"
+          >
+            <ModelPicker
+              value={{
+                provider: settings.aiDefaultProvider,
+                model:
+                  settings.aiDefaultProvider === "anthropic"
+                    ? settings.aiAnthropicModel
+                    : settings.aiDefaultProvider === "openai"
+                      ? settings.aiOpenaiModel
+                      : settings.aiOllamaModel,
+                baseUrl:
+                  settings.aiDefaultProvider === "openai"
+                    ? settings.aiOpenaiBaseUrl
+                    : settings.aiDefaultProvider === "ollama"
+                      ? settings.aiOllamaBaseUrl
+                      : undefined,
+              }}
+              onChange={(v) => {
+                if (v.provider !== settings.aiDefaultProvider) {
+                  update("aiDefaultProvider", v.provider);
+                }
+                if (v.provider === "anthropic") {
+                  update("aiAnthropicModel", v.model);
+                } else if (v.provider === "openai") {
+                  update("aiOpenaiModel", v.model);
+                  if (v.baseUrl !== undefined)
+                    update("aiOpenaiBaseUrl", v.baseUrl);
+                } else {
+                  update("aiOllamaModel", v.model);
+                  if (v.baseUrl !== undefined)
+                    update("aiOllamaBaseUrl", v.baseUrl);
+                }
+              }}
+            />
           </Field>
 
           <ProviderBlock

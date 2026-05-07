@@ -87,6 +87,28 @@ export interface ProviderContribution {
   label: string
 }
 
+export type AiProviderId = 'anthropic' | 'openai' | 'ollama'
+
+export interface AiBindingContribution {
+  /** Stable id for this AI workflow inside the extension (e.g. "commit"). */
+  id: string
+  /** Human-readable label. */
+  label: string
+  /** Optional explainer rendered under the title. */
+  description?: string
+  /**
+   * If true, the user can pick "Use mTerminal AI" (host-managed providers,
+   * vault-backed keys). Default: true.
+   */
+  supportsCore?: boolean
+  /** Restrict to a subset of providers. Default: all three. */
+  providers?: AiProviderId[]
+  /** Default provider when nothing has been chosen yet. */
+  defaultProvider?: AiProviderId
+  /** Default model per provider. */
+  defaultModels?: Partial<Record<AiProviderId, string>>
+}
+
 export interface SecretContribution {
   /** Storage key, e.g. "anthropic.apiKey". */
   key: string
@@ -150,6 +172,7 @@ export interface ExtensionManifest {
     themes: ThemeContribution[]
     providers: ProviderContribution[]
     secrets: SecretContribution[]
+    aiBindings: AiBindingContribution[]
   }
 
   /** Where the extension lives on disk. */
@@ -399,6 +422,9 @@ function readContributes(v: unknown, issues: string[]): ExtensionManifest['contr
     ),
     secrets: readArrayOf(c.secrets, (x): x is SecretContribution =>
       isObject(x) && typeof x.key === 'string' && typeof x.label === 'string',
+    ),
+    aiBindings: readArrayOf(c.aiBindings, (x): x is AiBindingContribution =>
+      isObject(x) && typeof x.id === 'string' && typeof x.label === 'string',
     ),
   }
 }

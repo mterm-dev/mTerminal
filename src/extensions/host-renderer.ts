@@ -70,6 +70,15 @@ export interface ManifestRecord {
       link?: string
       placeholder?: string
     }>
+    aiBindings: Array<{
+      id: string
+      label: string
+      description?: string
+      supportsCore?: boolean
+      providers?: Array<'anthropic' | 'openai' | 'ollama'>
+      defaultProvider?: 'anthropic' | 'openai' | 'ollama'
+      defaultModels?: Partial<Record<'anthropic' | 'openai' | 'ollama', string>>
+    }>
   }
   source: 'built-in' | 'user'
   extensionPath: string

@@ -4266,6 +4266,14 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
   border-color: var(--accent);
 }
 
+/* AI binding group — visual grouping for one binding inside the settings form. */
+.ai-binding-group {
+  margin-bottom: 18px;
+}
+.ai-binding-group .settings-section-h:first-child {
+  margin-top: 4px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

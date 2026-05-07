@@ -91,37 +91,6 @@
             "default": "ff-only",
             "description": "Default pull strategy"
           },
-          "commitProvider": {
-            "type": "string",
-            "enum": ["anthropic", "openai", "ollama"],
-            "default": "anthropic",
-            "description": "AI provider for commit message generation"
-          },
-          "anthropicModel": {
-            "type": "string",
-            "default": "claude-sonnet-4-5",
-            "description": "Anthropic model id"
-          },
-          "openaiModel": {
-            "type": "string",
-            "default": "gpt-4o-mini",
-            "description": "OpenAI model id"
-          },
-          "openaiBaseUrl": {
-            "type": "string",
-            "default": "https://api.openai.com/v1",
-            "description": "OpenAI-compatible base URL (override for Groq, OpenRouter, local proxies, …)"
-          },
-          "ollamaModel": {
-            "type": "string",
-            "default": "llama3.1",
-            "description": "Ollama model name"
-          },
-          "ollamaBaseUrl": {
-            "type": "string",
-            "default": "http://localhost:11434",
-            "description": "Ollama server base URL"
-          },
           "commitSystemPrompt": {
             "type": "string",
             "default": "Write a single conventional-commit message (under 72 chars on the first line) for the diff. Do not include extra commentary.",
@@ -129,20 +98,19 @@
           }
         }
       },
-      "secrets": [
+      "aiBindings": [
         {
-          "key": "anthropic.apiKey",
-          "label": "Anthropic API key",
-          "description": "Used when commit provider is set to Anthropic.",
-          "link": "https://console.anthropic.com/account/keys",
-          "placeholder": "sk-ant-…"
-        },
-        {
-          "key": "openai.apiKey",
-          "label": "OpenAI (or compatible) API key",
-          "description": "Used when commit provider is OpenAI. Compatible with Groq / OpenRouter / local proxies via the base URL setting.",
-          "link": "https://platform.openai.com/api-keys",
-          "placeholder": "sk-…"
+          "id": "commit",
+          "label": "Commit message generator",
+          "description": "Picks the model used by the ✨ Generate button. Choose mTerminal's shared AI providers (vault keys) or use a private key scoped to this extension.",
+          "supportsCore": true,
+          "providers": ["anthropic", "openai", "ollama"],
+          "defaultProvider": "anthropic",
+          "defaultModels": {
+            "anthropic": "claude-sonnet-4-5",
+            "openai": "gpt-4o-mini",
+            "ollama": "llama3.1"
+          }
         }
       ]
     }
