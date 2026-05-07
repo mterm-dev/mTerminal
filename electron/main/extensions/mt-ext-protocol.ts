@@ -76,8 +76,15 @@ export function registerMtExtProtocol(): void {
         return new Response(`unknown extension: ${extId}`, { status: 404 })
       }
 
-      const baseDir =
-        rec.manifest.source === 'built-in' ? builtInExtensionsDir() : userExtensionsDir()
+      let baseDir: string | null
+      if (rec.manifest.source === 'built-in') {
+        baseDir = builtInExtensionsDir()
+      } else {
+        baseDir = userExtensionsDir()
+      }
+      if (!baseDir) {
+        return new Response('extension source unavailable', { status: 404 })
+      }
       const extDir = path.resolve(baseDir, extId)
       const target = path.resolve(extDir, relPath)
       // Prevent path traversal: target must be inside extDir.

@@ -27,14 +27,21 @@ export function userExtensionsDir(): string {
   return path.join(userRoot(), 'extensions')
 }
 
-export function builtInExtensionsDir(): string {
-  // app.getAppPath() points to the asar root (or repo root in dev). Built-in
-  // plugins ship in `extensions/` next to the app code.
+export function builtInExtensionsDir(): string | null {
+  if (app.isPackaged) return null
+  if (process.env.MTERMINAL_LOAD_BUILTINS !== '1') return null
   return path.join(app.getAppPath(), 'extensions')
 }
 
 export function extensionDir(source: ExtensionSource, id: string): string {
-  return path.join(source === 'built-in' ? builtInExtensionsDir() : userExtensionsDir(), id)
+  if (source === 'built-in') {
+    const dir = builtInExtensionsDir()
+    if (!dir) {
+      throw new Error('built-in extensions are not available in this build')
+    }
+    return path.join(dir, id)
+  }
+  return path.join(userExtensionsDir(), id)
 }
 
 /**

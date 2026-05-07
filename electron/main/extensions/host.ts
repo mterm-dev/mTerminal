@@ -66,10 +66,10 @@ export class ExtensionHostMain {
     await ensureUserDirs()
     const seenIds = new Set<string>()
 
-    const sources: Array<{ dir: string; source: 'built-in' | 'user' }> = [
-      { dir: builtInExtensionsDir(), source: 'built-in' },
-      { dir: userExtensionsDir(), source: 'user' },
-    ]
+    const builtInDir = builtInExtensionsDir()
+    const sources: Array<{ dir: string; source: 'built-in' | 'user' }> = []
+    if (builtInDir) sources.push({ dir: builtInDir, source: 'built-in' })
+    sources.push({ dir: userExtensionsDir(), source: 'user' })
 
     for (const { dir, source } of sources) {
       const entries = await listExtensionDirs(dir)

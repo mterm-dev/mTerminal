@@ -9,13 +9,8 @@ files:
   - out/**/*
   - build/icon.png
   - package.json
-  - extensions/**/*
   - "!**/.vscode/*"
   - "!**/{.eslintrc,.prettierrc,tsconfig*.json}"
-  - "!extensions/*/node_modules/**/*"
-  - "!extensions/*/src/**/*.{ts,tsx}"
-  - "!extensions/*/tsup.config.*"
-  - "!extensions/*/dist/**/*.map"
 
 asar: true
 asarUnpack:

@@ -31,7 +31,8 @@ export function startWatcher({ enabled }: WatcherDeps): void {
   if (!enabled) return
   if (watcherInstance) return
 
-  const watchPaths = [userExtensionsDir(), builtInExtensionsDir()]
+  const builtIn = builtInExtensionsDir()
+  const watchPaths = builtIn ? [userExtensionsDir(), builtIn] : [userExtensionsDir()]
   watcherInstance = watch(watchPaths, {
     ignored: [
       /(^|[\\/])\../, // dotfiles
@@ -87,7 +88,8 @@ async function doReload(id: string): Promise<void> {
 function extractExtensionId(fullPath: string): string | null {
   // The watcher's roots are the two extension dirs. The first path component
   // immediately under either root is the extension id.
-  const candidates = [userExtensionsDir(), builtInExtensionsDir()]
+  const builtIn = builtInExtensionsDir()
+  const candidates = builtIn ? [userExtensionsDir(), builtIn] : [userExtensionsDir()]
   for (const root of candidates) {
     const rel = path.relative(root, fullPath)
     if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue
