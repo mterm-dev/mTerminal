@@ -49,13 +49,17 @@
     "node-pty": "^1.0.0",
     "pidtree": "^0.6.0",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "ssh2": "^1.17.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
       "node-pty",
       "esbuild"
+    ],
+    "ignoredOptionalDependencies": [
+      "cpu-features"
     ]
   },
   "devDependencies": {
