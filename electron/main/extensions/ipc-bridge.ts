@@ -10,6 +10,12 @@ import {
   secretsOnChange,
   secretsSet,
 } from './secrets-store'
+import {
+  clearExtSecret,
+  getExtSecret,
+  listExtSecretKeys,
+  setExtSecret,
+} from '../vault'
 
 const REGISTERED_FLAG = Symbol.for('mTerminal.extensionBridge.registered')
 
@@ -134,6 +140,40 @@ export function registerExtensionsBridge(deps: BridgeDeps): void {
   // Forward in-process changes (e.g. one renderer setting a key) to all
   // renderer windows so other windows / settings forms can refresh.
   void secretsOnChange
+
+  ipcMain.handle('ext:vault:get', async (_e, payload: { extId: string; key: string }) => {
+    requireSecretArgs(payload)
+    return getExtSecret(payload.extId, payload.key)
+  })
+
+  ipcMain.handle('ext:vault:set', async (_e, payload: { extId: string; key: string; value: string }) => {
+    requireSecretArgs(payload)
+    if (typeof payload.value !== 'string') {
+      throw new Error('ext:vault:set requires a string value')
+    }
+    setExtSecret(payload.extId, payload.key, payload.value)
+    broadcastVault(payload.extId, payload.key, true)
+    return true
+  })
+
+  ipcMain.handle('ext:vault:delete', async (_e, payload: { extId: string; key: string }) => {
+    requireSecretArgs(payload)
+    clearExtSecret(payload.extId, payload.key)
+    broadcastVault(payload.extId, payload.key, false)
+    return true
+  })
+
+  ipcMain.handle('ext:vault:has', async (_e, payload: { extId: string; key: string }) => {
+    requireSecretArgs(payload)
+    return getExtSecret(payload.extId, payload.key) !== null
+  })
+
+  ipcMain.handle('ext:vault:keys', async (_e, payload: { extId: string }) => {
+    if (!payload || typeof payload.extId !== 'string') {
+      throw new Error('ext:vault:keys requires { extId }')
+    }
+    return listExtSecretKeys(payload.extId)
+  })
 }
 
 function requireSecretArgs(payload: { extId?: unknown; key?: unknown }): asserts payload is {
@@ -151,6 +191,14 @@ function requireSecretArgs(payload: { extId?: unknown; key?: unknown }): asserts
 
 function broadcast(extId: string, key: string, present: boolean): void {
   const env = { event: `ext:secrets:changed:${extId}`, payload: { key, present }, origin: 'm' }
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.isDestroyed()) continue
+    w.webContents.send('ext:bus', env)
+  }
+}
+
+function broadcastVault(extId: string, key: string, present: boolean): void {
+  const env = { event: `ext:vault:changed:${extId}`, payload: { key, present }, origin: 'm' }
   for (const w of BrowserWindow.getAllWindows()) {
     if (w.isDestroyed()) continue
     w.webContents.send('ext:bus', env)

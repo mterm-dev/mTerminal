@@ -1,24 +1,44 @@
 import { useState } from "react";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { VaultDecryptingAnimation } from "./VaultDecryptingAnimation";
 
 export type MasterPasswordMode = "init" | "unlock" | "change";
+export type MasterPasswordPhase = "input" | "decrypting" | "success";
 
 interface Props {
   mode: MasterPasswordMode;
+  phase?: MasterPasswordPhase;
   onClose: () => void;
   onInit: (password: string) => Promise<void>;
   onUnlock: (password: string) => Promise<void>;
   onChange?: (oldPassword: string, newPassword: string) => Promise<void>;
+  onPhaseChange?: (phase: MasterPasswordPhase) => void;
 }
 
-export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange }: Props) {
+export function MasterPasswordModal({
+  mode,
+  phase: phaseProp,
+  onClose,
+  onInit,
+  onUnlock,
+  onChange,
+  onPhaseChange,
+}: Props) {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [oldPw, setOldPw] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [localPhase, setLocalPhase] = useState<MasterPasswordPhase>("input");
+
+  const phase = phaseProp ?? localPhase;
+  const busy = phase !== "input";
 
   useEscapeKey(onClose, { enabled: !busy, preventDefault: true });
+
+  const setPhase = (next: MasterPasswordPhase) => {
+    if (phaseProp === undefined) setLocalPhase(next);
+    onPhaseChange?.(next);
+  };
 
   const submit = async (e?: { preventDefault?: () => void }) => {
     e?.preventDefault?.();
@@ -52,7 +72,7 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
         return;
       }
     }
-    setBusy(true);
+    setPhase("decrypting");
     try {
       if (mode === "init") {
         await onInit(pw);
@@ -62,11 +82,13 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
         if (!onChange) throw new Error("change handler missing");
         await onChange(oldPw, pw);
       }
-      onClose();
+      setPhase("success");
+      if (phaseProp === undefined) {
+        setTimeout(onClose, 220);
+      }
     } catch (err) {
+      setPhase("input");
       setError(String(err));
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -111,6 +133,7 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
                   className="settings-input"
                   value={oldPw}
                   onChange={(e) => setOldPw(e.target.value)}
+                  disabled={busy}
                   autoFocus
                 />
               </div>
@@ -127,6 +150,7 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
                 className="settings-input"
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
+                disabled={busy}
                 autoFocus={mode !== "change"}
               />
             </div>
@@ -141,6 +165,7 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
                   className="settings-input"
                   value={pw2}
                   onChange={(e) => setPw2(e.target.value)}
+                  disabled={busy}
                 />
               </div>
             </div>
@@ -162,9 +187,26 @@ export function MasterPasswordModal({ mode, onClose, onInit, onUnlock, onChange 
               className="confirm-btn confirm-btn-primary"
               disabled={busy}
             >
-              {busy ? "..." : mode === "unlock" ? "unlock" : "save"}
+              {phase === "decrypting"
+                ? "..."
+                : mode === "unlock"
+                  ? "unlock"
+                  : "save"}
             </button>
           </div>
+
+          {phase === "decrypting" && (
+            <VaultDecryptingAnimation
+              label={
+                mode === "init"
+                  ? "encrypting vault…"
+                  : mode === "change"
+                    ? "re-encrypting vault…"
+                    : "decrypting vault…"
+              }
+            />
+          )}
+          {phase === "success" && <VaultDecryptingAnimation variant="success" />}
         </form>
       </div>
     </div>

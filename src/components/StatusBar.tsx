@@ -10,6 +10,13 @@ export interface VoiceStatusProps {
   tooltip?: string;
 }
 
+export interface VaultLockProps {
+  visible: boolean;
+  exists: boolean;
+  unlocked: boolean;
+  onClick: () => void;
+}
+
 interface Props {
   activeLabel: string;
   cwd?: string;
@@ -18,6 +25,7 @@ interface Props {
   groupCount: number;
   aiUsage?: { inTokens: number; outTokens: number; costUsd: number };
   voice?: VoiceStatusProps;
+  vaultLock?: VaultLockProps;
 }
 
 export function StatusBar({
@@ -28,6 +36,7 @@ export function StatusBar({
   groupCount,
   aiUsage,
   voice,
+  vaultLock,
 }: Props) {
   return (
     <div className="term-status">
@@ -57,6 +66,18 @@ export function StatusBar({
         >
           ai <strong>${aiUsage.costUsd.toFixed(3)}</strong>
         </div>
+      )}
+      {vaultLock?.visible && (
+        <button
+          type="button"
+          className="vault-lock-btn"
+          data-locked={vaultLock.unlocked ? "false" : "true"}
+          onClick={vaultLock.onClick}
+          title={vaultLockTooltip(vaultLock)}
+          aria-label={vaultLockTooltip(vaultLock)}
+        >
+          {vaultLock.unlocked ? <UnlockIcon /> : <LockIcon />}
+        </button>
       )}
       {voice?.visible && (
         <button
@@ -150,6 +171,57 @@ function SpinnerIcon() {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+function vaultLockTooltip(v: VaultLockProps): string {
+  if (!v.exists) return "set master password to enable vault";
+  return v.unlocked ? "vault unlocked — click to lock" : "vault locked — click to unlock";
+}
+
+function LockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <rect
+        x="3.5"
+        y="7"
+        width="9"
+        height="7"
+        rx="1.2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        fill="none"
+      />
+      <path
+        d="M5 7V5a3 3 0 0 1 6 0v2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+function UnlockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <rect
+        x="3.5"
+        y="7"
+        width="9"
+        height="7"
+        rx="1.2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        fill="none"
+      />
+      <path
+        d="M5 7V5a3 3 0 0 1 5.6-1.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
         fill="none"
       />
     </svg>

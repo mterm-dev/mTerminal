@@ -130,12 +130,31 @@ export interface ExtensionContext {
   readonly workspaceState: KeyValueStoreT
   readonly globalState: KeyValueStoreT
   readonly secrets: SecretsApi
+  readonly vault: VaultApi
   readonly services: Record<string, ServiceProxy<unknown>>
   readonly providedServices: { publish<T>(id: string, impl: T): Disposable }
   subscribe(d: Disposer): void
 }
 
 export interface SecretsApi {
+  get(key: string): Promise<string | null>
+  set(key: string, value: string): Promise<void>
+  delete(key: string): Promise<void>
+  has(key: string): Promise<boolean>
+  keys(): Promise<string[]>
+  onChange(cb: (key: string, present: boolean) => void): Disposable
+}
+
+/**
+ * Master-password-protected secret storage. Operations may prompt the user to
+ * unlock the vault — calls await the unlock flow and resolve only after the
+ * vault is open (or reject if the user cancels).
+ *
+ * Use for highly sensitive data (long-lived API keys, deployment tokens).
+ * For low-sensitivity caches that need to survive a vault lock, use
+ * `ctx.secrets` (OS keychain) instead.
+ */
+export interface VaultApi {
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<void>
   delete(key: string): Promise<void>

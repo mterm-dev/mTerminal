@@ -15,6 +15,7 @@ import {
 import { readManifest, type ExtensionManifest, ManifestValidationError } from './manifest'
 import { satisfies } from './semver-mini'
 import { HOST_API_VERSION } from './api-version'
+import { isUnlocked, purgeExtSecrets } from '../vault'
 
 /**
  * The main-process extension host.
@@ -278,6 +279,13 @@ export class ExtensionHostMain {
     }
     await this.deactivate(id)
     await fs.rm(rec.manifest.extensionPath, { recursive: true, force: true })
+    if (isUnlocked()) {
+      try {
+        purgeExtSecrets(id)
+      } catch (err) {
+        console.warn(`[extensions] purgeExtSecrets failed for ${id}:`, err)
+      }
+    }
     this.registry.remove(id)
   }
 

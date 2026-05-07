@@ -1104,12 +1104,14 @@ body.resizing-git-panel * {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 4px 2px 0;
+  padding: 3px 10px 3px 4px;
+  margin: 1px 4px;
   border-radius: var(--r-sm);
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
+  font-family: var(--font-sans);
+  font-size: var(--t-sm);
   color: var(--fg-muted);
   min-height: 22px;
+  transition: color 0.1s, background 0.1s;
 }
 .git-tree-row:hover {
   background: var(--bg-hover);
@@ -1119,6 +1121,15 @@ body.resizing-git-panel * {
   cursor: pointer;
   color: var(--fg);
 }
+.git-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.git-file-icon svg { display: block; }
 .git-tree-dir-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1162,6 +1173,8 @@ body.resizing-git-panel * {
   white-space: nowrap;
   cursor: pointer;
   flex: 1;
+  font-family: var(--font-sans);
+  font-size: var(--t-sm);
 }
 .git-file-path:hover {
   text-decoration: underline;

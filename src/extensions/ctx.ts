@@ -31,9 +31,11 @@ import type {
   EventBus,
   ExtIpc,
   SecretsApi,
+  VaultApi,
   ServiceProxy,
   KeyValueStoreT,
 } from './ctx-types'
+import { getVaultGateBridge } from './vault-gate-bridge'
 
 import { getCommandRegistry } from './registries/commands'
 import { getKeybindingRegistry } from './registries/keybindings'
@@ -338,6 +340,44 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
     },
   }
 
+  // ─ vault (master-password protected) ──────────────────────────────────
+  const mtVault = window.mt.ext.vault
+  const ensureVault = async (): Promise<void> => {
+    const gate = getVaultGateBridge()
+    if (!gate) throw new Error('vault not available — gate not mounted')
+    if (gate.isUnlocked()) return
+    const ok = await gate.ensure()
+    if (!ok) throw new Error('vault locked')
+  }
+  const vault: VaultApi = {
+    async get(key) {
+      await ensureVault()
+      return mtVault.get(id, key)
+    },
+    async set(key, value) {
+      await ensureVault()
+      await mtVault.set(id, key, value)
+    },
+    async delete(key) {
+      await ensureVault()
+      await mtVault.delete(id, key)
+    },
+    async has(key) {
+      await ensureVault()
+      return mtVault.has(id, key)
+    },
+    async keys() {
+      await ensureVault()
+      return mtVault.keys(id)
+    },
+    onChange(cb) {
+      const off = mtVault.onChange(id, cb)
+      const d: Disposable = { dispose: off }
+      subscribe(d)
+      return d
+    },
+  }
+
   // ─ assemble ────────────────────────────────────────────────────────────
   const services = consumed.proxies as Record<string, ServiceProxy<unknown>>
   void NS // keep helper
@@ -370,6 +410,7 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
     workspaceState,
     globalState,
     secrets,
+    vault,
     services,
     providedServices,
     subscribe,

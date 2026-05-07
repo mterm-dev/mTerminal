@@ -20,10 +20,16 @@ export function __reset(): void {
   handlers.clear()
 }
 
-export type BrowserWindow = unknown
+export const BrowserWindow = {
+  getAllWindows(): unknown[] {
+    return []
+  },
+}
+export type BrowserWindow = typeof BrowserWindow
+
 export const app = {
   getPath: () => '/tmp',
   on: () => {},
 }
 
-export default { ipcMain, app }
+export default { ipcMain, app, BrowserWindow }

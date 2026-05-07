@@ -269,6 +269,15 @@ export interface ExtensionContext {
   readonly workspaceState: KeyValueStore
   readonly globalState: KeyValueStore
   readonly secrets: SecretsApi
+  /**
+   * Master-password protected secret storage. Reads/writes prompt the user
+   * to unlock the vault when locked; resolves only after unlock or rejects
+   * if the user cancels. For low-sensitivity caches that should survive a
+   * vault lock, use `secrets` (OS keychain) instead.
+   *
+   * @since mterminal-api 1.1.0
+   */
+  readonly vault: VaultApi
 
   /** Service consumption: keys are service ids declared in `consumedServices`. */
   readonly services: ServiceMap
@@ -743,6 +752,27 @@ export interface KeyValueStore {
  * Extensions are free to use this OR roll their own credential flow.
  */
 export interface SecretsApi {
+  get(key: string): Promise<string | null>
+  set(key: string, value: string): Promise<void>
+  delete(key: string): Promise<void>
+  has(key: string): Promise<boolean>
+  keys(): Promise<string[]>
+  onChange(cb: (key: string, present: boolean) => void): Disposable
+}
+
+/**
+ * Master-password protected per-extension secret storage. Backed by the host
+ * vault (Argon2id + XChaCha20-Poly1305). All read/write operations gate on
+ * `vault unlocked` — when locked, the host shows the master-password modal
+ * and the call resolves only after the user enters the password. If the user
+ * cancels the prompt, the call rejects with `vault locked`.
+ *
+ * Use for highly sensitive secrets (API keys, tokens). For low-sensitivity
+ * caches that should survive a vault lock, use `SecretsApi` (OS keychain).
+ *
+ * @since mterminal-api 1.1.0
+ */
+export interface VaultApi {
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<void>
   delete(key: string): Promise<void>

@@ -345,11 +345,94 @@ describe("MasterPasswordModal - close behavior", () => {
     );
     const overlay = container.querySelector(".settings-overlay") as HTMLElement;
     const dialog = container.querySelector(".settings-dialog") as HTMLElement;
-    
+
     fireEvent.mouseDown(dialog);
     expect(onClose).not.toHaveBeenCalled();
-    
+
     fireEvent.mouseDown(overlay);
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe("MasterPasswordModal - decrypting phase", () => {
+  it("disables inputs while unlock is in flight and shows decrypting overlay", async () => {
+    let resolveUnlock: (() => void) | null = null;
+    const onUnlock = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnlock = () => resolve();
+        }),
+    );
+    const { container } = render(
+      <MasterPasswordModal
+        mode="unlock"
+        onClose={vi.fn()}
+        onInit={vi.fn(async () => {})}
+        onUnlock={onUnlock}
+      />,
+    );
+    fireEvent.change(getInputByLabel("master password"), {
+      target: { value: "secret123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "unlock" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".vault-phase-overlay")).toBeTruthy();
+    });
+    expect(getInputByLabel("master password").disabled).toBe(true);
+    expect(screen.getByText(/decrypting vault/i)).toBeTruthy();
+
+    resolveUnlock!();
+    await waitFor(() => {
+      expect(screen.getByText(/^unlocked$/i)).toBeTruthy();
+    });
+  });
+
+  it("returns to input phase on unlock failure and re-enables fields", async () => {
+    const onUnlock = vi.fn(async () => {
+      throw new Error("decrypt failed");
+    });
+    const { container } = render(
+      <MasterPasswordModal
+        mode="unlock"
+        onClose={vi.fn()}
+        onInit={vi.fn(async () => {})}
+        onUnlock={onUnlock}
+      />,
+    );
+    fireEvent.change(getInputByLabel("master password"), {
+      target: { value: "wrong" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "unlock" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/decrypt failed/i)).toBeTruthy();
+    });
+    expect(container.querySelector(".vault-phase-overlay")).toBeNull();
+    expect(getInputByLabel("master password").disabled).toBe(false);
+  });
+
+  it("respects an external phase prop (controlled mode)", () => {
+    const { container, rerender } = render(
+      <MasterPasswordModal
+        mode="unlock"
+        phase="input"
+        onClose={vi.fn()}
+        onInit={vi.fn(async () => {})}
+        onUnlock={vi.fn(async () => {})}
+      />,
+    );
+    expect(container.querySelector(".vault-phase-overlay")).toBeNull();
+    rerender(
+      <MasterPasswordModal
+        mode="unlock"
+        phase="decrypting"
+        onClose={vi.fn()}
+        onInit={vi.fn(async () => {})}
+        onUnlock={vi.fn(async () => {})}
+      />,
+    );
+    expect(container.querySelector(".vault-phase-overlay")).toBeTruthy();
+    expect(getInputByLabel("master password").disabled).toBe(true);
   });
 });

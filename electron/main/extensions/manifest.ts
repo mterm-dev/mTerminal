@@ -122,6 +122,14 @@ export interface SecretContribution {
   placeholder?: string
 }
 
+export interface VaultKeyContribution {
+  key: string
+  label: string
+  description?: string
+  link?: string
+  placeholder?: string
+}
+
 export interface JsonSchema {
   type?: 'object' | 'string' | 'number' | 'boolean' | 'array'
   title?: string
@@ -172,6 +180,7 @@ export interface ExtensionManifest {
     themes: ThemeContribution[]
     providers: ProviderContribution[]
     secrets: SecretContribution[]
+    vaultKeys: VaultKeyContribution[]
     aiBindings: AiBindingContribution[]
   }
 
@@ -421,6 +430,9 @@ function readContributes(v: unknown, issues: string[]): ExtensionManifest['contr
       typeof x.label === 'string',
     ),
     secrets: readArrayOf(c.secrets, (x): x is SecretContribution =>
+      isObject(x) && typeof x.key === 'string' && typeof x.label === 'string',
+    ),
+    vaultKeys: readArrayOf(c.vaultKeys, (x): x is VaultKeyContribution =>
       isObject(x) && typeof x.key === 'string' && typeof x.label === 'string',
     ),
     aiBindings: readArrayOf(c.aiBindings, (x): x is AiBindingContribution =>
