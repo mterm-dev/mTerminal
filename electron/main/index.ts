@@ -21,10 +21,18 @@ import { registerWorkspaceHandlers } from './workspace'
 import { registerSettingsHandlers } from './settings-store'
 import { registerGitHandlers } from './git'
 import { registerVoiceHandlers } from './voice'
+import {
+  getExtensionHost,
+  registerExtensionsHost,
+  registerMtExtProtocolPrivileges,
+} from './extensions'
 
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('disable-features', 'WaylandWpColorManagerV1')
 }
+
+// Custom URL scheme privileges MUST be registered before app.whenReady().
+registerMtExtProtocolPrivileges()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -75,7 +83,7 @@ const createWindow = (): BrowserWindow => {
 
 app
   .whenReady()
-  .then(() => {
+  .then(async () => {
     registerWindowIpc()
     registerClipboardIpc()
     registerDialogIpc()
@@ -94,8 +102,14 @@ app
     registerVoiceHandlers()
     app.on('before-quit', () => {
       void stopMcpServer()
+      void getExtensionHost().shutdown()
     })
     registerSystemHandlers()
+
+    // Spin up the extension system. Manifest scan + activation happen here
+    // so plugin contributions are visible by the time the renderer asks for
+    // them via `ext:list-manifests`.
+    await registerExtensionsHost()
 
     const win = createWindow()
     setPtyWindow(win)

@@ -1,0 +1,33 @@
+{
+  "cssVars": {
+    "--bg": "#0a0a0a",
+    "--surface": "#1a1a1a",
+    "--text": "#e5e5e5",
+    "--text-soft": "#a3a3a3",
+    "--border": "#262626",
+    "--accent": "#60a5fa"
+  },
+  "xterm": {
+    "background": "#0a0a0a",
+    "foreground": "#e5e5e5",
+    "cursor": "#60a5fa",
+    "cursorAccent": "#0a0a0a",
+    "selection": "rgba(96, 165, 250, 0.3)",
+    "black": "#171717",
+    "red": "#f87171",
+    "green": "#4ade80",
+    "yellow": "#facc15",
+    "blue": "#60a5fa",
+    "magenta": "#c084fc",
+    "cyan": "#22d3ee",
+    "white": "#d4d4d4",
+    "brightBlack": "#525252",
+    "brightRed": "#fca5a5",
+    "brightGreen": "#86efac",
+    "brightYellow": "#fde047",
+    "brightBlue": "#93c5fd",
+    "brightMagenta": "#d8b4fe",
+    "brightCyan": "#67e8f9",
+    "brightWhite": "#fafafa"
+  }
+}

@@ -1,0 +1,27 @@
+import { defineExtension, type ExtensionContext } from '@mterminal/extension-api'
+
+export default defineExtension({
+  activate(ctx: ExtensionContext) {
+    let lastMatch: { text: string } | null = null
+
+    ctx.events.on('app:terminal:output', (payload) => {
+      const text = (payload as { chunk?: string }).chunk ?? ''
+      const m = /\b(error|warning):\s*(.+)/i.exec(text)
+      if (m) {
+        lastMatch = { text: m[2] }
+      }
+    })
+
+    ctx.commands.register({
+      id: '__ID__.showLast',
+      title: '__DISPLAY_NAME__: Show last match',
+      run: () => {
+        if (!lastMatch) {
+          ctx.ui.toast({ kind: 'info', message: 'no match yet' })
+          return
+        }
+        ctx.ui.toast({ kind: 'success', message: lastMatch.text })
+      },
+    })
+  },
+})

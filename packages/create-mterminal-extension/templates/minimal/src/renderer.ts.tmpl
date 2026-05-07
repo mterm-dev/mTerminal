@@ -1,0 +1,18 @@
+import { defineExtension, type ExtensionContext } from '@mterminal/extension-api'
+
+export default defineExtension({
+  activate(ctx: ExtensionContext) {
+    ctx.logger.info('__ID__ activated')
+
+    ctx.commands.register({
+      id: '__ID__.greet',
+      title: '__DISPLAY_NAME__: Greet',
+      run: () => {
+        ctx.ui.toast({
+          kind: 'success',
+          message: `Hello from ${ctx.id}!`,
+        })
+      },
+    })
+  },
+})

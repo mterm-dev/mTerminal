@@ -1,0 +1,32 @@
+import { defineExtension, type ExtensionContext } from '@mterminal/extension-api'
+
+export default defineExtension({
+  activate(ctx: ExtensionContext) {
+    ctx.tabs.registerTabType({
+      id: '__ID__',
+      title: '__DISPLAY_NAME__',
+      factory: ({ tabId }) => {
+        let host: HTMLElement | null = null
+        return {
+          mount(h) {
+            host = h
+            const wrap = document.createElement('div')
+            wrap.style.padding = '12px'
+            wrap.style.fontFamily = 'var(--font-family, monospace)'
+            wrap.textContent = `__DISPLAY_NAME__ tab #${tabId}`
+            h.appendChild(wrap)
+          },
+          unmount() {
+            while (host?.firstChild) host.removeChild(host.firstChild)
+          },
+        }
+      },
+    })
+
+    ctx.commands.register({
+      id: '__ID__.open',
+      title: '__DISPLAY_NAME__: Open',
+      run: () => ctx.tabs.open({ type: '__ID__', title: '__DISPLAY_NAME__' }),
+    })
+  },
+})

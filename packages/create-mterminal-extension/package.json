@@ -1,0 +1,21 @@
+{
+  "name": "create-mterminal-extension",
+  "version": "1.0.0-alpha.0",
+  "description": "Scaffold a new mTerminal extension",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "create-mterminal-extension": "./bin.mjs"
+  },
+  "files": [
+    "bin.mjs",
+    "templates",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

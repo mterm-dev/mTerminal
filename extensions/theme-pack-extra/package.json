@@ -1,0 +1,29 @@
+{
+  "name": "mterminal-plugin-theme-pack-extra",
+  "version": "1.0.0",
+  "description": "A small bundle of extra themes shipped with mTerminal",
+  "license": "MIT",
+  "engines": {
+    "mterminal-api": "^1.0.0"
+  },
+  "mterminal": {
+    "id": "theme-pack-extra",
+    "displayName": "Theme Pack: Extra",
+    "activationEvents": [],
+    "capabilities": ["ui:theme"],
+    "contributes": {
+      "themes": [
+        {
+          "id": "oxocarbon",
+          "label": "Oxocarbon",
+          "path": "themes/oxocarbon.json"
+        },
+        {
+          "id": "rosepine-pine",
+          "label": "Rose Pine — Pine",
+          "path": "themes/rosepine-pine.json"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "@mterminal/extension-api",
+  "version": "1.0.0-alpha.0",
+  "description": "TypeScript declarations for the mTerminal extension API",
+  "license": "MIT",
+  "homepage": "https://github.com/arthurr0/mTerminal",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arthurr0/mTerminal.git",
+    "directory": "packages/extension-api"
+  },
+  "main": "src/index.d.ts",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts"
+    },
+    "./proposed": {
+      "types": "./src/proposed.d.ts"
+    },
+    "./events": {
+      "types": "./src/events.d.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "mterminal",
+    "extension",
+    "plugin",
+    "api",
+    "types"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

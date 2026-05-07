@@ -57,6 +57,11 @@ export interface Settings {
   voiceWhisperCppModelPath: string;
   voiceOpenaiModel: string;
   voiceOpenaiBaseUrl: string;
+  /**
+   * Extension namespace. Each plugin's settings live under
+   * `extensions[<extensionId>]`. Plugins read/write via `ctx.settings.*`.
+   */
+  extensions?: Record<string, Record<string, unknown>>;
 }
 
 export const DEFAULT_COMMIT_PROMPT = `You are an expert engineer writing a git commit message.

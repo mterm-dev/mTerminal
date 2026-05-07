@@ -1,4 +1,5 @@
 import { Clock } from "./Clock";
+import { PluginStatusItems } from "../extensions/components/PluginStatusItems";
 
 export type VoiceStatusState = "idle" | "recording" | "transcribing" | "error";
 
@@ -40,7 +41,11 @@ export function StatusBar({
       )}
       {cmd && <div className="seg" title={cmd}>{cmd}</div>}
       <div className="seg">UTF-8</div>
+      {/* Extension-contributed status items aligned to the left. */}
+      <PluginStatusItems align="left" />
       <div className="grow" />
+      {/* Extension-contributed status items aligned to the right. */}
+      <PluginStatusItems align="right" />
       <div className="seg">
         {tabCount} tab{tabCount === 1 ? "" : "s"} · {groupCount} group
         {groupCount === 1 ? "" : "s"}

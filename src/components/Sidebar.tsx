@@ -9,6 +9,7 @@ import {
 import type { Group, Tab } from "../hooks/useWorkspace";
 import type { CcStatus } from "../hooks/useClaudeCodeStatus";
 import { InlineEdit } from "./InlineEdit";
+import { PluginPanelSlot } from "../extensions/components/PluginPanelSlot";
 
 interface Props {
   tabs: Tab[];
@@ -37,7 +38,6 @@ interface Props {
   activeGroupId: string | null;
   onSelectGroup: (id: string) => void;
   remoteSlot?: ReactNode;
-  gitSlot?: ReactNode;
   width: number;
   onResize: (w: number) => void;
   ccStatuses?: Map<number, CcStatus>;
@@ -110,7 +110,6 @@ export function Sidebar(props: Props) {
     activeGroupId,
     onSelectGroup,
     remoteSlot,
-    gitSlot,
     width,
     onResize,
     ccStatuses,
@@ -640,7 +639,9 @@ export function Sidebar(props: Props) {
         title="drag to resize · double-click to reset"
       />
 
-      {gitSlot}
+      {/* Extension-contributed sidebar panels (e.g. the Git Panel extension). */}
+      <PluginPanelSlot location="sidebar" />
+      <PluginPanelSlot location="sidebar.bottom" />
 
       <div className="term-side-foot">
         <button className="settings-btn" onClick={onOpenSettings}>

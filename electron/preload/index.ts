@@ -367,6 +367,96 @@ const api = {
     }): Promise<{ text: string }> =>
       ipcRenderer.invoke('voice:transcribe', args),
   },
+  /**
+   * Extension system bridge. Used by `src/extensions/host-renderer.ts` and the
+   * Plugin Manager UI; not intended to be called by extensions directly
+   * (extensions use `ctx.ipc` and `ctx.events`, which delegate here).
+   */
+  ext: {
+    /** Snapshot of the registry: manifests + state for every installed extension. */
+    listManifests: (): Promise<
+      Array<{
+        manifest: unknown
+        state: string
+        enabled: boolean
+        trusted: boolean
+        lastError: { message: string; stack?: string } | null
+        activatedAt: number | null
+      }>
+    > => ipcRenderer.invoke('ext:list-manifests'),
+
+    /** Call an extension's main-side IPC handler. */
+    invoke: (extId: string, channel: string, args?: unknown): Promise<unknown> =>
+      ipcRenderer.invoke('ext:invoke', { extId, channel, args }),
+
+    /** Subscribe to events from `ctx.ipc.emit(...)` on the main side. */
+    on: (
+      extId: string,
+      channel: string,
+      cb: (payload: unknown) => void,
+    ): (() => void) => {
+      const event = `ext:${extId}:${channel}`
+      const listener = (_: unknown, payload: unknown): void => cb(payload)
+      // Renderer subscribes via the bus (event-bus channel `ext:bus`).
+      const busListener = (_: unknown, env: unknown): void => {
+        const e = env as { event: string; payload: unknown }
+        if (e?.event === event) listener(_, e.payload)
+      }
+      ipcRenderer.on('ext:bus', busListener)
+      return () => ipcRenderer.off('ext:bus', busListener)
+    },
+
+    /** Subscribe to ALL bus events. Used by the renderer-side host. */
+    onBus: (cb: (env: { event: string; payload: unknown; origin: string }) => void): (() => void) => {
+      const listener = (_: unknown, env: unknown): void =>
+        cb(env as { event: string; payload: unknown; origin: string })
+      ipcRenderer.on('ext:bus', listener)
+      return () => ipcRenderer.off('ext:bus', listener)
+    },
+
+    /** Emit an event onto the cross-process bus. */
+    emit: (event: string, payload?: unknown): Promise<void> =>
+      ipcRenderer.invoke('ext:bus:emit', { event, payload, origin: 'r' }),
+
+    enable: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('ext:enable', id),
+    disable: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('ext:disable', id),
+    setTrusted: (id: string, trusted: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('ext:trust:set', { id, trusted }),
+    reload: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('ext:reload', id),
+    reloadAll: (): Promise<boolean> => ipcRenderer.invoke('ext:reload-all'),
+    install: (source: 'npm' | 'url' | 'folder', ref: string): Promise<unknown> =>
+      ipcRenderer.invoke('ext:install', { source, ref }),
+    uninstall: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('ext:uninstall', id),
+
+    secrets: {
+      get: (extId: string, key: string): Promise<string | null> =>
+        ipcRenderer.invoke('ext:secrets:get', { extId, key }),
+      set: (extId: string, key: string, value: string): Promise<boolean> =>
+        ipcRenderer.invoke('ext:secrets:set', { extId, key, value }),
+      delete: (extId: string, key: string): Promise<boolean> =>
+        ipcRenderer.invoke('ext:secrets:delete', { extId, key }),
+      has: (extId: string, key: string): Promise<boolean> =>
+        ipcRenderer.invoke('ext:secrets:has', { extId, key }),
+      keys: (extId: string): Promise<string[]> =>
+        ipcRenderer.invoke('ext:secrets:keys', { extId }),
+      onChange: (
+        extId: string,
+        cb: (key: string, present: boolean) => void,
+      ): (() => void) => {
+        const target = `ext:secrets:changed:${extId}`
+        const listener = (_: unknown, env: unknown): void => {
+          const e = env as { event: string; payload: { key: string; present: boolean } }
+          if (e?.event === target) cb(e.payload.key, e.payload.present)
+        }
+        ipcRenderer.on('ext:bus', listener)
+        return () => ipcRenderer.off('ext:bus', listener)
+      },
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld('mt', api)

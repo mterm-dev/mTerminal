@@ -1,0 +1,32 @@
+import { defineExtension, type ExtensionContext } from '@mterminal/extension-api'
+
+export default defineExtension({
+  activate(ctx: ExtensionContext) {
+    ctx.panels.register({
+      id: '__ID__-panel',
+      title: '__DISPLAY_NAME__',
+      location: 'sidebar',
+      render: (host) => {
+        const heading = document.createElement('div')
+        heading.style.padding = '8px 0'
+        heading.style.fontSize = '12px'
+        heading.textContent = `Hello from ${ctx.id}`
+        host.appendChild(heading)
+
+        const counter = document.createElement('div')
+        counter.style.fontSize = '13px'
+        let count = 0
+        const tick = () => {
+          counter.textContent = `tick: ${++count}`
+        }
+        tick()
+        const interval = window.setInterval(tick, 1000)
+        host.appendChild(counter)
+
+        return () => {
+          window.clearInterval(interval)
+        }
+      },
+    })
+  },
+})

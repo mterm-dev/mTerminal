@@ -163,6 +163,30 @@ export function spawnSession(opts: {
   SESSIONS.set(id, session)
 
   const channel = 'pty:event:' + id
+  // Lazy import to avoid a circular dependency between extensions and PTY
+  // bootstrap. Throttle the bus broadcast so high-frequency producers (yes,
+  // tail -f, etc.) don't flood the renderer; chunks accumulate between ticks.
+  let extBus: { emitThrottled: (event: string, payload: unknown, intervalMs: number) => void; emit: (event: string, payload: unknown) => void } | null = null
+  const ensureExtBus = (): typeof extBus => {
+    if (extBus) return extBus
+    try {
+      const mod = require('./extensions/event-bus-main') as {
+        getMainEventBus: () => NonNullable<typeof extBus>
+      }
+      extBus = mod.getMainEventBus()
+    } catch {
+      extBus = null
+    }
+    return extBus
+  }
+  // Announce the new PTY to extensions. tabId is unknown here — the renderer
+  // associates ptyId with tabId via setPtyMap; plugins that care about tabId
+  // should listen on `app:terminal:created` and look up tabId via
+  // `ctx.workspace.tabs()` afterwards.
+  {
+    const bus = ensureExtBus()
+    if (bus) bus.emit('app:terminal:created', { ptyId: id, kind: 'local' })
+  }
   ptyProc.onData((chunk) => {
     const buf = Buffer.from(chunk, 'utf8')
     ring.push(buf)
@@ -171,12 +195,18 @@ export function spawnSession(opts: {
     if (win && !win.isDestroyed()) {
       win.webContents.send(channel, { kind: 'data', value: chunk })
     }
+    const bus = ensureExtBus()
+    if (bus) {
+      bus.emitThrottled('app:terminal:output', { ptyId: id, chunk }, 33)
+    }
   })
   ptyProc.onExit(() => {
     const win = getMainWindow()
     if (win && !win.isDestroyed()) {
       win.webContents.send(channel, { kind: 'exit' })
     }
+    const bus = ensureExtBus()
+    if (bus) bus.emit('app:terminal:exit', { ptyId: id })
     SESSIONS.delete(id)
   })
 

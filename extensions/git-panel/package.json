@@ -1,0 +1,150 @@
+{
+  "name": "mterminal-plugin-git-panel",
+  "version": "1.0.0",
+  "description": "Full-featured Git panel for mTerminal — built-in extension that replaces the in-tree GitPanel",
+  "license": "MIT",
+  "type": "module",
+  "renderer": "dist/renderer.mjs",
+  "engines": {
+    "mterminal-api": "^1.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@mterminal/extension-api": "^1.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@mterminal/extension-api": "workspace:*",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0"
+  },
+  "mterminal": {
+    "id": "git-panel",
+    "displayName": "Git Panel",
+    "icon": "icons/git.svg",
+    "activationEvents": ["onStartupFinished"],
+    "capabilities": [
+      "ui:sidebar",
+      "filesystem:read",
+      "filesystem:write",
+      "child-process",
+      "network:limited"
+    ],
+    "contributes": {
+      "panels": [
+        {
+          "id": "git-panel",
+          "title": "Git",
+          "location": "sidebar.bottom",
+          "initialCollapsed": false
+        }
+      ],
+      "commands": [
+        { "id": "gitPanel.refresh", "title": "Git: Refresh status" },
+        { "id": "gitPanel.commit", "title": "Git: Commit" },
+        { "id": "gitPanel.commitPush", "title": "Git: Commit and push" },
+        { "id": "gitPanel.push", "title": "Git: Push" },
+        { "id": "gitPanel.pull", "title": "Git: Pull" },
+        { "id": "gitPanel.fetch", "title": "Git: Fetch" },
+        { "id": "gitPanel.branches", "title": "Git: Branches" },
+        { "id": "gitPanel.history", "title": "Git: History" },
+        { "id": "gitPanel.generateMessage", "title": "Git: Generate AI commit message" }
+      ],
+      "keybindings": [
+        { "command": "gitPanel.commit", "key": "Ctrl+Enter", "when": "view == git-panel && !commitMessageEmpty" }
+      ],
+      "settings": {
+        "type": "object",
+        "properties": {
+          "treeView": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show changes as a tree (vs flat list)"
+          },
+          "collapsed": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether the panel starts collapsed"
+          },
+          "panelHeight": {
+            "type": "number",
+            "default": 240,
+            "description": "Initial panel height in pixels"
+          },
+          "messageHeight": {
+            "type": "number",
+            "default": 60,
+            "description": "Commit message textarea height"
+          },
+          "pullStrategy": {
+            "type": "string",
+            "enum": ["ff-only", "merge", "rebase"],
+            "default": "ff-only",
+            "description": "Default pull strategy"
+          },
+          "commitProvider": {
+            "type": "string",
+            "enum": ["anthropic", "openai", "ollama"],
+            "default": "anthropic",
+            "description": "AI provider for commit message generation"
+          },
+          "anthropicModel": {
+            "type": "string",
+            "default": "claude-sonnet-4-5",
+            "description": "Anthropic model id"
+          },
+          "openaiModel": {
+            "type": "string",
+            "default": "gpt-4o-mini",
+            "description": "OpenAI model id"
+          },
+          "openaiBaseUrl": {
+            "type": "string",
+            "default": "https://api.openai.com/v1",
+            "description": "OpenAI-compatible base URL (override for Groq, OpenRouter, local proxies, …)"
+          },
+          "ollamaModel": {
+            "type": "string",
+            "default": "llama3.1",
+            "description": "Ollama model name"
+          },
+          "ollamaBaseUrl": {
+            "type": "string",
+            "default": "http://localhost:11434",
+            "description": "Ollama server base URL"
+          },
+          "commitSystemPrompt": {
+            "type": "string",
+            "default": "Write a single conventional-commit message (under 72 chars on the first line) for the diff. Do not include extra commentary.",
+            "description": "System prompt sent to the AI provider"
+          }
+        }
+      },
+      "secrets": [
+        {
+          "key": "anthropic.apiKey",
+          "label": "Anthropic API key",
+          "description": "Used when commit provider is set to Anthropic.",
+          "link": "https://console.anthropic.com/account/keys",
+          "placeholder": "sk-ant-…"
+        },
+        {
+          "key": "openai.apiKey",
+          "label": "OpenAI (or compatible) API key",
+          "description": "Used when commit provider is OpenAI. Compatible with Groq / OpenRouter / local proxies via the base URL setting.",
+          "link": "https://platform.openai.com/api-keys",
+          "placeholder": "sk-…"
+        }
+      ]
+    }
+  }
+}

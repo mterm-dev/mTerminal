@@ -33,7 +33,8 @@ import { useMcpServer } from "./hooks/useMcpServer";
 import { AICommandPalette } from "./components/AICommandPalette";
 import { ExplainPopover } from "./components/ExplainPopover";
 import { AIPanel } from "./components/AIPanel";
-import { GitPanel } from "./components/GitPanel";
+// Git Panel is now provided by the git-panel extension under
+// extensions/git-panel/. Sidebar.tsx mounts plugin panels via PluginPanelSlot.
 import { invoke, open as openDialog } from "./lib/ipc";
 import type { AiUsage } from "./hooks/useAI";
 import {
@@ -54,6 +55,13 @@ import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import { useThemeVars } from "./hooks/useThemeVars";
 import { useGlobalHotkeys } from "./hooks/useGlobalHotkeys";
 import { insertDictation } from "./lib/insertDictation";
+import {
+  bootExtensionsHostRenderer,
+  setSettingsBackend,
+  setWorkspaceBackend,
+} from "./extensions";
+import { PluginUiHost } from "./extensions/components/PluginUiHost";
+import { PluginManager } from "./extensions/components/PluginManager";
 
 interface CtxState {
   x: number;
@@ -221,6 +229,72 @@ export default function App() {
     (window as unknown as { __MT_HOME?: string }).__MT_HOME = `/home/${sys.user}`;
   }, [sys.user]);
 
+  // ── Extension system: settings/workspace backends + boot ────────────────
+  // Wire the renderer host's settings/workspace backends to the live React
+  // state. Boot is fire-and-forget — plugins activate asynchronously.
+  useEffect(() => {
+    setSettingsBackend({
+      readAll: (extId) => settingsRef.current.extensions?.[extId] ?? {},
+      read: (extId, key) => settingsRef.current.extensions?.[extId]?.[key],
+      write: async (extId, key, value) => {
+        const cur = settingsRef.current.extensions ?? {};
+        const next: Record<string, Record<string, unknown>> = { ...cur };
+        next[extId] = { ...(next[extId] ?? {}), [key]: value };
+        updateRef.current("extensions", next);
+      },
+      onChange: () => ({ dispose: () => {} }),
+      readCore: <T = unknown,>(key: string): T | undefined =>
+        (settingsRef.current as unknown as Record<string, T>)[key],
+      onCoreChange: () => ({ dispose: () => {} }),
+    });
+    setWorkspaceBackend({
+      groups: () => wsRef.current.groups.map((g) => ({ id: g.id, label: g.name })),
+      activeGroup: () => null,
+      setActiveGroup: () => {},
+      tabs: () =>
+        wsRef.current.tabs.map((t) => ({
+          id: t.id,
+          type: "terminal",
+          title: t.label,
+          groupId: t.groupId,
+          active: t.id === wsRef.current.activeId,
+        })),
+      cwd: () => {
+        const ws = wsRef.current;
+        const active = ws.tabs.find((t) => t.id === ws.activeId);
+        return active?.cwd ?? null;
+      },
+      openTab: async () => -1,
+      closeTab: () => {},
+      active: () => null,
+      list: () =>
+        wsRef.current.tabs.map((t) => ({
+          id: t.id,
+          type: "terminal",
+          title: t.label,
+          groupId: t.groupId,
+          active: t.id === wsRef.current.activeId,
+        })),
+      onTabsChange: () => ({ dispose: () => {} }),
+    });
+    void bootExtensionsHostRenderer().catch((err) => {
+      console.error("[extensions] boot failed:", err);
+    });
+  }, []);
+
+  const [showPluginManager, setShowPluginManager] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "x") {
+        e.preventDefault();
+        setShowPluginManager((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   useThemeVars(theme, settings);
 
   useEffect(() => {
@@ -258,6 +332,90 @@ export default function App() {
     () => ws.tabs.find((t) => t.id === ws.activeId) ?? null,
     [ws.tabs, ws.activeId],
   );
+
+  // Bridge core state changes onto the extension event bus so plugins can
+  // subscribe via ctx.events.on('app:tab:focused' / 'app:cwd:changed' / ...).
+  const prevActiveIdRef = useRef<number | null>(null);
+  const prevCwdRef = useRef<string | null>(null);
+  const prevTabIdsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const next = ws.activeId;
+    const prev = prevActiveIdRef.current;
+    if (next !== prev) {
+      prevActiveIdRef.current = next;
+      if (next != null) {
+        void window.mt.ext
+          .emit("app:tab:focused", { tabId: next, prevTabId: prev })
+          .catch(() => {});
+      }
+    }
+    const cwd = activeTab?.cwd ?? null;
+    if (cwd !== prevCwdRef.current && next != null) {
+      prevCwdRef.current = cwd;
+      if (cwd) {
+        void window.mt.ext
+          .emit("app:cwd:changed", { tabId: next, cwd })
+          .catch(() => {});
+      }
+    }
+    // Diff the previous and current tab id sets to emit created/closed.
+    const cur = new Set(ws.tabs.map((t) => t.id));
+    for (const id of cur) {
+      if (!prevTabIdsRef.current.has(id)) {
+        const tab = ws.tabs.find((t) => t.id === id);
+        if (tab) {
+          void window.mt.ext
+            .emit("app:tab:created", {
+              tab: {
+                id: tab.id,
+                type: "terminal",
+                title: tab.label,
+                groupId: tab.groupId,
+                active: tab.id === ws.activeId,
+              },
+            })
+            .catch(() => {});
+        }
+      }
+    }
+    for (const id of prevTabIdsRef.current) {
+      if (!cur.has(id)) {
+        void window.mt.ext.emit("app:tab:closed", { tabId: id }).catch(() => {});
+      }
+    }
+    prevTabIdsRef.current = cur;
+  }, [ws.activeId, ws.tabs, activeTab?.cwd]);
+
+  // Settings/theme change events go through the bus as well.
+  const prevThemeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevThemeRef.current !== null && prevThemeRef.current !== settings.themeId) {
+      void window.mt.ext
+        .emit("app:theme:changed", { themeId: settings.themeId })
+        .catch(() => {});
+    }
+    prevThemeRef.current = settings.themeId;
+  }, [settings.themeId]);
+
+  // Settings change broadcasting. Diff each top-level key against the
+  // previous render and emit `app:settings:changed` for any that changed.
+  // Plugins listen via `ctx.settings.onChange` (their own namespace) or the
+  // global event for cross-cutting concerns.
+  const prevSettingsRef = useRef(settings);
+  useEffect(() => {
+    const prev = prevSettingsRef.current as unknown as Record<string, unknown>;
+    const cur = settings as unknown as Record<string, unknown>;
+    if (prev !== cur) {
+      for (const key of Object.keys(cur)) {
+        if (prev[key] !== cur[key]) {
+          void window.mt.ext
+            .emit("app:settings:changed", { key, value: cur[key] })
+            .catch(() => {});
+        }
+      }
+      prevSettingsRef.current = settings;
+    }
+  }, [settings]);
 
   const ptyMapRef = useRef(ptyMap);
   ptyMapRef.current = ptyMap;
@@ -854,24 +1012,6 @@ export default function App() {
           width={settings.sidebarWidth}
           onResize={(w) => update("sidebarWidth", w)}
           ccStatuses={ccStatuses}
-          gitSlot={
-            settings.gitPanelEnabled ? (
-              <GitPanel
-                cwd={activeTab?.cwd}
-                collapsed={settings.gitPanelCollapsed}
-                onToggleCollapsed={(b) => update("gitPanelCollapsed", b)}
-                treeView={settings.gitPanelTreeView}
-                onToggleTreeView={(b) => update("gitPanelTreeView", b)}
-                settings={settings}
-                height={settings.gitPanelHeight}
-                onResizeHeight={(h) => update("gitPanelHeight", h)}
-                msgHeight={settings.gitCommitMsgHeight}
-                onResizeMsgHeight={(h) => update("gitCommitMsgHeight", h)}
-                onUpdatePullStrategy={(s) => update("gitPullStrategy", s)}
-                onEnsureVaultUnlocked={ensureVaultUnlocked}
-              />
-            ) : undefined
-          }
           remoteSlot={
             settings.remoteWorkspaceEnabled ? (
               <RemoteWorkspace
@@ -1191,6 +1331,66 @@ export default function App() {
           }}
           onChange={(oldPw, newPw) => vault.changePassword(oldPw, newPw)}
         />
+      )}
+
+      {/* Extension system: pending modals/toasts/trust prompts. */}
+      <PluginUiHost />
+
+      {showPluginManager && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 8200,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowPluginManager(false);
+          }}
+        >
+          <div
+            style={{
+              background: "var(--surface, #1a1a1a)",
+              color: "var(--text, #eee)",
+              borderRadius: 8,
+              width: "min(720px, 92vw)",
+              maxHeight: "85vh",
+              overflow: "auto",
+              boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+            }}
+          >
+            <div
+              style={{
+                padding: "10px 16px",
+                borderBottom: "1px solid var(--border, #333)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <strong>Extensions</strong>
+              <button
+                type="button"
+                onClick={() => setShowPluginManager(false)}
+                style={{
+                  background: "transparent",
+                  color: "inherit",
+                  border: "1px solid var(--border, #444)",
+                  borderRadius: 4,
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <PluginManager />
+          </div>
+        </div>
       )}
     </div>
   );
