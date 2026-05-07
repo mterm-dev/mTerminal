@@ -103,8 +103,12 @@ export class ExtensionHostRenderer {
     // Listen for registry events from main so we can re-fetch when extensions
     // are installed/uninstalled or hot-reloaded.
     const bus = getRendererEventBus()
-    bus.on('extension:activated', () => this.refreshSnapshots())
-    bus.on('extension:deactivated', () => this.refreshSnapshots())
+    bus.on('extension:activated', (payload) => {
+      void this.onMainActivated(payload)
+    })
+    bus.on('extension:deactivated', (payload) => {
+      void this.onMainDeactivated(payload)
+    })
 
     getRendererEventBus().emit('app:ready', { version: '1.0.0-alpha.0' })
 
@@ -132,6 +136,45 @@ export class ExtensionHostRenderer {
 
   async refreshSnapshots(): Promise<void> {
     await this.loadManifests()
+  }
+
+  /**
+   * Called when main fires `extension:activated`. Refreshes snapshots, then
+   * activates the extension on the renderer side too — without this, panels,
+   * status-bar items, and other contributions registered inside the plugin's
+   * `activate(ctx)` would never appear after install/enable performed at
+   * runtime (post-boot). Boot-time activation is handled separately in
+   * `boot()`.
+   */
+  private async onMainActivated(payload: unknown): Promise<void> {
+    await this.refreshSnapshots()
+    const id = (payload as { id?: string } | null)?.id
+    if (!id) return
+    if (this.active.has(id)) return
+    const snap = this.snapshots.get(id)
+    if (!snap || !snap.enabled) return
+    try {
+      await this.activate(id)
+    } catch (err) {
+      console.error(`[ext] post-install activate("${id}") failed:`, err)
+    }
+  }
+
+  /**
+   * Called when main fires `extension:deactivated`. Refreshes snapshots and
+   * tears down the renderer-side activation so contributions disappear when
+   * the extension is uninstalled or disabled.
+   */
+  private async onMainDeactivated(payload: unknown): Promise<void> {
+    const id = (payload as { id?: string } | null)?.id
+    if (id && this.active.has(id)) {
+      try {
+        await this.deactivate(id)
+      } catch (err) {
+        console.error(`[ext] mirror-deactivate("${id}") failed:`, err)
+      }
+    }
+    await this.refreshSnapshots()
   }
 
   list(): ManifestSnapshot[] {

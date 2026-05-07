@@ -53,8 +53,10 @@ interface ObjectSchema {
 
 export function ExtensionsOverview({
   onPickExtension,
+  onOpenMarketplace,
 }: {
   onPickExtension: (extId: string) => void;
+  onOpenMarketplace?: () => void;
 }) {
   const host = getRendererHost();
   const [snaps, setSnaps] = useState<ManifestSnapshot[]>(() => host.list());
@@ -125,15 +127,29 @@ export function ExtensionsOverview({
 
   if (sortedSnaps.length === 0) {
     return (
-      <div className="ext-empty">
-        <div className="ext-empty-icon">⬡</div>
-        <div className="ext-empty-title">No extensions installed</div>
-        <div className="ext-empty-sub">
-          Drop an extension folder into{" "}
-          <code>~/.mterminal/extensions/&lt;id&gt;/</code> and click{" "}
-          <em>Reload all</em> in the Plugin Manager.
+      <>
+        {onOpenMarketplace && (
+          <div className="ext-toolbar">
+            <button
+              type="button"
+              className="ext-marketplace-btn"
+              onClick={onOpenMarketplace}
+            >
+              <span className="ext-marketplace-btn-icon">⬡</span>
+              <span>Browse marketplace</span>
+              <span className="ext-marketplace-btn-hint">{marketplaceHotkeyLabel()}</span>
+            </button>
+          </div>
+        )}
+        <div className="ext-empty">
+          <div className="ext-empty-icon">⬡</div>
+          <div className="ext-empty-title">No extensions installed</div>
+          <div className="ext-empty-sub">
+            Install extensions from the marketplace, or drop a folder into{" "}
+            <code>~/.mterminal/extensions/&lt;id&gt;/</code> and reload.
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -164,6 +180,19 @@ export function ExtensionsOverview({
 
   return (
     <>
+      {onOpenMarketplace && (
+        <div className="ext-toolbar">
+          <button
+            type="button"
+            className="ext-marketplace-btn"
+            onClick={onOpenMarketplace}
+          >
+            <span className="ext-marketplace-btn-icon">⬡</span>
+            <span>Browse marketplace</span>
+            <span className="ext-marketplace-btn-hint">{marketplaceHotkeyLabel()}</span>
+          </button>
+        </div>
+      )}
       <div className="ext-card-grid">
         {sortedSnaps.map((snap) => {
           const m = snap.manifest;
@@ -231,6 +260,12 @@ export function ExtensionsOverview({
       )}
     </>
   );
+}
+
+function marketplaceHotkeyLabel(): string {
+  const isMac =
+    (window as { mt?: { platform?: string } }).mt?.platform === "darwin";
+  return isMac ? "⌘⇧X" : "Ctrl+Shift+X";
 }
 
 function summarize(m: ManifestSnapshot["manifest"]): string {

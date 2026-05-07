@@ -28,6 +28,7 @@ interface Props {
   vaultExists: boolean;
   onRequestVault: () => void;
   mcpStatus?: { running: boolean; socketPath: string | null };
+  onOpenMarketplace?: () => void;
 }
 
 /**
@@ -69,6 +70,7 @@ export function SettingsModal({
   vaultExists,
   onRequestVault,
   mcpStatus,
+  onOpenMarketplace,
 }: Props) {
   const [section, setSection] = useState<Section>("appearance");
   const [extensionsOpen, setExtensionsOpen] = useState(false);
@@ -245,6 +247,7 @@ export function SettingsModal({
                   setExtensionsOpen(true);
                   setSection(`extension:${extId}`);
                 }}
+                onOpenMarketplace={onOpenMarketplace}
               />
             )}
             {isExtensionSub && currentExtId && (

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   resolveEndpoint,
   PROD_ENDPOINT,
-  DEV_ENDPOINT,
 } from '../../../electron/main/marketplace/config'
 
 describe('resolveEndpoint', () => {
@@ -10,11 +9,11 @@ describe('resolveEndpoint', () => {
     expect(resolveEndpoint({})).toBe(PROD_ENDPOINT)
   })
 
-  it('uses dev endpoint when NODE_ENV=development', () => {
-    expect(resolveEndpoint({ NODE_ENV: 'development' })).toBe(DEV_ENDPOINT)
+  it('returns prod even in development (no NODE_ENV branching)', () => {
+    expect(resolveEndpoint({ NODE_ENV: 'development' })).toBe(PROD_ENDPOINT)
   })
 
-  it('prefers MARKETPLACE_ENDPOINT over NODE_ENV', () => {
+  it('respects MARKETPLACE_ENDPOINT override', () => {
     expect(
       resolveEndpoint({
         NODE_ENV: 'development',

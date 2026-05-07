@@ -1297,6 +1297,10 @@ function AppInner({
             requestVault(vault.status.exists ? "unlock" : "init")
           }
           mcpStatus={mcp.status}
+          onOpenMarketplace={() => {
+            setShowSettings(false);
+            setShowMarketplace(true);
+          }}
         />
       )}
 
