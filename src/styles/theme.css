@@ -3423,6 +3423,64 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
   }
 }
 
+/* ── settings: vault panel pill + actions ─────────────── */
+.vault-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--t-xs);
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  text-transform: lowercase;
+}
+.vault-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-dim);
+}
+.vault-status-pill[data-tone="ok"] {
+  border-color: color-mix(in oklch, var(--c-green, #6dd28a) 50%, var(--border));
+  color: var(--c-green, #6dd28a);
+}
+.vault-status-pill[data-tone="ok"] .vault-status-dot {
+  background: var(--c-green, #6dd28a);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--c-green, #6dd28a) 60%, transparent);
+}
+.vault-status-pill[data-tone="off"] {
+  border-color: color-mix(in oklch, var(--c-orange, #d4a657) 50%, var(--border));
+  color: var(--c-orange, #d4a657);
+}
+.vault-status-pill[data-tone="off"] .vault-status-dot {
+  background: var(--c-orange, #d4a657);
+}
+.vault-status-pill[data-tone="warn"] {
+  color: var(--fg-dim);
+}
+.vault-status-pill[data-tone="dev"] {
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.vault-status-pill[data-tone="dev"] .vault-status-dot {
+  display: none;
+}
+.vault-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vault-danger-btn {
+  border-color: color-mix(in oklch, var(--c-red, #e06b6b) 60%, var(--border));
+  color: var(--c-red, #e06b6b);
+}
+.vault-danger-btn:hover {
+  background: color-mix(in oklch, var(--c-red, #e06b6b) 12%, transparent);
+}
+
 /* ── status bar: vault lock indicator ─────────────────── */
 .vault-lock-btn {
   display: inline-flex;
