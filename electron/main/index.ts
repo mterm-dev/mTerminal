@@ -31,6 +31,10 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('disable-features', 'WaylandWpColorManagerV1')
 }
 
+if (!app.isPackaged) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'mterminal-dev'))
+}
+
 // Custom URL scheme privileges MUST be registered before app.whenReady().
 registerMtExtProtocolPrivileges()
 

@@ -52,6 +52,8 @@ import { useGlobalHotkeys } from "./hooks/useGlobalHotkeys";
 import { insertDictation } from "./lib/insertDictation";
 import {
   bootExtensionsHostRenderer,
+  getTabTypeRegistry,
+  getTerminalRegistry,
   setSettingsBackend,
   setWorkspaceBackend,
 } from "./extensions";
@@ -117,6 +119,29 @@ export default function App() {
       (settings.voiceEnabled && settings.voiceEngine === "openai"),
   );
 
+  const requestVault = useCallback(
+    (mode: MasterPasswordMode, after?: () => void) => {
+      if (after) setPendingAfterUnlock(() => after);
+      setVaultModal({ mode });
+    },
+    [],
+  );
+
+  const ensureVaultUnlocked = useCallback(
+    (after: () => void) => {
+      if (!vault.status.exists) {
+        requestVault("init", after);
+        return false;
+      }
+      if (!vault.status.unlocked) {
+        requestVault("unlock", after);
+        return false;
+      }
+      return true;
+    },
+    [vault.status, requestVault],
+  );
+
   const [ptyMap, setPtyMap] = useState<Map<number, number>>(new Map());
   const pendingCommandsRef = useRef<Map<number, string>>(new Map());
   const handlePtyReady = useCallback((tabId: number, ptyId: number) => {
@@ -158,40 +183,63 @@ export default function App() {
       setShowSettings(true);
       return;
     }
-    if (ws.activeId != null) {
-      const ptyId = ptyMap.get(ws.activeId);
-      if (ptyId != null) {
-        try {
-          const out = await invoke<string>("pty_recent_output", {
-            id: ptyId,
-            maxBytes: 4096,
-          });
-          setPaletteRecentOutput(out);
-        } catch {
-          setPaletteRecentOutput(undefined);
+    const doOpen = async () => {
+      if (ws.activeId != null) {
+        const ptyId = ptyMap.get(ws.activeId);
+        if (ptyId != null) {
+          try {
+            const out = await invoke<string>("pty_recent_output", {
+              id: ptyId,
+              maxBytes: 4096,
+            });
+            setPaletteRecentOutput(out);
+          } catch {
+            setPaletteRecentOutput(undefined);
+          }
         }
       }
-    }
-    setShowPalette(true);
-  }, [settings.aiEnabled, ws.activeId, ptyMap]);
+      setShowPalette(true);
+    };
+    const needsVault = settings.aiDefaultProvider !== "ollama";
+    if (needsVault && !ensureVaultUnlocked(() => { void doOpen(); })) return;
+    await doOpen();
+  }, [
+    settings.aiEnabled,
+    settings.aiDefaultProvider,
+    ws.activeId,
+    ptyMap,
+    ensureVaultUnlocked,
+  ]);
 
   const openExplain = useCallback(
     async (tabId: number, selection: string, _x: number, _y: number) => {
       if (!settings.aiEnabled || !settings.aiExplainEnabled) return;
-      const ptyId = ptyMap.get(tabId);
-      let context: string | undefined;
-      if (ptyId != null) {
-        try {
-          context = await invoke<string>("pty_recent_output", {
-            id: ptyId,
-            maxBytes: 3000,
-          });
-        } catch {}
-      }
-      const tab = ws.tabs.find((t) => t.id === tabId);
-      setExplainState({ selection, context, cwd: tab?.cwd });
+      const doOpen = async () => {
+        const ptyId = ptyMap.get(tabId);
+        let context: string | undefined;
+        if (ptyId != null) {
+          try {
+            context = await invoke<string>("pty_recent_output", {
+              id: ptyId,
+              maxBytes: 3000,
+            });
+          } catch {}
+        }
+        const tab = ws.tabs.find((t) => t.id === tabId);
+        setExplainState({ selection, context, cwd: tab?.cwd });
+      };
+      const needsVault = settings.aiDefaultProvider !== "ollama";
+      if (needsVault && !ensureVaultUnlocked(() => { void doOpen(); })) return;
+      await doOpen();
     },
-    [settings.aiEnabled, settings.aiExplainEnabled, ptyMap, ws.tabs],
+    [
+      settings.aiEnabled,
+      settings.aiExplainEnabled,
+      settings.aiDefaultProvider,
+      ptyMap,
+      ws.tabs,
+      ensureVaultUnlocked,
+    ],
   );
 
   const aiProvider = settings.aiDefaultProvider;
@@ -264,7 +312,14 @@ export default function App() {
       cwd: () => {
         const ws = wsRef.current;
         const active = ws.tabs.find((t) => t.id === ws.activeId);
-        return active?.cwd ?? null;
+        if (active?.cwd) return active.cwd;
+        const termActive = getTerminalRegistry().getActive();
+        if (termActive) {
+          const tab = ws.tabs.find((t) => t.id === termActive.tabId);
+          if (tab?.cwd) return tab.cwd;
+          return termActive.cwd ?? null;
+        }
+        return null;
       },
       openTab: async (args: { type: string; title?: string; props?: unknown; groupId?: string | null }) => {
         if (args.type === "terminal") {
@@ -306,6 +361,20 @@ export default function App() {
     void bootExtensionsHostRenderer().catch((err) => {
       console.error("[extensions] boot failed:", err);
     });
+  }, []);
+
+  const [registeredTabTypes, setRegisteredTabTypes] = useState<Set<string>>(() => {
+    const reg = getTabTypeRegistry();
+    return new Set(reg.list().map((t) => t.id));
+  });
+  useEffect(() => {
+    const reg = getTabTypeRegistry();
+    const refresh = (): void => {
+      setRegisteredTabTypes(new Set(reg.list().map((t) => t.id)));
+    };
+    refresh();
+    const sub = reg.subscribe(refresh);
+    return () => sub.dispose();
   }, []);
 
   const [showPluginManager, setShowPluginManager] = useState(false);
@@ -686,29 +755,6 @@ export default function App() {
     ws.setActive(id);
   };
 
-  const requestVault = useCallback(
-    (mode: MasterPasswordMode, after?: () => void) => {
-      if (after) setPendingAfterUnlock(() => after);
-      setVaultModal({ mode });
-    },
-    [],
-  );
-
-  const ensureVaultUnlocked = useCallback(
-    (after: () => void) => {
-      if (!vault.status.exists) {
-        requestVault("init", after);
-        return false;
-      }
-      if (!vault.status.unlocked) {
-        requestVault("unlock", after);
-        return false;
-      }
-      return true;
-    },
-    [vault.status, requestVault],
-  );
-
   const connectToHost = useCallback(
     (host: HostMeta) => {
       const needsVault = host.auth === "password" && host.savePassword;
@@ -874,8 +920,21 @@ export default function App() {
       setShowSettings(true);
       return;
     }
-    update("aiPanelOpen", !settings.aiPanelOpen);
-  }, [settings.aiEnabled, settings.aiPanelOpen, update]);
+    if (settings.aiPanelOpen) {
+      update("aiPanelOpen", false);
+      return;
+    }
+    const doOpen = () => update("aiPanelOpen", true);
+    const needsVault = settings.aiDefaultProvider !== "ollama";
+    if (needsVault && !ensureVaultUnlocked(doOpen)) return;
+    doOpen();
+  }, [
+    settings.aiEnabled,
+    settings.aiPanelOpen,
+    settings.aiDefaultProvider,
+    update,
+    ensureVaultUnlocked,
+  ]);
   const toggleAIPanelRef = useRef(toggleAIPanel);
   toggleAIPanelRef.current = toggleAIPanel;
 
@@ -1021,14 +1080,18 @@ export default function App() {
             if (target !== gridGroupId) setGridGroupId(null);
             ws.addTab(g);
           }}
-          onAddFileBrowser={(gid) => {
-            ws.addCustomTab({
-              customType: "file-browser",
-              label: "files",
-              groupId: gid,
-            });
-            setGridGroupId(gid);
-          }}
+          onAddFileBrowser={
+            registeredTabTypes.has("file-browser")
+              ? (gid) => {
+                  ws.addCustomTab({
+                    customType: "file-browser",
+                    label: "files",
+                    groupId: gid,
+                  });
+                  setGridGroupId(gid);
+                }
+              : undefined
+          }
           onAddGroup={() => ws.addGroup()}
           onToggleGroup={ws.toggleGroup}
           onRenameTab={ws.renameTab}

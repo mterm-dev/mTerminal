@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Channel, invoke, writeText } from "../lib/ipc";
 import type { CursorStyle } from "../settings/useSettings";
+import { getTerminalRegistry, type TerminalAdapter } from "../extensions";
 
 type TabKind = "local" | "remote";
 
@@ -108,6 +109,12 @@ export function TerminalTab({
   const onActivateRef = useRef(onActivate);
   onActivateRef.current = onActivate;
   const mouseDownTargetRef = useRef<EventTarget | null>(null);
+  const cwdRef = useRef<string | null>(initialCwd ?? null);
+  const cmdRef = useRef<string | null>(null);
+  const titleRef = useRef<string>("");
+  const adapterDisposeRef = useRef<(() => void) | null>(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -221,6 +228,87 @@ export function TerminalTab({
         ptyIdRef.current = id;
         onPtyReadyRef.current?.(tabId, id);
 
+        const adapter: TerminalAdapter = {
+          tabId,
+          get ptyId() {
+            return ptyIdRef.current ?? -1;
+          },
+          get cwd() {
+            return cwdRef.current;
+          },
+          get cmd() {
+            return cmdRef.current;
+          },
+          get title() {
+            return titleRef.current;
+          },
+          async read(maxBytes = 4096) {
+            const pid = ptyIdRef.current;
+            if (pid == null) return "";
+            try {
+              return await invoke<string>("pty_recent_output", {
+                id: pid,
+                maxBytes,
+              });
+            } catch {
+              return "";
+            }
+          },
+          async write(data: string) {
+            const pid = ptyIdRef.current;
+            if (pid == null) return;
+            await invoke("pty_write", { id: pid, data }).catch(() => {});
+          },
+          async insertAtPrompt(data: string) {
+            const pid = ptyIdRef.current;
+            if (pid == null) return;
+            await invoke("pty_write", { id: pid, data }).catch(() => {});
+          },
+          async sendKey(key: string) {
+            const pid = ptyIdRef.current;
+            if (pid == null) return;
+            const map: Record<string, string> = {
+              Enter: "\n",
+              Tab: "\t",
+              Escape: "\x1b",
+              Backspace: "\x7f",
+              ArrowUp: "\x1b[A",
+              ArrowDown: "\x1b[B",
+              ArrowRight: "\x1b[C",
+              ArrowLeft: "\x1b[D",
+            };
+            const data = map[key] ?? key;
+            await invoke("pty_write", { id: pid, data }).catch(() => {});
+          },
+          getSelection() {
+            return termRef.current?.getSelection() ?? null;
+          },
+          onData(cb) {
+            const t = termRef.current;
+            if (!t) return { dispose: () => {} };
+            const sub = t.onData(cb);
+            return { dispose: () => sub.dispose() };
+          },
+          onExit() {
+            return { dispose: () => {} };
+          },
+          onTitleChange(cb) {
+            const t = termRef.current;
+            if (!t) return { dispose: () => {} };
+            const sub = t.onTitleChange((next) => {
+              titleRef.current = next;
+              cb(next);
+            });
+            return { dispose: () => sub.dispose() };
+          },
+        };
+        const reg = getTerminalRegistry();
+        const handle = reg.register(adapter);
+        adapterDisposeRef.current = () => {
+          handle.dispose();
+        };
+        if (activeRef.current) reg.setActive(tabId);
+
         const initCmd = initialCommandRef.current;
         if (initCmd) {
           initialCommandRef.current = null;
@@ -271,6 +359,8 @@ export function TerminalTab({
       }
       events.unsubscribe?.();
       onPtyCloseRef.current?.(tabId);
+      adapterDisposeRef.current?.();
+      adapterDisposeRef.current = null;
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
@@ -280,6 +370,9 @@ export function TerminalTab({
 
   useEffect(() => {
     if (!active) return;
+    if (adapterDisposeRef.current) {
+      getTerminalRegistry().setActive(tabId);
+    }
     const t = setTimeout(() => {
       try {
         fitRef.current?.fit();
@@ -287,7 +380,7 @@ export function TerminalTab({
       } catch {}
     }, 0);
     return () => clearTimeout(t);
-  }, [active]);
+  }, [active, tabId]);
 
   useEffect(() => {
     if (!active) return;
@@ -303,6 +396,8 @@ export function TerminalTab({
           pid: number;
         }>("pty_info", { id });
         if (cancelled) return;
+        cwdRef.current = info.cwd;
+        cmdRef.current = info.cmd;
         onInfoRef.current?.(tabId, { cwd: info.cwd, cmd: info.cmd });
       } catch {}
     };
