@@ -8,6 +8,7 @@ interface Props {
   containerRef: React.RefObject<HTMLDivElement | null>;
   onColSizes: (sizes: number[]) => void;
   onRowSizes: (sizes: number[]) => void;
+  occupancy?: number[][];
   gapPx?: number;
   paddingPx?: number;
   minFr?: number;
@@ -21,6 +22,7 @@ export function GridResizers({
   containerRef,
   onColSizes,
   onRowSizes,
+  occupancy,
   gapPx = 4,
   paddingPx = 4,
   minFr = 0.1,
@@ -141,36 +143,119 @@ export function GridResizers({
   const colBoundaries = computeBoundaries(colSizes, colTotal);
   const rowBoundaries = computeBoundaries(rowSizes, rowTotal);
 
+  const colCumFractions = cumFractions(colSizes, colTotal);
+  const rowCumFractions = cumFractions(rowSizes, rowTotal);
+
+  const colSegments = (boundary: number): Array<[number, number]> => {
+    const ranges: Array<[number, number]> = [];
+    let start = -1;
+    for (let c = 0; c < cols; c++) {
+      let active = true;
+      if (occupancy) {
+        const above = occupancy[boundary]?.[c];
+        const below = occupancy[boundary + 1]?.[c];
+        if (above !== undefined && below !== undefined && above === below && above !== -1) {
+          active = false;
+        }
+      }
+      if (active) {
+        if (start < 0) start = c;
+      } else {
+        if (start >= 0) ranges.push([start, c - 1]);
+        start = -1;
+      }
+    }
+    if (start >= 0) ranges.push([start, cols - 1]);
+    return ranges;
+  };
+
+  const rowSegments = (boundary: number): Array<[number, number]> => {
+    const ranges: Array<[number, number]> = [];
+    let start = -1;
+    for (let r = 0; r < rows; r++) {
+      let active = true;
+      if (occupancy) {
+        const left = occupancy[r]?.[boundary];
+        const right = occupancy[r]?.[boundary + 1];
+        if (left !== undefined && right !== undefined && left === right && left !== -1) {
+          active = false;
+        }
+      }
+      if (active) {
+        if (start < 0) start = r;
+      } else {
+        if (start >= 0) ranges.push([start, r - 1]);
+        start = -1;
+      }
+    }
+    if (start >= 0) ranges.push([start, rows - 1]);
+    return ranges;
+  };
+
+  const colInner = `(100% - ${paddingPx * 2}px - ${gapPx * (cols - 1)}px)`;
+  const rowInner = `(100% - ${paddingPx * 2}px - ${gapPx * (rows - 1)}px)`;
+
   return (
     <>
       {cols >= 2 &&
         colTotal > 0 &&
-        colBoundaries.map((fraction, i) => (
-          <div
-            key={`c${i}`}
-            className="grid-resizer col"
-            style={{
-              left: `calc(${paddingPx}px + (100% - ${paddingPx * 2}px - ${gapPx * (cols - 1)}px) * ${fraction} + ${gapPx * i}px + ${gapPx / 2}px)`,
-            }}
-            onPointerDown={(e) => startColDrag(e, i)}
-            aria-hidden="true"
-          />
-        ))}
+        colBoundaries.map((fraction, i) => {
+          const segs = rowSegments(i);
+          if (segs.length === 0) return null;
+          return segs.map(([rStart, rEnd]) => {
+            const topFrac = rowCumFractions[rStart];
+            const bottomFrac = rowCumFractions[rEnd + 1];
+            return (
+              <div
+                key={`c${i}-${rStart}-${rEnd}`}
+                className="grid-resizer col"
+                style={{
+                  left: `calc(${paddingPx}px + ${colInner} * ${fraction} + ${gapPx * i}px + ${gapPx / 2}px)`,
+                  top: `calc(${paddingPx}px + ${rowInner} * ${topFrac} + ${gapPx * rStart}px)`,
+                  height: `calc(${rowInner} * ${bottomFrac - topFrac} + ${gapPx * (rEnd - rStart)}px)`,
+                }}
+                onPointerDown={(e) => startColDrag(e, i)}
+                aria-hidden="true"
+              />
+            );
+          });
+        })}
       {rows >= 2 &&
         rowTotal > 0 &&
-        rowBoundaries.map((fraction, i) => (
-          <div
-            key={`r${i}`}
-            className="grid-resizer row"
-            style={{
-              top: `calc(${paddingPx}px + (100% - ${paddingPx * 2}px - ${gapPx * (rows - 1)}px) * ${fraction} + ${gapPx * i}px + ${gapPx / 2}px)`,
-            }}
-            onPointerDown={(e) => startRowDrag(e, i)}
-            aria-hidden="true"
-          />
-        ))}
+        rowBoundaries.map((fraction, i) => {
+          const segs = colSegments(i);
+          if (segs.length === 0) return null;
+          return segs.map(([cStart, cEnd]) => {
+            const leftFrac = colCumFractions[cStart];
+            const rightFrac = colCumFractions[cEnd + 1];
+            return (
+              <div
+                key={`r${i}-${cStart}-${cEnd}`}
+                className="grid-resizer row"
+                style={{
+                  top: `calc(${paddingPx}px + ${rowInner} * ${fraction} + ${gapPx * i}px + ${gapPx / 2}px)`,
+                  left: `calc(${paddingPx}px + ${colInner} * ${leftFrac} + ${gapPx * cStart}px)`,
+                  width: `calc(${colInner} * ${rightFrac - leftFrac} + ${gapPx * (cEnd - cStart)}px)`,
+                }}
+                onPointerDown={(e) => startRowDrag(e, i)}
+                aria-hidden="true"
+              />
+            );
+          });
+        })}
     </>
   );
+}
+
+function cumFractions(sizes: number[], total: number): number[] {
+  if (total <= 0) return sizes.map(() => 0).concat(0);
+  const out: number[] = [0];
+  let acc = 0;
+  for (const s of sizes) {
+    acc += s;
+    out.push(acc / total);
+  }
+  return out;
 }
 
 function computeBoundaries(sizes: number[], total: number): number[] {

@@ -19,6 +19,33 @@ export function computeGridLayout(n: number): GridLayout | null {
   return { cols, rows, spanRowsSlots };
 }
 
+/**
+ * Simulate CSS `grid-auto-flow: row` placement for `n` slots into a `cols x rows`
+ * grid, with the slots in `spanRowsSlots` taking 2 rows. Returns a 2D occupancy
+ * map `[row][col] = slotIndex` (or -1 for empty cells).
+ */
+export function computeOccupancy(
+  n: number,
+  cols: number,
+  rows: number,
+  spanRowsSlots: Set<number>,
+): number[][] {
+  const grid: number[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => -1),
+  );
+  let slot = 0;
+  for (let r = 0; r < rows && slot < n; r++) {
+    for (let c = 0; c < cols && slot < n; c++) {
+      if (grid[r][c] !== -1) continue;
+      const wantSpan = spanRowsSlots.has(slot) && r + 1 < rows;
+      grid[r][c] = slot;
+      if (wantSpan) grid[r + 1][c] = slot;
+      slot++;
+    }
+  }
+  return grid;
+}
+
 export interface SlotPlacement {
   colStart: number;
   rowStart: number;

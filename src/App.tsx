@@ -42,12 +42,7 @@ import {
   type HostGroup,
   type HostMeta,
 } from "./hooks/useRemoteHosts";
-import {
-  computeGridLayout,
-  defaultSizes,
-  rowsForCount,
-  slotPlacement,
-} from "./lib/grid-layout";
+import { computeGridLayout, computeOccupancy, defaultSizes } from "./lib/grid-layout";
 import { useSettings } from "./settings/useSettings";
 import { findTheme } from "./settings/themes";
 import { SettingsModal } from "./settings/SettingsModal";
@@ -62,6 +57,7 @@ import {
 } from "./extensions";
 import { PluginUiHost } from "./extensions/components/PluginUiHost";
 import { PluginManager } from "./extensions/components/PluginManager";
+import { PluginTabHost } from "./extensions/components/PluginTabHost";
 
 interface CtxState {
   x: number;
@@ -247,14 +243,20 @@ export default function App() {
         (settingsRef.current as unknown as Record<string, T>)[key],
       onCoreChange: () => ({ dispose: () => {} }),
     });
+    const tabType = (t: { kind: string; customType?: string }): string =>
+      t.kind === "custom" ? t.customType ?? "custom" : t.kind === "remote" ? "remote" : "terminal";
     setWorkspaceBackend({
       groups: () => wsRef.current.groups.map((g) => ({ id: g.id, label: g.name })),
-      activeGroup: () => null,
+      activeGroup: () => {
+        const ws = wsRef.current;
+        const active = ws.tabs.find((t) => t.id === ws.activeId);
+        return active?.groupId ?? null;
+      },
       setActiveGroup: () => {},
       tabs: () =>
         wsRef.current.tabs.map((t) => ({
           id: t.id,
-          type: "terminal",
+          type: tabType(t),
           title: t.label,
           groupId: t.groupId,
           active: t.id === wsRef.current.activeId,
@@ -264,13 +266,37 @@ export default function App() {
         const active = ws.tabs.find((t) => t.id === ws.activeId);
         return active?.cwd ?? null;
       },
-      openTab: async () => -1,
-      closeTab: () => {},
-      active: () => null,
+      openTab: async (args: { type: string; title?: string; props?: unknown; groupId?: string | null }) => {
+        if (args.type === "terminal") {
+          return wsRef.current.addTab(args.groupId ?? undefined);
+        }
+        const ws = wsRef.current;
+        const active = ws.tabs.find((t) => t.id === ws.activeId);
+        const inferredGroupId =
+          args.groupId === undefined
+            ? active && (active.kind === "local" || active.kind === "custom")
+              ? active.groupId
+              : null
+            : args.groupId;
+        const id = ws.addCustomTab({
+          customType: args.type,
+          label: args.title,
+          groupId: inferredGroupId,
+          props: args.props,
+        });
+        if (inferredGroupId) setGridGroupId(inferredGroupId);
+        return id;
+      },
+      closeTab: (id: number) => wsRef.current.closeTab(id),
+      active: () => {
+        const ws = wsRef.current;
+        const a = ws.tabs.find((t) => t.id === ws.activeId);
+        return a ? { id: a.id, type: tabType(a) } : null;
+      },
       list: () =>
         wsRef.current.tabs.map((t) => ({
           id: t.id,
-          type: "terminal",
+          type: tabType(t),
           title: t.label,
           groupId: t.groupId,
           active: t.id === wsRef.current.activeId,
@@ -537,26 +563,23 @@ export default function App() {
     if (!gridGroupId) return null;
     if (soloTabId != null) return null;
     if (gridTabs.length === 0) return null;
-    if (customLayout) {
-      const cols = Math.max(1, customLayout.cols);
-      const rows = rowsForCount(gridTabs.length, cols);
-      return {
-        cols,
-        rows,
-        colSizes: customLayout.colSizes,
-        rowSizes: customLayout.rowSizes,
-        hasCustom: true,
-        spanRowsSlots: new Set<number>(),
-      };
-    }
     const auto = computeGridLayout(gridTabs.length);
     if (!auto) return null;
+    const cols = auto.cols;
+    const rows = auto.rows;
+    const colSizes =
+      customLayout && customLayout.cols === cols
+        ? customLayout.colSizes
+        : defaultSizes(cols);
+    const rowSizes =
+      customLayout && customLayout.cols === cols && customLayout.rowSizes.length === rows
+        ? customLayout.rowSizes
+        : defaultSizes(rows);
     return {
-      cols: auto.cols,
-      rows: auto.rows,
-      colSizes: defaultSizes(auto.cols),
-      rowSizes: defaultSizes(auto.rows),
-      hasCustom: false,
+      cols,
+      rows,
+      colSizes,
+      rowSizes,
       spanRowsSlots: auto.spanRowsSlots,
     };
   }, [gridGroupId, gridTabs.length, soloTabId, customLayout]);
@@ -998,6 +1021,14 @@ export default function App() {
             if (target !== gridGroupId) setGridGroupId(null);
             ws.addTab(g);
           }}
+          onAddFileBrowser={(gid) => {
+            ws.addCustomTab({
+              customType: "file-browser",
+              label: "files",
+              groupId: gid,
+            });
+            setGridGroupId(gid);
+          }}
           onAddGroup={() => ws.addGroup()}
           onToggleGroup={ws.toggleGroup}
           onRenameTab={ws.renameTab}
@@ -1064,6 +1095,12 @@ export default function App() {
                 containerRef={paneRef}
                 onColSizes={handleColSizes}
                 onRowSizes={handleRowSizes}
+                occupancy={computeOccupancy(
+                  gridTabs.length,
+                  gridDims.cols,
+                  gridDims.rows,
+                  gridDims.spanRowsSlots,
+                )}
               />
             )}
             {ws.tabs.map((t) => {
@@ -1085,12 +1122,48 @@ export default function App() {
                 gridDims && t.groupId === gridGroupId
                   ? gridTabs.findIndex((x) => x.id === t.id)
                   : -1;
-              const placement =
-                gridDims && gridDims.hasCustom && slotIndex >= 0
-                  ? slotPlacement(slotIndex, gridTabs.length, gridDims.cols)
-                  : null;
               const isDropTarget = isGridContext && dropTargetTabId === t.id;
               const isDragging = isGridContext && dragSourceTabId === t.id;
+              const tabToolbar = showToolbar ? (
+                <GridTabToolbar
+                  label={t.label}
+                  sub={t.sub}
+                  isSolo={isSolo}
+                  onSolo={() => toggleSolo(t.id)}
+                  onRename={() => setEditingTabId(t.id)}
+                  onClose={() => ws.closeTab(t.id)}
+                  onDragStart={
+                    gridDims && !isSolo
+                      ? (e) => startTabDrag(t.id, e)
+                      : undefined
+                  }
+                  dragging={isDragging}
+                  editing={editingTabId === t.id}
+                  setEditing={(b) => setEditingTabId(b ? t.id : null)}
+                  onCommitRename={(v) => ws.renameTab(t.id, v)}
+                />
+              ) : undefined;
+              if (t.kind === "custom" && t.customType) {
+                return (
+                  <PluginTabHost
+                    key={t.id}
+                    tabId={t.id}
+                    customType={t.customType}
+                    customProps={t.customProps}
+                    active={visibleTabIds.has(t.id)}
+                    gridSlot={slotIndex >= 0 ? slotIndex : null}
+                    gridSpanRows={
+                      gridDims && slotIndex >= 0
+                        ? gridDims.spanRowsSlots.has(slotIndex)
+                        : false
+                    }
+                    gridPlacement={null}
+                    isDropTarget={isDropTarget}
+                    isDragging={isDragging}
+                    toolbar={tabToolbar}
+                  />
+                );
+              }
               return (
                 <TerminalTab
                   key={t.id}
@@ -1098,11 +1171,11 @@ export default function App() {
                   active={visibleTabIds.has(t.id)}
                   gridSlot={slotIndex >= 0 ? slotIndex : null}
                   gridSpanRows={
-                    gridDims && !gridDims.hasCustom && slotIndex >= 0
+                    gridDims && slotIndex >= 0
                       ? gridDims.spanRowsSlots.has(slotIndex)
                       : false
                   }
-                  gridPlacement={placement}
+                  gridPlacement={null}
                   isDropTarget={isDropTarget}
                   isDragging={isDragging}
                   onExit={(id) => ws.closeTab(id)}
@@ -1112,29 +1185,7 @@ export default function App() {
                   onActivate={ws.setActive}
                   initialCommand={pendingCommandsRef.current.get(t.id) ?? null}
                   onSelectionMenu={openExplain}
-                  toolbar={
-                    showToolbar ? (
-                      <GridTabToolbar
-                        label={t.label}
-                        sub={t.sub}
-                        isSolo={isSolo}
-                        onSolo={() => toggleSolo(t.id)}
-                        onRename={() => setEditingTabId(t.id)}
-                        onClose={() => ws.closeTab(t.id)}
-                        onDragStart={
-                          gridDims && !isSolo
-                            ? (e) => startTabDrag(t.id, e)
-                            : undefined
-                        }
-                        dragging={isDragging}
-                        editing={editingTabId === t.id}
-                        setEditing={(b) =>
-                          setEditingTabId(b ? t.id : null)
-                        }
-                        onCommitRename={(v) => ws.renameTab(t.id, v)}
-                      />
-                    ) : undefined
-                  }
+                  toolbar={tabToolbar}
                   fontFamily={settings.fontFamily}
                   fontSize={settings.fontSize}
                   lineHeight={settings.lineHeight}
@@ -1146,7 +1197,7 @@ export default function App() {
                   shellArgs={shellArgs}
                   showGreeting={settings.showGreeting}
                   copyOnSelect={settings.copyOnSelect}
-                  kind={t.kind}
+                  kind={t.kind === "remote" ? "remote" : "local"}
                   remoteHostId={t.remoteHostId}
                   remoteBanner={banner}
                   initialCwd={t.cwd}

@@ -22,6 +22,7 @@ interface Props {
   setEditingGroupId: (id: string | null) => void;
   onSelectTab: (id: number) => void;
   onAddTab: (groupId?: string | null) => void;
+  onAddFileBrowser?: (groupId: string) => void;
   onAddGroup: () => void;
   onToggleGroup: (id: string) => void;
   onRenameTab: (id: number, name: string) => void;
@@ -98,6 +99,7 @@ export function Sidebar(props: Props) {
     setEditingGroupId,
     onSelectTab,
     onAddTab,
+    onAddFileBrowser,
     onAddGroup,
     onToggleGroup,
     onRenameTab,
@@ -576,6 +578,16 @@ export function Sidebar(props: Props) {
                   >
                     +
                   </button>
+                  {onAddFileBrowser && (
+                    <button
+                      className="ghost-btn small"
+                      title="open file browser in group"
+                      aria-label="open file browser in group"
+                      onClick={() => onAddFileBrowser(g.id)}
+                    >
+                      ⌸
+                    </button>
+                  )}
                 </div>
 
                 {!g.collapsed && (

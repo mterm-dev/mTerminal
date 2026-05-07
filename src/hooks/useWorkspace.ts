@@ -19,7 +19,7 @@ export function basename(p: string): string {
   return parts[parts.length - 1] || "/";
 }
 
-export type TabKind = "local" | "remote";
+export type TabKind = "local" | "remote" | "custom";
 
 export interface Tab {
   id: number;
@@ -30,6 +30,8 @@ export interface Tab {
   autoLabel: boolean;
   kind: TabKind;
   remoteHostId?: string;
+  customType?: string;
+  customProps?: unknown;
 }
 
 export interface Group {
@@ -127,14 +129,19 @@ function loadInitial(): WorkspaceState {
         }));
         const groupIds = new Set(groups.map((g) => g.id));
         const tabs: Tab[] = parsed.tabs.map((t) => {
-          const kind: TabKind = t.kind === "remote" ? "remote" : "local";
+          const kind: TabKind =
+            t.kind === "remote"
+              ? "remote"
+              : t.kind === "custom"
+                ? "custom"
+                : "local";
           const gid =
             kind === "remote"
               ? null
               : typeof t.groupId === "string" && groupIds.has(t.groupId)
                 ? t.groupId
                 : null;
-          return {
+          const tab: Tab = {
             id: t.id!,
             label: t.label || "shell",
             sub: t.sub,
@@ -144,6 +151,14 @@ function loadInitial(): WorkspaceState {
             kind,
             remoteHostId: kind === "remote" ? t.remoteHostId : undefined,
           };
+          if (kind === "custom") {
+            tab.customType =
+              typeof (t as { customType?: unknown }).customType === "string"
+                ? ((t as { customType?: string }).customType as string)
+                : undefined;
+            tab.customProps = (t as { customProps?: unknown }).customProps;
+          }
+          return tab;
         });
         const groupLayouts = sanitizeGroupLayouts(
           (parsed as { groupLayouts?: Record<string, unknown> }).groupLayouts,
@@ -307,7 +322,10 @@ export function useWorkspace() {
     let createdId = -1;
     setState((s) => {
       const active = s.tabs.find((t) => t.id === s.activeId);
-      const activeGroup = active && active.kind === "local" ? active.groupId : null;
+      const activeGroup =
+        active && (active.kind === "local" || active.kind === "custom")
+          ? active.groupId
+          : null;
       const targetGroup = groupId === undefined ? activeGroup ?? null : groupId;
       const group = targetGroup
         ? s.groups.find((g) => g.id === targetGroup)
@@ -331,6 +349,49 @@ export function useWorkspace() {
     });
     return createdId;
   }, []);
+
+  const addCustomTab = useCallback(
+    (opts: {
+      customType: string;
+      label?: string;
+      sub?: string;
+      groupId?: string | null;
+      cwd?: string;
+      props?: unknown;
+    }): number => {
+      let createdId = -1;
+      setState((s) => {
+        const active = s.tabs.find((t) => t.id === s.activeId);
+        const activeGroup =
+          active && (active.kind === "local" || active.kind === "custom")
+            ? active.groupId
+            : null;
+        const targetGroup =
+          opts.groupId === undefined ? activeGroup ?? null : opts.groupId;
+        const id = s.nextTabId;
+        createdId = id;
+        const tab: Tab = {
+          id,
+          label: opts.label ?? opts.customType,
+          sub: opts.sub,
+          cwd: opts.cwd,
+          groupId: targetGroup,
+          autoLabel: false,
+          kind: "custom",
+          customType: opts.customType,
+          customProps: opts.props,
+        };
+        return {
+          ...s,
+          tabs: [...s.tabs, tab],
+          activeId: id,
+          nextTabId: id + 1,
+        };
+      });
+      return createdId;
+    },
+    [],
+  );
 
   const addRemoteTab = useCallback(
     (remoteHostId: string, label: string): number => {
@@ -566,11 +627,14 @@ export function useWorkspace() {
           patch.rowSizes ??
           existing?.rowSizes ??
           Array.from({ length: targetRows }, () => 1);
+        const baseSlotOrder =
+          patch.slotOrder !== undefined ? patch.slotOrder : existing?.slotOrder;
         const merged = syncLayoutSizes(
           {
             cols: baseCols,
             colSizes: baseColSizes,
             rowSizes: baseRowSizes,
+            slotOrder: baseSlotOrder,
           },
           count,
         );
@@ -578,7 +642,8 @@ export function useWorkspace() {
           existing &&
           existing.cols === merged.cols &&
           arraysEqual(existing.colSizes, merged.colSizes) &&
-          arraysEqual(existing.rowSizes, merged.rowSizes)
+          arraysEqual(existing.rowSizes, merged.rowSizes) &&
+          arraysEqual(existing.slotOrder, merged.slotOrder)
         ) {
           return s;
         }
@@ -656,6 +721,7 @@ export function useWorkspace() {
     setActive,
     addTab,
     addRemoteTab,
+    addCustomTab,
     closeTab,
     renameTab,
     updateTabInfo,
@@ -674,8 +740,9 @@ export function useWorkspace() {
   };
 }
 
-function arraysEqual(a: number[], b: number[]): boolean {
+function arraysEqual(a: number[] | undefined, b: number[] | undefined): boolean {
   if (a === b) return true;
+  if (!a || !b) return false;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) return false;

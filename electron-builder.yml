@@ -15,6 +15,7 @@ files:
 asar: true
 asarUnpack:
   - "**/node_modules/node-pty/**"
+  - "**/node_modules/ssh2/**"
 
 linux:
   target:
