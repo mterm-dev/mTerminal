@@ -1,45 +1,40 @@
 <div align="center">
 
-## *ALPHA* Testing repository 
 # mTerminal
 
+**A modern, multi-tab terminal emulator for Linux, Windows, and macOS.**
 
-**A modern, multi-tab terminal emulator for Linux and Windows.**
-
-Built with [Electron](https://www.electronjs.org), [electron-vite](https://electron-vite.org), [React 19](https://react.dev), and TypeScript. Real PTY sessions via [`node-pty`](https://github.com/microsoft/node-pty), ANSI rendering by [xterm.js](https://xtermjs.org), and an encrypted vault for SSH credentials.
+Built with [Electron](https://www.electronjs.org), [electron-vite](https://electron-vite.org), [React 19](https://react.dev), and TypeScript. Real PTY sessions via [`node-pty`](https://github.com/microsoft/node-pty), ANSI rendering by [xterm.js](https://xtermjs.org), and an encrypted vault for credentials.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Electron](https://img.shields.io/badge/electron-latest-47848F.svg)](https://www.electronjs.org)
+[![Electron](https://img.shields.io/badge/electron-42-47848F.svg)](https://www.electronjs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-strict-3178C6.svg)](https://www.typescriptlang.org)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey.svg)](#install)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)](#install)
 
 </div>
 
-> **Status:** alpha. Tested on Linux (X11 + Wayland, KDE Plasma / CachyOS) and Windows 10/11.
+> **Status:** alpha. Tested on Linux (X11 + Wayland), Windows 10/11, and macOS 14+.
 
 ---
 
 ## Highlights
 
-- **Multi-tab PTY** — each tab is an independent shell. Login shell from `/etc/passwd` on Linux; `pwsh.exe` → `powershell.exe` → `cmd.exe` fallback on Windows (ConPTY).
+- **Multi-tab PTY** — independent shell per tab. Login shell from `/etc/passwd` on Linux/macOS; `pwsh.exe` → `powershell.exe` → `cmd.exe` fallback on Windows (ConPTY).
 - **Tab groups** — collapsible, drag-and-drop reordering, inline rename, 10-color accent palette.
-- **Live tab labels** — auto-update from process `cwd` and the running command (`vim`, `htop`, etc.).
-- **SSH host manager** — saved hosts, optional grouping, key-based or password auth, last-used tracking.
-- **Encrypted credential vault** — SSH passwords stored locally, encrypted with XChaCha20-Poly1305 + Argon2id key derivation. Master password never leaves the device. Vault file format byte-compatible with the previous Tauri build.
-- **AI integration** — Anthropic, OpenAI, and Ollama providers. Inline command palette (Ctrl+Shift+P), side panel chat (Ctrl+Shift+A), explain-selection popover, one-shot Claude Code tab (Ctrl+Shift+L).
-- **Embedded MCP server** — JSON-RPC over Unix domain socket (Linux/macOS) exposes `list_tabs`, `get_output`, `send_keys` to local agents.
-- **Themes** — 6 built-ins: mTerminal, Tokyo Night, Catppuccin Mocha, Solarized Dark, Gruvbox Dark, mTerminal Light.
-- **Custom titlebar** — macOS-style traffic lights, drag region, rounded corners when windowed.
+- **Live tab labels** — auto-updated from process `cwd` and the running command (`vim`, `htop`, …).
+- **Encrypted credential vault** — XChaCha20-Poly1305 + Argon2id (m=64 MiB, t=3, p=4). Master password never leaves the device.
+- **AI integration** — Anthropic, OpenAI, and Ollama providers. Inline command palette, side panel chat, explain-selection popover, one-shot Claude Code tab.
+- **Embedded MCP server** — JSON-RPC over Unix domain socket (Linux/macOS) exposing `list_tabs`, `get_output`, `send_keys` to local agents.
+- **Extension system** — first-party extensions for SSH/SFTP, file browser, git panel/status, error linkifier, and extra themes. Custom URL scheme (`mt-ext://`) and a typed `@mterminal/extension-api`.
+- **Themes** — 6 built-in (mTerminal, Tokyo Night, Catppuccin Mocha, Solarized Dark, Gruvbox Dark, mTerminal Light) plus a theme-pack extension.
 - **Persistent workspace** — tabs, groups, names, and accent colors survive restarts.
-- **Status bar** — active tab, cwd, running command, tab/group counts, clock.
+- **Native window chrome** — frameless on Linux/Windows with rounded corners; `hiddenInset` traffic lights on macOS.
 
-## Screenshots
-
-<div align="center">
-  <em>Add screenshots to <code>docs/screenshots/</code> and reference them here.</em>
-</div>
+---
 
 ## Keyboard shortcuts
+
+`Ctrl` on Linux/Windows, `Cmd` on macOS.
 
 | Shortcut | Action |
 |---|---|
@@ -52,8 +47,8 @@ Built with [Electron](https://www.electronjs.org), [electron-vite](https://elect
 | `Ctrl+Shift+L` | New Claude Code tab |
 | `Ctrl+,` | Open settings |
 | `Ctrl+B` | Toggle sidebar |
-| `Double-click` | Rename tab or group |
-| `Right-click` | Context menu (rename, move, accent, delete) |
+| Double-click | Rename tab or group |
+| Right-click | Context menu (rename, move, accent, delete) |
 
 ---
 
@@ -71,17 +66,17 @@ cd mTerminal
 
 ### Linux — release artifacts
 
-Grab the latest from the [Releases page](https://github.com/arthurr0/mTerminal/releases):
+From the [Releases page](https://github.com/arthurr0/mTerminal/releases):
 
 | Artifact | Use case |
 |---|---|
-| `mTerminal_<version>_amd64.AppImage` | Portable. `chmod +x` and run. Needs `fuse2` installed (`sudo pacman -S fuse2` on Arch); otherwise run with `--appimage-extract-and-run`. |
-| `mterminal_<version>_amd64.deb` | Debian / Ubuntu / Mint. `sudo dpkg -i mterminal_*.deb` |
+| `mTerminal_<version>_amd64.AppImage` | Portable. `chmod +x` and run. Needs `fuse2`; otherwise run with `--appimage-extract-and-run`. |
+| `mterminal_<version>_amd64.deb` | Debian / Ubuntu / Mint: `sudo dpkg -i mterminal_*.deb` |
 
 ### Arch / CachyOS (AUR)
 
 ```bash
-yay -S mterminal-bin       # binary release
+yay -S mterminal-bin
 ```
 
 Or build locally from the cloned repo with `makepkg -si`.
@@ -91,19 +86,22 @@ Or build locally from the cloned repo with `makepkg -si`.
 ```powershell
 git clone https://github.com/arthurr0/mTerminal.git
 cd mTerminal
-pwsh -File .\install.ps1                    # per-user (no admin)
-pwsh -File .\install.ps1 -Mode System       # system-wide (UAC)
-pwsh -File .\install.ps1 -SkipBuild         # reuse existing installer
+pwsh -File .\install.ps1                # per-user (no admin)
+pwsh -File .\install.ps1 -Mode System   # system-wide (UAC)
+pwsh -File .\install.ps1 -SkipBuild     # reuse existing installer
 pwsh -File .\install.ps1 -Uninstall
 ```
 
-Or download from Releases:
+Or grab `mTerminal-<version>-setup.exe` (NSIS, per-user, no admin) from Releases. Bundled Electron ships its own Chromium — no WebView2 install needed.
 
-| Artifact | Use case |
-|---|---|
-| `mTerminal-<version>-setup.exe` | NSIS installer, per-user, no admin. |
+### macOS
 
-Bundled Electron ships its own Chromium runtime — no WebView2 install needed.
+Download the universal DMG from the Releases page (built on `macos-14`, contains both arm64 and x64).
+
+Builds are **unsigned** (no Apple Developer certificate). On first run Gatekeeper will block the app:
+
+- right-click the `.app` → **Open** → **Open** in the dialog, or
+- clear the quarantine flag: `xattr -cr /Applications/mTerminal.app`
 
 ---
 
@@ -119,30 +117,37 @@ Bundled Electron ships its own Chromium runtime — no WebView2 install needed.
   | Arch / CachyOS | `nodejs pnpm base-devel python` |
   | Debian / Ubuntu | `nodejs build-essential python3` (and `pnpm` via Corepack) |
   | Fedora | `nodejs @"C Development Tools and Libraries" python3` |
-  | Windows | MSVC C++ Build Tools (or VS with "Desktop development with C++" workload) — required to compile `node-pty` |
+  | macOS | Xcode Command Line Tools (`xcode-select --install`) |
+  | Windows | MSVC C++ Build Tools (or VS with the "Desktop development with C++" workload) — required to compile `node-pty` |
 
-### Linux
+### All platforms
 
 ```bash
 pnpm install
 pnpm exec electron-rebuild -f -w node-pty   # rebuild node-pty against Electron's ABI
 pnpm dev                                    # electron-vite dev (HMR)
-pnpm package:linux                          # AppImage + deb → release/
 ```
 
-### Windows
+### Package
 
-```powershell
-pnpm install
-pnpm exec electron-rebuild -f -w node-pty
-pnpm dev
-pnpm package:win                            # NSIS installer → release/
+```bash
+pnpm package:linux    # AppImage + deb       → release/
+pnpm package:win      # NSIS installer       → release/
+pnpm package:mac      # universal DMG        → release/
 ```
 
 ### Notes
 
-- `pnpm rebuild` (the npm built-in) targets the host Node ABI. Always use `pnpm exec electron-rebuild` for `node-pty` after install or after upgrading Electron.
-- Wayland: works out of the box on most compositors. If GPU/compositor issues, launch with `--ozone-platform=wayland` or `--disable-gpu`.
+- `pnpm rebuild` (the npm built-in) targets the host Node ABI. Always use `pnpm exec electron-rebuild` for `node-pty` after `pnpm install` or after upgrading Electron.
+- Wayland: works out of the box on most compositors. If you hit GPU/compositor issues, launch with `--ozone-platform=wayland` or `--disable-gpu`.
+
+### Tests
+
+```bash
+pnpm test            # vitest run
+pnpm test:watch      # watch mode
+pnpm typecheck       # tsc -b (strict)
+```
 
 ---
 
@@ -152,10 +157,10 @@ pnpm package:win                            # NSIS installer → release/
 
 | Platform | Resolution order |
 |---|---|
-| Linux | `/etc/passwd` field 7 → `$SHELL` → `/bin/bash` |
+| Linux / macOS | `/etc/passwd` field 7 → `$SHELL` → `/bin/bash` |
 | Windows | `MTERMINAL_SHELL` → `pwsh.exe` → `powershell.exe` → `%COMSPEC%` → `cmd.exe` |
 
-`$SHELL` is intentionally **not** the primary source on Linux — it can be inherited from a parent process and lie about the user's actual login shell.
+`$SHELL` is intentionally **not** the primary source on Linux/macOS — it can be inherited from a parent process and lie about the user's actual login shell.
 
 ### Environment
 
@@ -174,15 +179,14 @@ Spawned shells receive:
 
 ### State and storage
 
-| Data | Location |
-|---|---|
-| Workspace (tabs, groups, accents) | `localStorage` key `mterminal:workspace:v1` |
-| Settings (theme, font) | `localStorage` key `mterminal:settings:v1` |
-| SSH hosts (no secrets) | `$XDG_CONFIG_HOME/mterminal/hosts.json` · `%APPDATA%\mterminal\hosts.json` |
-| Encrypted vault (SSH + AI keys) | `$XDG_CONFIG_HOME/mterminal/vault.bin` · `%APPDATA%\mterminal\vault.bin` |
-| MCP socket (Linux/macOS) | `$XDG_RUNTIME_DIR/mterminal-mcp-$USER.sock` |
+| Data | Linux | Windows | macOS |
+|---|---|---|---|
+| Workspace, settings | `localStorage` | `localStorage` | `localStorage` |
+| Hosts (no secrets) | `$XDG_CONFIG_HOME/mterminal/hosts.json` | `%APPDATA%\mterminal\hosts.json` | `~/Library/Application Support/mterminal/hosts.json` |
+| Encrypted vault | `$XDG_CONFIG_HOME/mterminal/vault.bin` | `%APPDATA%\mterminal\vault.bin` | `~/Library/Application Support/mterminal/vault.bin` |
+| MCP socket | `$XDG_RUNTIME_DIR/mterminal-mcp-$USER.sock` | *(not supported)* | `~/Library/Caches/mterminal/mcp-<user>.sock` |
 
-The vault is encrypted with XChaCha20-Poly1305 using a key derived from your master password via Argon2id (m=64 MiB, t=3, p=4). The plaintext master password and decrypted secrets are kept in memory only while the vault is unlocked.
+The vault is encrypted with XChaCha20-Poly1305 using a key derived from your master password via Argon2id. The plaintext password and decrypted secrets stay in memory only while the vault is unlocked.
 
 ---
 
@@ -192,18 +196,19 @@ The vault is encrypted with XChaCha20-Poly1305 using a key derived from your mas
 ┌─────────────────────────────┐         ┌──────────────────────────────┐
 │      Renderer (React)       │         │       Main (Node.js)         │
 │  ─────────────────────────  │   IPC   │  ──────────────────────────  │
-│   xterm.js · workspace      │ ◀─────▶ │   node-pty · ssh · MCP       │
-│   settings · SSH host UI    │ events  │   AI providers · vault       │
+│   xterm.js · workspace      │ ◀─────▶ │   node-pty · MCP · vault     │
+│   settings · extension UI   │ events  │   AI providers · extensions  │
 └─────────────────────────────┘         └──────────────────────────────┘
 ```
 
 - **`electron/main/pty.ts`** — owns the PTY session table (`node-pty`); spawns shells, streams output via `pty:event:<id>` IPC, walks the process tree to surface the running command.
-- **`electron/main/ssh.ts`** — `ssh:spawn` wraps a saved host into a PTY-attached `ssh` invocation.
 - **`electron/main/vault.ts`** — Argon2id-derived key, XChaCha20-Poly1305 sealed payload (`@noble/ciphers` + `@noble/hashes`).
-- **`electron/main/hosts.ts`** — host metadata persistence (clear-text, no secrets) + SSH key scanner.
 - **`electron/main/ai/`** — provider-agnostic streaming completion (Anthropic, OpenAI, Ollama).
 - **`electron/main/mcp.ts`** — embedded JSON-RPC MCP server on a Unix domain socket.
+- **`electron/main/extensions/`** — extension host: manifest loader, IPC bridge, `mt-ext://` protocol, typed API surface.
 - **`electron/preload/index.ts`** — `contextBridge` exposes the typed `window.mt` API to the renderer.
+- **`packages/extension-api/`** — public types (`MtApi`, manifest schema) consumed by extensions.
+- **`extensions/*`** — first-party extensions (`remote-ssh`, `file-browser`, `git-panel`, `git-status-mini`, `error-linkifier`, `theme-pack-extra`).
 - **`src/hooks/useWorkspace.ts`** — single source of truth for tabs/groups/active selection.
 - **`src/components/TerminalTab.tsx`** — xterm.js wrapper; one Terminal instance per tab, font/theme changes applied in place to avoid killing the shell.
 
@@ -213,22 +218,20 @@ See [`CLAUDE.md`](CLAUDE.md) for deeper architecture notes.
 
 ## Contributing
 
-Issues and PRs welcome at <https://github.com/arthurr0/mTerminal>. There is no test suite yet; please verify changes manually with `pnpm dev` on at least one of Linux / Windows before opening a PR.
+Issues and PRs welcome at <https://github.com/arthurr0/mTerminal>. Run `pnpm test && pnpm typecheck` before opening a PR; both must pass.
 
 ### Commit style
 
-Commits follow [Conventional Commits](https://www.conventionalcommits.org/) so release notes can be generated automatically. Use one of: `feat`, `fix`, `perf`, `refactor`, `style`, `docs`, `test`, `build`, `ci`, `chore`. Add `!` after the type for breaking changes (e.g. `feat!: drop legacy vault format`) or include a `BREAKING CHANGE:` footer.
+[Conventional Commits](https://www.conventionalcommits.org/), so release notes can be generated automatically. Use one of: `feat`, `fix`, `perf`, `refactor`, `style`, `docs`, `test`, `build`, `ci`, `chore`. Add `!` after the type for breaking changes (e.g. `feat!: drop legacy vault format`) or include a `BREAKING CHANGE:` footer.
 
 ---
 
 ## Releasing
 
-Tags drive everything. Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds Linux + Windows artifacts, generates release notes from commits with [`git-cliff`](https://git-cliff.org/), and publishes a GitHub Release with the binaries attached. There is **no `CHANGELOG.md`** — release notes live only on the GitHub Releases page and are regenerated each tag.
-
-### Cut a release
+Tags drive everything. Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds Linux + Windows + macOS artifacts, generates release notes from commits with [`git-cliff`](https://git-cliff.org/), and publishes a GitHub Release with the binaries attached. There is **no `CHANGELOG.md`** — release notes live only on the GitHub Releases page and are regenerated each tag.
 
 ```bash
-pnpm release patch         # bump the patch component of the latest tag
+pnpm release patch         # bump patch component
 pnpm release minor         # bump minor, reset patch
 pnpm release major         # bump major, reset minor and patch
 pnpm release 0.5.0         # explicit version
@@ -241,16 +244,7 @@ The script (`scripts/release.mjs`) refuses to proceed unless:
 - the computed tag does not already exist locally or on `origin`
 - there is at least one commit since the previous tag
 
-It then creates an annotated tag `v<x.y.z>` and pushes it to `origin`. CI takes over from there.
-
-### Manual tag (alternative)
-
-```bash
-git tag -a v0.5.0 -m "release v0.5.0"
-git push origin v0.5.0
-```
-
-CI will react identically. The `package.json` version is overwritten from the tag at build time, so you do **not** need to bump it by hand.
+It then creates an annotated tag `v<x.y.z>` and pushes it to `origin`. CI takes over from there. The `package.json` version is overwritten from the tag at build time, so you do **not** bump it by hand.
 
 ### Preview release notes locally
 
@@ -260,8 +254,6 @@ Optional — install [`git-cliff`](https://git-cliff.org/docs/installation) and 
 git-cliff --config cliff.toml --unreleased   # what the next release will contain
 git-cliff --config cliff.toml --latest       # what the most recent tag contained
 ```
-
-Sections (Features, Bug Fixes, Performance, Refactor, …) are derived from commit prefixes via `cliff.toml`. `chore(release): …` and merge commits are skipped; non-conventional commits land under "Other".
 
 ---
 
