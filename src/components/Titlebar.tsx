@@ -7,12 +7,18 @@ interface Props {
   onToggleSidebar: () => void;
 }
 
+export function isMacPlatform(): boolean {
+  return (window as { mt?: { platform?: string } }).mt?.platform === "darwin";
+}
+
 export function Titlebar({ title, sidebarCollapsed, onToggleSidebar }: Props) {
   const win = getCurrentWindow();
   const maximized = useMaximized();
+  const isMac = isMacPlatform();
 
   return (
-    <div className="term-titlebar" data-app-drag>
+    <div className="term-titlebar" data-app-drag data-platform={isMac ? "mac" : ""}>
+      {isMac && <div className="mac-traffic-spacer" data-app-drag />}
       <div className="term-titlebar-lead">
         <button
           className="titlebar-toggle"
@@ -53,57 +59,59 @@ export function Titlebar({ title, sidebarCollapsed, onToggleSidebar }: Props) {
       <div className="term-title" data-app-drag>
         {title}
       </div>
-      <div className="term-winctl">
-        <button
-          className="winctl-btn"
-          aria-label="minimize"
-          title="Minimize"
-          onClick={() => win.minimize()}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M3 8h10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-        </button>
-        <button
-          className="winctl-btn"
-          aria-label={maximized ? "restore" : "maximize"}
-          title={maximized ? "Restore" : "Maximize"}
-          onClick={() => win.toggleMaximize()}
-        >
-          {maximized ? (
+      {!isMac && (
+        <div className="term-winctl">
+          <button
+            className="winctl-btn"
+            aria-label="minimize"
+            title="Minimize"
+            onClick={() => win.minimize()}
+          >
             <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-              <rect
-                x="4.5" y="4.5" width="7" height="7"
-                fill="none" stroke="currentColor" strokeWidth="1.1"
-              />
+              <path d="M3 8h10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            className="winctl-btn"
+            aria-label={maximized ? "restore" : "maximize"}
+            title={maximized ? "Restore" : "Maximize"}
+            onClick={() => win.toggleMaximize()}
+          >
+            {maximized ? (
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <rect
+                  x="4.5" y="4.5" width="7" height="7"
+                  fill="none" stroke="currentColor" strokeWidth="1.1"
+                />
+                <path
+                  d="M6 4.5V3h7v7h-1.5"
+                  fill="none" stroke="currentColor" strokeWidth="1.1"
+                />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <rect
+                  x="3.5" y="3.5" width="9" height="9"
+                  fill="none" stroke="currentColor" strokeWidth="1.1"
+                />
+              </svg>
+            )}
+          </button>
+          <button
+            className="winctl-btn winctl-close"
+            aria-label="close"
+            title="Close"
+            onClick={() => win.close()}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
               <path
-                d="M6 4.5V3h7v7h-1.5"
-                fill="none" stroke="currentColor" strokeWidth="1.1"
+                d="M4 4l8 8M12 4l-8 8"
+                stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"
               />
             </svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-              <rect
-                x="3.5" y="3.5" width="9" height="9"
-                fill="none" stroke="currentColor" strokeWidth="1.1"
-              />
-            </svg>
-          )}
-        </button>
-        <button
-          className="winctl-btn winctl-close"
-          aria-label="close"
-          title="Close"
-          onClick={() => win.close()}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-            <path
-              d="M4 4l8 8M12 4l-8 8"
-              stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"
-            />
-          </svg>
-        </button>
-      </div>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

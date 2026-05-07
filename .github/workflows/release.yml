@@ -16,8 +16,11 @@ jobs:
   build-windows:
     uses: ./.github/workflows/build-windows.yml
 
+  build-macos:
+    uses: ./.github/workflows/build-macos.yml
+
   publish-github:
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-macos]
     if: startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/publish-github.yml
 

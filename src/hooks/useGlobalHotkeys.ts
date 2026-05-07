@@ -48,13 +48,24 @@ export function useGlobalHotkeys({
     };
     window.addEventListener("keydown", onVoiceKey, { capture: true });
 
+    const isMac =
+      (window as { mt?: { platform?: string } }).mt?.platform === "darwin";
+    const modOnly = (e: KeyboardEvent) =>
+      isMac
+        ? e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey
+        : e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey;
+    const modShift = (e: KeyboardEvent) =>
+      isMac
+        ? e.metaKey && e.shiftKey && !e.ctrlKey && !e.altKey
+        : e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey;
+
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
 
       const w = wsRef.current;
       if (!w) return;
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+      if (modOnly(e)) {
         if (e.key === "t" || e.key === "T") {
           e.preventDefault();
           setGridGroupId(null);
@@ -84,23 +95,23 @@ export function useGlobalHotkeys({
           return;
         }
       }
-      if (e.ctrlKey && e.shiftKey && (e.key === "G" || e.key === "g")) {
+      if (modShift(e) && (e.key === "G" || e.key === "g")) {
         e.preventDefault();
         w.addGroup();
       }
-      if (e.ctrlKey && e.shiftKey && (e.key === "L" || e.key === "l")) {
+      if (modShift(e) && (e.key === "L" || e.key === "l")) {
         e.preventDefault();
         spawnClaudeTabRef.current?.();
       }
-      if (e.ctrlKey && e.shiftKey && (e.key === "P" || e.key === "p")) {
+      if (modShift(e) && (e.key === "P" || e.key === "p")) {
         e.preventDefault();
         openPaletteRef.current?.();
       }
-      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
+      if (modShift(e) && (e.key === "A" || e.key === "a")) {
         e.preventDefault();
         toggleAIPanelRef.current?.();
       }
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ",") {
+      if (modOnly(e) && e.key === ",") {
         e.preventDefault();
         setShowSettings(true);
       }

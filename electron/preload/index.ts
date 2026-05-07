@@ -45,44 +45,6 @@ const api = {
     changePassword: (oldPassword: string, newPassword: string): Promise<void> =>
       ipcRenderer.invoke('vault:change-password', { oldPassword, newPassword }),
   },
-  hosts: {
-    list: (): Promise<{
-      hosts: Array<{
-        id: string
-        name: string
-        host: string
-        port: number
-        user: string
-        auth: string
-        identityPath?: string
-        savePassword: boolean
-        lastUsed?: number
-        groupId?: string
-      }>
-      groups: Array<{
-        id: string
-        name: string
-        collapsed: boolean
-        accent: string
-      }>
-    }> => ipcRenderer.invoke('hosts:list'),
-    save: (host: unknown, password?: string): Promise<string> =>
-      ipcRenderer.invoke('hosts:save', { host, password }),
-    delete: (id: string): Promise<void> =>
-      ipcRenderer.invoke('hosts:delete', { id }),
-    getPassword: (id: string): Promise<string | null> =>
-      ipcRenderer.invoke('hosts:get-password', { id }),
-    groupSave: (group: unknown): Promise<string> =>
-      ipcRenderer.invoke('hosts:group-save', { group }),
-    groupDelete: (id: string): Promise<void> =>
-      ipcRenderer.invoke('hosts:group-delete', { id }),
-    setGroup: (hostId: string, groupId?: string): Promise<void> =>
-      ipcRenderer.invoke('hosts:set-group', { hostId, groupId }),
-    listKeys: (): Promise<Array<{ path: string; name: string; keyType: string }>> =>
-      ipcRenderer.invoke('hosts:list-keys'),
-    toolAvailability: (): Promise<{ sshpass: boolean }> =>
-      ipcRenderer.invoke('hosts:tool-availability'),
-  },
   ai: {
     streamComplete: (args: {
       provider: string
@@ -158,17 +120,13 @@ const api = {
     stop: (): Promise<{ running: boolean; socketPath: string | null }> =>
       ipcRenderer.invoke('mcp:stop'),
   },
-  ssh: {
-    spawn: (args: {
-      rows: number
-      cols: number
-      hostId: string
-    }): Promise<number> => ipcRenderer.invoke('ssh:spawn', args),
-  },
   system: {
     info: (): Promise<{ user: string; host: string }> =>
       ipcRenderer.invoke('system:info'),
-  } as { info: () => Promise<{ user: string; host: string }> },
+    platform: (): Promise<NodeJS.Platform> =>
+      ipcRenderer.invoke('system:platform'),
+  },
+  platform: process.platform as NodeJS.Platform,
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: (): Promise<boolean> =>
@@ -448,6 +406,31 @@ const api = {
         cb: (key: string, present: boolean) => void,
       ): (() => void) => {
         const target = `ext:secrets:changed:${extId}`
+        const listener = (_: unknown, env: unknown): void => {
+          const e = env as { event: string; payload: { key: string; present: boolean } }
+          if (e?.event === target) cb(e.payload.key, e.payload.present)
+        }
+        ipcRenderer.on('ext:bus', listener)
+        return () => ipcRenderer.off('ext:bus', listener)
+      },
+    },
+
+    vault: {
+      get: (extId: string, key: string): Promise<string | null> =>
+        ipcRenderer.invoke('ext:vault:get', { extId, key }),
+      set: (extId: string, key: string, value: string): Promise<boolean> =>
+        ipcRenderer.invoke('ext:vault:set', { extId, key, value }),
+      delete: (extId: string, key: string): Promise<boolean> =>
+        ipcRenderer.invoke('ext:vault:delete', { extId, key }),
+      has: (extId: string, key: string): Promise<boolean> =>
+        ipcRenderer.invoke('ext:vault:has', { extId, key }),
+      keys: (extId: string): Promise<string[]> =>
+        ipcRenderer.invoke('ext:vault:keys', { extId }),
+      onChange: (
+        extId: string,
+        cb: (key: string, present: boolean) => void,
+      ): (() => void) => {
+        const target = `ext:vault:changed:${extId}`
         const listener = (_: unknown, env: unknown): void => {
           const e = env as { event: string; payload: { key: string; present: boolean } }
           if (e?.event === target) cb(e.payload.key, e.payload.present)

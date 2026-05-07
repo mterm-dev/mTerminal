@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import os from 'node:os'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execFileP = promisify(execFile)
@@ -48,6 +48,23 @@ function loginShellUnix(): string {
     username = os.userInfo().username
   } catch {
     username = process.env.USER || process.env.LOGNAME || null
+  }
+  if (username && process.platform === 'darwin') {
+    try {
+      const out = execFileSync(
+        'dscl',
+        ['.', '-read', `/Users/${username}`, 'UserShell'],
+        { encoding: 'utf8', timeout: 1000 }
+      )
+      const m = /UserShell:\s*(.+)/.exec(out)
+      if (m && m[1]) {
+        const shell = m[1].trim()
+        try {
+          fs.statSync(shell)
+          return shell
+        } catch {}
+      }
+    } catch {}
   }
   if (username) {
     try {

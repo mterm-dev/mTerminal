@@ -21,10 +21,14 @@ let server: net.Server | null = null
 let socketPath: string | null = null
 let starting: Promise<McpStatus> | null = null
 
-function computeSocketPath(): string {
-  const base =
-    process.env.XDG_RUNTIME_DIR ?? process.env.TMPDIR ?? '/tmp'
+export function computeSocketPath(): string {
   const user = os.userInfo().username || 'user'
+  if (process.platform === 'darwin') {
+    const dir = path.join(os.homedir(), 'Library', 'Caches', 'mterminal')
+    fs.mkdirSync(dir, { recursive: true })
+    return path.join(dir, `mcp-${user}.sock`)
+  }
+  const base = process.env.XDG_RUNTIME_DIR ?? process.env.TMPDIR ?? '/tmp'
   return path.join(base, `mterminal-mcp-${user}.sock`)
 }
 

@@ -10,13 +10,12 @@ import {
 } from 'electron'
 import path from 'node:path'
 import { registerPtyHandlers, setMainWindow as setPtyWindow } from './pty'
-import { registerSshHandlers } from './ssh'
 import { registerSystemHandlers } from './system'
 import { registerVaultHandlers } from './vault'
-import { registerHostsHandlers } from './hosts'
 import { registerAiHandlers } from './ai'
 import { registerClaudeCodeHandlers } from './claude-code'
 import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
+import { setupAppMenu } from './menu'
 import { registerWorkspaceHandlers } from './workspace'
 import { registerSettingsHandlers } from './settings-store'
 import { registerGitHandlers } from './git'
@@ -44,14 +43,17 @@ const appIconPath = path.join(app.getAppPath(), 'build/icon.png')
 const appIcon = nativeImage.createFromPath(appIconPath)
 
 const createWindow = (): BrowserWindow => {
+  const isMac = process.platform === 'darwin'
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 720,
     minHeight: 420,
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
+    frame: isMac ? undefined : false,
+    titleBarStyle: isMac ? 'hiddenInset' : undefined,
+    trafficLightPosition: isMac ? { x: 14, y: 14 } : undefined,
+    transparent: !isMac,
+    backgroundColor: isMac ? '#1a1a1a' : '#00000000',
     hasShadow: true,
     show: false,
     icon: appIcon.isEmpty() ? undefined : appIcon,
@@ -88,15 +90,14 @@ const createWindow = (): BrowserWindow => {
 app
   .whenReady()
   .then(async () => {
+    setupAppMenu()
     registerWindowIpc()
     registerClipboardIpc()
     registerDialogIpc()
     registerNotificationIpc()
 
     registerPtyHandlers()
-    registerSshHandlers()
     registerVaultHandlers()
-    registerHostsHandlers()
     registerAiHandlers()
     registerClaudeCodeHandlers()
     registerMcpHandlers()

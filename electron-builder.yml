@@ -51,5 +51,15 @@ nsis:
 mac:
   category: public.app-category.developer-tools
   target:
-    - dmg
-  icon: build/icon.icns
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.png
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}

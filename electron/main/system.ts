@@ -37,4 +37,5 @@ export function registerSystemHandlers(): void {
     user: detectUser(),
     host: detectHost(),
   }))
+  ipcMain.handle('system:platform', () => process.platform)
 }

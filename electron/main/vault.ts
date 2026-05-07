@@ -25,10 +25,15 @@ interface VaultFile {
 export interface VaultPayload {
   passwords: Record<string, string>
   ai_keys: Record<string, string>
+  ext?: Record<string, Record<string, string>>
 }
 
+export const NS_AI_KEYS = 'ai_keys'
+export const NS_PASSWORDS = 'passwords'
+export const EXT_NS_PREFIX = 'ext:'
+
 function emptyPayload(): VaultPayload {
-  return { passwords: {}, ai_keys: {} }
+  return { passwords: {}, ai_keys: {}, ext: {} }
 }
 
 interface VaultState {
@@ -40,23 +45,51 @@ interface VaultState {
 let state: VaultState | null = null
 
 export function configDir(): string {
-  let base: string
+  let dir: string
   if (process.platform === 'win32') {
-    base = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming')
+    const base =
+      process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming')
+    dir = path.join(base, 'mterminal')
+  } else if (process.platform === 'darwin') {
+    dir = path.join(
+      os.homedir(),
+      'Library',
+      'Application Support',
+      'mterminal'
+    )
   } else {
     const xdg = process.env.XDG_CONFIG_HOME
-    if (xdg && xdg.length > 0) {
-      base = xdg
-    } else {
-      base = path.join(os.homedir(), '.config')
-    }
+    const base = xdg && xdg.length > 0 ? xdg : path.join(os.homedir(), '.config')
+    dir = path.join(base, 'mterminal')
   }
-  const dir = path.join(base, 'mterminal')
   fs.mkdirSync(dir, { recursive: true })
   return dir
 }
 
+export function legacyMacConfigDir(): string {
+  const xdg = process.env.XDG_CONFIG_HOME
+  const base = xdg && xdg.length > 0 ? xdg : path.join(os.homedir(), '.config')
+  return path.join(base, 'mterminal')
+}
+
+function migrateMacVaultIfNeeded(): void {
+  if (process.platform !== 'darwin') return
+  const target = path.join(configDir(), 'vault.bin')
+  if (fs.existsSync(target)) return
+  const legacy = path.join(legacyMacConfigDir(), 'vault.bin')
+  if (!fs.existsSync(legacy)) return
+  try {
+    fs.renameSync(legacy, target)
+  } catch {
+    try {
+      fs.copyFileSync(legacy, target)
+      fs.unlinkSync(legacy)
+    } catch {}
+  }
+}
+
 function vaultPath(): string {
+  migrateMacVaultIfNeeded()
   return path.join(configDir(), 'vault.bin')
 }
 
@@ -97,6 +130,7 @@ function decryptPayload(
   return {
     passwords: obj.passwords ?? {},
     ai_keys: obj.ai_keys ?? {},
+    ext: obj.ext ?? {},
   }
 }
 
@@ -152,42 +186,100 @@ export function isUnlocked(): boolean {
   return state !== null
 }
 
-export function getAiKey(provider: string): string | null {
+function assertUnlocked(): VaultState {
   if (!state) throw new Error('vault locked')
-  const v = state.payload.ai_keys[provider]
+  return state
+}
+
+function bucket(s: VaultState, ns: string, create: boolean): Record<string, string> | null {
+  if (ns === NS_AI_KEYS) return s.payload.ai_keys
+  if (ns === NS_PASSWORDS) return s.payload.passwords
+  if (ns.startsWith(EXT_NS_PREFIX)) {
+    const extId = ns.slice(EXT_NS_PREFIX.length)
+    if (extId.length === 0) throw new Error('invalid namespace: empty extension id')
+    if (!s.payload.ext) s.payload.ext = {}
+    let b = s.payload.ext[extId]
+    if (!b) {
+      if (!create) return null
+      b = {}
+      s.payload.ext[extId] = b
+    }
+    return b
+  }
+  throw new Error(`invalid vault namespace: ${ns}`)
+}
+
+export function getSecret(ns: string, key: string): string | null {
+  const s = assertUnlocked()
+  const b = bucket(s, ns, false)
+  if (!b) return null
+  const v = b[key]
   return typeof v === 'string' ? v : null
 }
 
-export function setAiKey(provider: string, key: string): void {
-  if (!state) throw new Error('vault locked')
-  state.payload.ai_keys[provider] = key
+export function setSecret(ns: string, key: string, value: string): void {
+  const s = assertUnlocked()
+  const b = bucket(s, ns, true)!
+  b[key] = value
   persist()
 }
 
-export function clearAiKey(provider: string): void {
-  if (!state) throw new Error('vault locked')
-  if (provider in state.payload.ai_keys) {
-    delete state.payload.ai_keys[provider]
+export function clearSecret(ns: string, key: string): void {
+  const s = assertUnlocked()
+  const b = bucket(s, ns, false)
+  if (!b) return
+  if (key in b) {
+    delete b[key]
     persist()
   }
 }
 
-export function getHostPassword(hostId: string): string | null {
-  if (!state) throw new Error('vault locked')
-  const v = state.payload.passwords[hostId]
-  return typeof v === 'string' ? v : null
+export function listSecretKeys(ns: string): string[] {
+  const s = assertUnlocked()
+  const b = bucket(s, ns, false)
+  return b ? Object.keys(b) : []
 }
 
-export function setHostPassword(hostId: string, password: string): void {
-  if (!state) throw new Error('vault locked')
-  state.payload.passwords[hostId] = password
-  persist()
+export function getAiKey(provider: string): string | null {
+  return getSecret(NS_AI_KEYS, provider)
 }
 
-export function clearHostPassword(hostId: string): void {
-  if (!state) throw new Error('vault locked')
-  if (hostId in state.payload.passwords) {
-    delete state.payload.passwords[hostId]
+export function setAiKey(provider: string, key: string): void {
+  setSecret(NS_AI_KEYS, provider, key)
+}
+
+export function clearAiKey(provider: string): void {
+  clearSecret(NS_AI_KEYS, provider)
+}
+
+function extNs(extId: string): string {
+  if (!extId || typeof extId !== 'string') {
+    throw new Error('invalid extension id')
+  }
+  return EXT_NS_PREFIX + extId
+}
+
+export function getExtSecret(extId: string, key: string): string | null {
+  return getSecret(extNs(extId), key)
+}
+
+export function setExtSecret(extId: string, key: string, value: string): void {
+  setSecret(extNs(extId), key, value)
+}
+
+export function clearExtSecret(extId: string, key: string): void {
+  clearSecret(extNs(extId), key)
+}
+
+export function listExtSecretKeys(extId: string): string[] {
+  return listSecretKeys(extNs(extId))
+}
+
+export function purgeExtSecrets(extId: string): void {
+  const s = assertUnlocked()
+  if (!s.payload.ext) return
+  if (extId in s.payload.ext) {
+    delete s.payload.ext[extId]
     persist()
   }
 }

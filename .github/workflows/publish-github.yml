@@ -28,6 +28,12 @@ jobs:
           name: windows-bundles
           path: release-artifacts
 
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: macos-bundles
+          path: release-artifacts
+
       - name: Generate changelog
         id: cliff
         uses: orhun/git-cliff-action@v4
@@ -49,3 +55,4 @@ jobs:
             release-artifacts/*.AppImage
             release-artifacts/*.deb
             release-artifacts/*-setup.exe
+            release-artifacts/*.dmg

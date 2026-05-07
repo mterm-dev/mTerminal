@@ -79,6 +79,35 @@ describe("Titlebar", () => {
     expect(screen.getByRole("button", { name: /restore/i })).toBeTruthy();
   });
 
+  it("hides custom window controls on macOS (uses native traffic lights)", () => {
+    (window as { mt: { platform: string } }).mt = { platform: "darwin" };
+    try {
+      const { container } = render(
+        <Titlebar title="t" sidebarCollapsed={false} onToggleSidebar={() => {}} />,
+      );
+      expect(container.querySelector(".term-winctl")).toBeNull();
+      expect(container.querySelector(".mac-traffic-spacer")).not.toBeNull();
+      expect(
+        container.querySelector('[data-platform="mac"]'),
+      ).not.toBeNull();
+    } finally {
+      delete (window as { mt?: unknown }).mt;
+    }
+  });
+
+  it("shows custom window controls on non-mac platforms", () => {
+    (window as { mt: { platform: string } }).mt = { platform: "linux" };
+    try {
+      const { container } = render(
+        <Titlebar title="t" sidebarCollapsed={false} onToggleSidebar={() => {}} />,
+      );
+      expect(container.querySelector(".term-winctl")).not.toBeNull();
+      expect(container.querySelector(".mac-traffic-spacer")).toBeNull();
+    } finally {
+      delete (window as { mt?: unknown }).mt;
+    }
+  });
+
   it("sidebar toggle button calls onToggleSidebar and reflects collapsed state", () => {
     const onToggle = vi.fn();
     const { rerender } = render(
