@@ -2,7 +2,8 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
 
-const mainExternals = ['node-pty']
+const mainExternals = ['electron', 'node-pty']
+const preloadExternals = ['electron']
 
 export default defineConfig({
   main: {
@@ -27,6 +28,7 @@ export default defineConfig({
       outDir: 'out/preload',
       rollupOptions: {
         input: resolve(__dirname, 'electron/preload/index.ts'),
+        external: preloadExternals,
         output: {
           format: 'cjs',
           entryFileNames: '[name].js',
