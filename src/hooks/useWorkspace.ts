@@ -19,7 +19,7 @@ export function basename(p: string): string {
   return parts[parts.length - 1] || "/";
 }
 
-export type TabKind = "local" | "remote" | "custom";
+export type TabKind = "local" | "custom";
 
 export interface Tab {
   id: number;
@@ -29,7 +29,6 @@ export interface Tab {
   groupId: string | null;
   autoLabel: boolean;
   kind: TabKind;
-  remoteHostId?: string;
   customType?: string;
   customProps?: unknown;
 }
@@ -128,38 +127,32 @@ function loadInitial(): WorkspaceState {
               : undefined,
         }));
         const groupIds = new Set(groups.map((g) => g.id));
-        const tabs: Tab[] = parsed.tabs.map((t) => {
-          const kind: TabKind =
-            t.kind === "remote"
-              ? "remote"
-              : t.kind === "custom"
-                ? "custom"
-                : "local";
-          const gid =
-            kind === "remote"
-              ? null
-              : typeof t.groupId === "string" && groupIds.has(t.groupId)
+        const tabs: Tab[] = parsed.tabs
+          .filter((t) => (t.kind as string | undefined) !== "remote")
+          .map((t) => {
+            const kind: TabKind = t.kind === "custom" ? "custom" : "local";
+            const gid =
+              typeof t.groupId === "string" && groupIds.has(t.groupId)
                 ? t.groupId
                 : null;
-          const tab: Tab = {
-            id: t.id!,
-            label: t.label || "shell",
-            sub: t.sub,
-            cwd: t.cwd,
-            groupId: gid,
-            autoLabel: t.autoLabel ?? true,
-            kind,
-            remoteHostId: kind === "remote" ? t.remoteHostId : undefined,
-          };
-          if (kind === "custom") {
-            tab.customType =
-              typeof (t as { customType?: unknown }).customType === "string"
-                ? ((t as { customType?: string }).customType as string)
-                : undefined;
-            tab.customProps = (t as { customProps?: unknown }).customProps;
-          }
-          return tab;
-        });
+            const tab: Tab = {
+              id: t.id!,
+              label: t.label || "shell",
+              sub: t.sub,
+              cwd: t.cwd,
+              groupId: gid,
+              autoLabel: t.autoLabel ?? true,
+              kind,
+            };
+            if (kind === "custom") {
+              tab.customType =
+                typeof (t as { customType?: unknown }).customType === "string"
+                  ? ((t as { customType?: string }).customType as string)
+                  : undefined;
+              tab.customProps = (t as { customProps?: unknown }).customProps;
+            }
+            return tab;
+          });
         const groupLayouts = sanitizeGroupLayouts(
           (parsed as { groupLayouts?: Record<string, unknown> }).groupLayouts,
           groups,
@@ -393,33 +386,6 @@ export function useWorkspace() {
     [],
   );
 
-  const addRemoteTab = useCallback(
-    (remoteHostId: string, label: string): number => {
-      let createdId = -1;
-      setState((s) => {
-        const id = s.nextTabId;
-        createdId = id;
-        const tab: Tab = {
-          id,
-          label,
-          groupId: null,
-          autoLabel: false,
-          kind: "remote",
-          remoteHostId,
-          sub: "remote",
-        };
-        return {
-          ...s,
-          tabs: [...s.tabs, tab],
-          activeId: id,
-          nextTabId: id + 1,
-        };
-      });
-      return createdId;
-    },
-    [],
-  );
-
   const closeTab = useCallback((id: number) => {
     setState((s) => {
       const idx = s.tabs.findIndex((t) => t.id === id);
@@ -454,7 +420,6 @@ export function useWorkspace() {
       setState((s) => {
         const t = s.tabs.find((x) => x.id === id);
         if (!t) return s;
-        if (t.kind === "remote") return s;
         const cwd = info.cwd ?? undefined;
         const cmd = info.cmd ?? undefined;
         const baseFromCwd = info.cwd ? basename(info.cwd) : undefined;
@@ -500,9 +465,8 @@ export function useWorkspace() {
       setState((s) => {
         const tab = s.tabs.find((t) => t.id === id);
         if (!tab) return s;
-        if (tab.kind === "remote" && groupId !== null) return s;
         const without = s.tabs.filter((t) => t.id !== id);
-        const updated: Tab = { ...tab, groupId: tab.kind === "remote" ? null : groupId };
+        const updated: Tab = { ...tab, groupId };
         let insertAt: number;
         if (beforeId == null) {
           let lastIdx = -1;
@@ -720,7 +684,6 @@ export function useWorkspace() {
     ...state,
     setActive,
     addTab,
-    addRemoteTab,
     addCustomTab,
     closeTab,
     renameTab,

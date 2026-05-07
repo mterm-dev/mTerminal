@@ -88,9 +88,20 @@ function migrateMacVaultIfNeeded(): void {
   }
 }
 
+function isDevMode(): boolean {
+  return (
+    !!process.env.ELECTRON_RENDERER_URL ||
+    process.env.NODE_ENV === 'development'
+  )
+}
+
+function vaultFileName(): string {
+  return isDevMode() ? 'vault.dev.bin' : 'vault.bin'
+}
+
 function vaultPath(): string {
-  migrateMacVaultIfNeeded()
-  return path.join(configDir(), 'vault.bin')
+  if (!isDevMode()) migrateMacVaultIfNeeded()
+  return path.join(configDir(), vaultFileName())
 }
 
 function deriveKey(password: string, salt: Uint8Array): Uint8Array {
@@ -292,7 +303,23 @@ export function registerVaultHandlers(): void {
     } catch {
       exists = false
     }
-    return { exists, unlocked: isUnlocked() }
+    return { exists, unlocked: isUnlocked(), dev: isDevMode() }
+  })
+
+  ipcMain.handle('vault:dev-reset', () => {
+    if (!isDevMode()) {
+      throw new Error('vault:dev-reset only available in development mode')
+    }
+    if (state) {
+      zero(state.key)
+      state = null
+    }
+    const p = vaultPath()
+    try {
+      if (fs.existsSync(p)) fs.unlinkSync(p)
+    } catch (err) {
+      throw new Error(`failed to remove vault file: ${(err as Error).message}`)
+    }
   })
 
   ipcMain.handle('vault:init', (_e, args: { masterPassword: string }) => {

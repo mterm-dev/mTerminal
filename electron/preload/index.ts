@@ -35,7 +35,7 @@ const api = {
     },
   },
   vault: {
-    status: (): Promise<{ exists: boolean; unlocked: boolean }> =>
+    status: (): Promise<{ exists: boolean; unlocked: boolean; dev?: boolean }> =>
       ipcRenderer.invoke('vault:status'),
     init: (masterPassword: string): Promise<void> =>
       ipcRenderer.invoke('vault:init', { masterPassword }),
@@ -44,6 +44,7 @@ const api = {
     lock: (): Promise<void> => ipcRenderer.invoke('vault:lock'),
     changePassword: (oldPassword: string, newPassword: string): Promise<void> =>
       ipcRenderer.invoke('vault:change-password', { oldPassword, newPassword }),
+    devReset: (): Promise<void> => ipcRenderer.invoke('vault:dev-reset'),
   },
   ai: {
     streamComplete: (args: {

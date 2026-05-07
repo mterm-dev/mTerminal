@@ -11,7 +11,7 @@ export default defineConfig([
     clean: true,
     splitting: false,
     sourcemap: true,
-    external: ['electron'],
+    external: ['electron', 'ssh2'],
   },
   {
     entry: { renderer: 'src/renderer.tsx' },
@@ -29,9 +29,9 @@ export default defineConfig([
       'react-dom/client',
       'react/jsx-runtime',
       'scheduler',
-      'codemirror',
-      /^@codemirror\//,
-      /^@lezer\//,
+      '@xterm/xterm',
+      '@xterm/addon-fit',
+      '@xterm/addon-web-links',
     ],
     define: {
       'process.env.NODE_ENV': JSON.stringify('production'),

@@ -28,9 +28,6 @@ function makeMt() {
         (_id: number, _cb: (ev: unknown) => void) => () => {},
       ),
     },
-    ssh: {
-      spawn: vi.fn(async () => 21),
-    },
     system: {
       info: vi.fn(async () => ({ user: "me", host: "box" })),
     },
@@ -40,17 +37,6 @@ function makeMt() {
       unlock: vi.fn(async () => undefined),
       lock: vi.fn(async () => undefined),
       changePassword: vi.fn(async () => undefined),
-    },
-    hosts: {
-      list: vi.fn(async () => []),
-      save: vi.fn(async () => undefined),
-      delete: vi.fn(async () => undefined),
-      getPassword: vi.fn(async () => "pw"),
-      groupSave: vi.fn(async () => undefined),
-      groupDelete: vi.fn(async () => undefined),
-      setGroup: vi.fn(async () => undefined),
-      listKeys: vi.fn(async () => ["~/.ssh/id_ed25519"]),
-      toolAvailability: vi.fn(async () => ({ sshpass: true })),
     },
     ai: {
       streamComplete: vi.fn(async () => 33),
@@ -152,29 +138,6 @@ describe("invoke routing", () => {
     expect(mt.pty.recentOutput).toHaveBeenCalledWith(1, 4096);
   });
 
-  it("ssh_spawn passes args + wires events via pty.onEvent", async () => {
-    const ch = new Channel<{ kind: string }>();
-    let lastEv: unknown = null;
-    ch.onmessage = (m) => (lastEv = m);
-    const id = await invoke<number>("ssh_spawn", {
-      events: ch,
-      rows: 12,
-      cols: 80,
-      hostId: "h-1",
-    });
-    expect(id).toBe(21);
-    expect(mt.ssh.spawn).toHaveBeenCalledWith({
-      rows: 12,
-      cols: 80,
-      hostId: "h-1",
-    });
-    
-    expect(mt.pty.onEvent).toHaveBeenCalledWith(21, expect.any(Function));
-    const cb = mt.pty.onEvent.mock.calls[0][1] as (ev: unknown) => void;
-    cb({ kind: "exit" });
-    expect(lastEv).toEqual({ kind: "exit" });
-  });
-
   it("vault_*", async () => {
     await invoke("vault_status");
     expect(mt.vault.status).toHaveBeenCalled();
@@ -186,27 +149,6 @@ describe("invoke routing", () => {
     expect(mt.vault.lock).toHaveBeenCalled();
     await invoke("vault_change_password", { oldPassword: "a", newPassword: "b" });
     expect(mt.vault.changePassword).toHaveBeenCalledWith("a", "b");
-  });
-
-  it("host_*", async () => {
-    await invoke("host_list");
-    expect(mt.hosts.list).toHaveBeenCalled();
-    await invoke("host_save", { host: { id: "x" }, password: "pw" });
-    expect(mt.hosts.save).toHaveBeenCalledWith({ id: "x" }, "pw");
-    await invoke("host_delete", { id: "x" });
-    expect(mt.hosts.delete).toHaveBeenCalledWith("x");
-    await invoke("host_get_password", { id: "x" });
-    expect(mt.hosts.getPassword).toHaveBeenCalledWith("x");
-    await invoke("host_group_save", { group: { id: "g1" } });
-    expect(mt.hosts.groupSave).toHaveBeenCalledWith({ id: "g1" });
-    await invoke("host_group_delete", { id: "g1" });
-    expect(mt.hosts.groupDelete).toHaveBeenCalledWith("g1");
-    await invoke("host_set_group", { hostId: "x", groupId: "g1" });
-    expect(mt.hosts.setGroup).toHaveBeenCalledWith("x", "g1");
-    await invoke("list_ssh_keys");
-    expect(mt.hosts.listKeys).toHaveBeenCalled();
-    await invoke("tool_availability");
-    expect(mt.hosts.toolAvailability).toHaveBeenCalled();
   });
 
   it("ai_*: stream_complete wires events; cancel/list/set/clear/has", async () => {

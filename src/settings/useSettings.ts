@@ -20,7 +20,6 @@ export interface Settings {
   copyOnSelect: boolean;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
-  remoteWorkspaceEnabled: boolean;
   showGreeting: boolean;
   aiEnabled: boolean;
   aiDefaultProvider: AiProviderId;
@@ -57,6 +56,7 @@ export interface Settings {
   voiceWhisperCppModelPath: string;
   voiceOpenaiModel: string;
   voiceOpenaiBaseUrl: string;
+  vaultIdleLockMs: number;
   /**
    * Extension namespace. Each plugin's settings live under
    * `extensions[<extensionId>]`. Plugins read/write via `ctx.settings.*`.
@@ -87,7 +87,6 @@ export const DEFAULT_SETTINGS: Settings = {
   copyOnSelect: false,
   sidebarCollapsed: false,
   sidebarWidth: 300,
-  remoteWorkspaceEnabled: false,
   showGreeting: true,
   aiEnabled: false,
   aiDefaultProvider: "anthropic",
@@ -124,6 +123,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceWhisperCppModelPath: "",
   voiceOpenaiModel: "whisper-1",
   voiceOpenaiBaseUrl: "https://api.openai.com/v1",
+  vaultIdleLockMs: 15 * 60 * 1000,
 };
 
 const KEY = "mterminal:settings:v1";

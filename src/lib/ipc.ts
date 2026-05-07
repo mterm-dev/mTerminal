@@ -1,4 +1,5 @@
 import type { MtApi } from '../../electron/preload'
+import { getVaultGateBridge } from '../extensions/vault-gate-bridge'
 
 const mt = (): MtApi => {
   const api = (window as unknown as { mt?: MtApi }).mt
@@ -17,7 +18,28 @@ export class Channel<T> {
 
 type Args = Record<string, unknown> | undefined
 
+const VAULT_LOCKED_RE = /vault\s*(?:is\s*)?locked/i
+
 export async function invoke<T = unknown>(
+  cmd: string,
+  args?: Args,
+): Promise<T> {
+  try {
+    return await dispatchInvoke<T>(cmd, args)
+  } catch (err) {
+    const msg = String((err as Error)?.message ?? err)
+    if (cmd.startsWith('vault_') || !VAULT_LOCKED_RE.test(msg)) {
+      throw err
+    }
+    const gate = getVaultGateBridge()
+    if (!gate) throw err
+    const ok = await gate.ensure()
+    if (!ok) throw err
+    return await dispatchInvoke<T>(cmd, args)
+  }
+}
+
+async function dispatchInvoke<T = unknown>(
   cmd: string,
   args?: Args,
 ): Promise<T> {
@@ -36,19 +58,6 @@ export async function invoke<T = unknown>(
         args: (a.args as string[] | null | undefined) ?? undefined,
         env: (a.env as Record<string, string> | null | undefined) ?? undefined,
         cwd: (a.cwd as string | null | undefined) ?? undefined,
-      })
-      if (events) {
-        const off = api.pty.onEvent(id, (ev) => events.onmessage?.(ev as unknown))
-        events.unsubscribe = off
-      }
-      return id as T
-    }
-    case 'ssh_spawn': {
-      const events = a.events as Channel<unknown> | undefined
-      const id = await api.ssh.spawn({
-        rows: a.rows as number,
-        cols: a.cols as number,
-        hostId: a.hostId as string,
       })
       if (events) {
         const off = api.pty.onEvent(id, (ev) => events.onmessage?.(ev as unknown))
@@ -82,36 +91,13 @@ export async function invoke<T = unknown>(
       return (await api.vault.unlock(a.masterPassword as string)) as T
     case 'vault_lock':
       return (await api.vault.lock()) as T
+    case 'vault_dev_reset':
+      return (await api.vault.devReset()) as T
     case 'vault_change_password':
       return (await api.vault.changePassword(
         a.oldPassword as string,
         a.newPassword as string,
       )) as T
-
-    case 'host_list':
-      return (await api.hosts.list()) as T
-    case 'host_save':
-      return (await api.hosts.save(
-        a.host,
-        (a.password as string | null | undefined) ?? undefined,
-      )) as T
-    case 'host_delete':
-      return (await api.hosts.delete(a.id as string)) as T
-    case 'host_get_password':
-      return (await api.hosts.getPassword(a.id as string)) as T
-    case 'host_group_save':
-      return (await api.hosts.groupSave(a.group)) as T
-    case 'host_group_delete':
-      return (await api.hosts.groupDelete(a.id as string)) as T
-    case 'host_set_group':
-      return (await api.hosts.setGroup(
-        a.hostId as string,
-        (a.groupId as string | null | undefined) ?? undefined,
-      )) as T
-    case 'list_ssh_keys':
-      return (await api.hosts.listKeys()) as T
-    case 'tool_availability':
-      return (await api.hosts.toolAvailability()) as T
 
     case 'ai_stream_complete': {
       const events = a.events as Channel<unknown> | undefined

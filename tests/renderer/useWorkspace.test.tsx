@@ -110,7 +110,7 @@ describe("useWorkspace - initial state", () => {
     expect(result.current.tabs[2].groupId).toBeNull();
   });
 
-  it("5. remote tab seed has groupId forced to null", () => {
+  it("5. legacy remote tab seed is dropped on load", () => {
     const seed = {
       tabs: [
         {
@@ -121,18 +121,24 @@ describe("useWorkspace - initial state", () => {
           kind: "remote",
           remoteHostId: "h1",
         },
+        {
+          id: 2,
+          label: "shell",
+          groupId: null,
+          autoLabel: true,
+          kind: "local",
+        },
       ],
       groups: [
         { id: "g1", name: "one", collapsed: false, accent: "orange" },
       ],
       activeId: 1,
-      nextTabId: 2,
+      nextTabId: 3,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
     const { result } = renderHook(() => useWorkspace());
-    expect(result.current.tabs[0].kind).toBe("remote");
-    expect(result.current.tabs[0].groupId).toBeNull();
-    expect(result.current.tabs[0].remoteHostId).toBe("h1");
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.tabs[0].kind).toBe("local");
   });
 });
 
@@ -199,24 +205,6 @@ describe("useWorkspace - addTab", () => {
     });
     const created = result.current.tabs[result.current.tabs.length - 1];
     expect(created.groupId).toBe(gid);
-  });
-});
-
-describe("useWorkspace - addRemoteTab", () => {
-  it("10. adds remote tab with proper defaults", () => {
-    const { result } = renderHook(() => useWorkspace());
-    let createdId = -1;
-    act(() => {
-      createdId = result.current.addRemoteTab("host-42", "my-host");
-    });
-    const created = result.current.tabs.find((t) => t.id === createdId)!;
-    expect(created.kind).toBe("remote");
-    expect(created.autoLabel).toBe(false);
-    expect(created.sub).toBe("remote");
-    expect(created.groupId).toBeNull();
-    expect(created.label).toBe("my-host");
-    expect(created.remoteHostId).toBe("host-42");
-    expect(result.current.activeId).toBe(createdId);
   });
 });
 
@@ -337,20 +325,6 @@ describe("useWorkspace - updateTabInfo", () => {
     expect(result.current.tabs[0].sub).toBe("b");
   });
 
-  it("20. remote tab → no-op", () => {
-    const { result } = renderHook(() => useWorkspace());
-    let rid = -1;
-    act(() => {
-      rid = result.current.addRemoteTab("h1", "remote-label");
-    });
-    const before = result.current.tabs.find((t) => t.id === rid);
-    act(() => {
-      result.current.updateTabInfo(rid, { cwd: "/x/y", cmd: "bash" });
-    });
-    const after = result.current.tabs.find((t) => t.id === rid);
-    expect(after).toEqual(before);
-  });
-
   it("21. same input as current state returns same state object", () => {
     const { result } = renderHook(() => useWorkspace());
     const id = result.current.tabs[0].id;
@@ -377,7 +351,7 @@ describe("useWorkspace - updateTabInfo", () => {
 });
 
 describe("useWorkspace - moveTab", () => {
-  it("23. moves local tab to group; remote unchanged", () => {
+  it("23. moves local tab to group", () => {
     const { result } = renderHook(() => useWorkspace());
     const localId = result.current.tabs[0].id;
     act(() => {
@@ -385,19 +359,10 @@ describe("useWorkspace - moveTab", () => {
     });
     const gid = result.current.groups[0].id;
     act(() => {
-      result.current.addRemoteTab("h1", "r");
-    });
-    const remoteId = result.current.tabs[result.current.tabs.length - 1].id;
-    act(() => {
       result.current.moveTab(localId, gid);
     });
-    act(() => {
-      result.current.moveTab(remoteId, gid);
-    });
     const local = result.current.tabs.find((t) => t.id === localId)!;
-    const remote = result.current.tabs.find((t) => t.id === remoteId)!;
     expect(local.groupId).toBe(gid);
-    expect(remote.groupId).toBeNull();
   });
 });
 
@@ -447,22 +412,6 @@ describe("useWorkspace - reorderTab", () => {
     expect(ids).toEqual([t0, t2, t1]);
   });
 
-  it("26. remote tab cannot move into a group (no-op)", () => {
-    const { result } = renderHook(() => useWorkspace());
-    act(() => {
-      result.current.addGroup("g");
-    });
-    const gid = result.current.groups[0].id;
-    act(() => {
-      result.current.addRemoteTab("h1", "r");
-    });
-    const rid = result.current.tabs[result.current.tabs.length - 1].id;
-    const tabsBefore = result.current.tabs;
-    act(() => {
-      result.current.reorderTab(rid, null, gid);
-    });
-    expect(result.current.tabs).toBe(tabsBefore);
-  });
 });
 
 describe("useWorkspace - groups", () => {

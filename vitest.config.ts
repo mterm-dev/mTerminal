@@ -8,7 +8,11 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    include: [
+      'tests/**/*.test.ts',
+      'tests/**/*.test.tsx',
+      'extensions/*/tests/**/*.test.ts',
+    ],
     environmentMatchGlobs: [
       ['tests/renderer/**', 'jsdom'],
     ],

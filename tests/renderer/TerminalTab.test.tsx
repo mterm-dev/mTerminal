@@ -263,34 +263,6 @@ describe("TerminalTab", () => {
     expect(onPtyReady).toHaveBeenCalledWith(1, 42);
   });
 
-  it("2. remote mount calls invoke('ssh_spawn',…) instead and writes banner", async () => {
-    shimMock.invoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "ssh_spawn") return 7;
-      return undefined;
-    });
-    render(
-      <TerminalTab
-        {...baseProps}
-        tabId={9}
-        kind="remote"
-        remoteHostId="hostA"
-        remoteBanner="connecting to hostA"
-      />,
-    );
-    await flush();
-    const sshCall = shimMock.invoke.mock.calls.find((c) => c[0] === "ssh_spawn");
-    expect(sshCall).toBeTruthy();
-    expect((sshCall![1] as Record<string, unknown>).hostId).toBe("hostA");
-    expect(
-      shimMock.invoke.mock.calls.find((c) => c[0] === "pty_spawn"),
-    ).toBeUndefined();
-    
-    const t = lastTerm();
-    const wrote = (t.write as ReturnType<typeof vi.fn>).mock.calls.some((c) =>
-      String(c[0]).includes("connecting to hostA"),
-    );
-    expect(wrote).toBe(true);
-  });
 
   it("3. PTY 'data' event writes chunk to terminal", async () => {
     let channel: { onmessage: ((m: unknown) => void) | null } | null = null;
@@ -494,33 +466,4 @@ describe("TerminalTab", () => {
     expect(shimMock.writeText).toHaveBeenCalledWith("copied");
   });
 
-  it("12. remote tab + initialCommand: ssh_spawn used and command sent later", async () => {
-    shimMock.invoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "ssh_spawn") return 200;
-      return undefined;
-    });
-    render(
-      <TerminalTab
-        {...baseProps}
-        tabId={5}
-        kind="remote"
-        remoteHostId="h1"
-        remoteBanner="banner"
-        initialCommand={"ls\n"}
-      />,
-    );
-    await flush();
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 250));
-    });
-    const ssh = shimMock.invoke.mock.calls.find((c) => c[0] === "ssh_spawn");
-    expect(ssh).toBeTruthy();
-    const w = shimMock.invoke.mock.calls.find(
-      (c) =>
-        c[0] === "pty_write" &&
-        (c[1] as Record<string, unknown>).id === 200 &&
-        (c[1] as Record<string, unknown>).data === "ls\n",
-    );
-    expect(w).toBeTruthy();
-  });
 });

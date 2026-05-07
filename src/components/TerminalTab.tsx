@@ -6,8 +6,6 @@ import { Channel, invoke, writeText } from "../lib/ipc";
 import type { CursorStyle } from "../settings/useSettings";
 import { getTerminalRegistry, type TerminalAdapter } from "../extensions";
 
-type TabKind = "local" | "remote";
-
 export interface GridPlacement {
   colStart: number;
   rowStart: number;
@@ -45,9 +43,6 @@ interface Props {
   shellArgs: string[];
   showGreeting: boolean;
   copyOnSelect: boolean;
-  kind?: TabKind;
-  remoteHostId?: string;
-  remoteBanner?: string;
   initialCwd?: string;
   toolbar?: ReactNode;
 }
@@ -82,9 +77,6 @@ export function TerminalTab({
   shellArgs,
   showGreeting,
   copyOnSelect,
-  kind = "local",
-  remoteHostId,
-  remoteBanner,
   initialCwd,
   toolbar,
 }: Props) {
@@ -101,7 +93,6 @@ export function TerminalTab({
   const onPtyCloseRef = useRef(onPtyClose);
   onPtyCloseRef.current = onPtyClose;
   const initialShellRef = useRef({ shell, shellArgs, showGreeting });
-  const initialRemoteRef = useRef({ kind, remoteHostId, remoteBanner });
   const initialCwdRef = useRef(initialCwd);
   const initialCommandRef = useRef(initialCommand);
   const onSelectionMenuRef = useRef(onSelectionMenu);
@@ -198,29 +189,15 @@ export function TerminalTab({
     const start = async () => {
       try {
         const init = initialShellRef.current;
-        const remote = initialRemoteRef.current;
-        let id: number;
-        if (remote.kind === "remote" && remote.remoteHostId) {
-          if (remote.remoteBanner) {
-            term.write(`\x1b[2m${remote.remoteBanner}\x1b[0m\r\n`);
-          }
-          id = await invoke<number>("ssh_spawn", {
-            events,
-            rows: term.rows,
-            cols: term.cols,
-            hostId: remote.remoteHostId,
-          });
-        } else {
-          id = await invoke<number>("pty_spawn", {
-            events,
-            rows: term.rows,
-            cols: term.cols,
-            shell: init.shell || null,
-            args: init.shellArgs.length ? init.shellArgs : null,
-            env: init.showGreeting ? { MT_GREETING: "1" } : null,
-            cwd: initialCwdRef.current || null,
-          });
-        }
+        const id = await invoke<number>("pty_spawn", {
+          events,
+          rows: term.rows,
+          cols: term.cols,
+          shell: init.shell || null,
+          args: init.shellArgs.length ? init.shellArgs : null,
+          env: init.showGreeting ? { MT_GREETING: "1" } : null,
+          cwd: initialCwdRef.current || null,
+        });
         if (disposed) {
           await invoke("pty_kill", { id }).catch(() => {});
           return;
@@ -384,7 +361,6 @@ export function TerminalTab({
 
   useEffect(() => {
     if (!active) return;
-    if (initialRemoteRef.current.kind === "remote") return;
     let cancelled = false;
     const pollInfo = async () => {
       const id = ptyIdRef.current;

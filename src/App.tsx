@@ -17,17 +17,16 @@ import { GridTabToolbar } from "./components/GridTabToolbar";
 import { GridResizers } from "./components/GridResizers";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { ConfirmDialog } from "./components/ConfirmDialog";
-import { RemoteWorkspace } from "./components/RemoteWorkspace";
-import {
-  MasterPasswordModal,
-  type MasterPasswordMode,
-} from "./components/MasterPasswordModal";
-import { RemoteHostModal } from "./components/RemoteHostModal";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { ColorPicker } from "./components/ColorPicker";
 import { useSystemInfo } from "./hooks/useSystemInfo";
 import { useMaximized } from "./hooks/useMaximized";
-import { useVault } from "./hooks/useVault";
+import {
+  VaultGateProvider,
+  useVaultGate,
+  type VaultModalMode,
+} from "./vault/VaultGate";
+import { VaultModalHost } from "./vault/VaultModalHost";
 import { useClaudeCodeStatus } from "./hooks/useClaudeCodeStatus";
 import { useMcpServer } from "./hooks/useMcpServer";
 import { AICommandPalette } from "./components/AICommandPalette";
@@ -37,11 +36,6 @@ import { AIPanel } from "./components/AIPanel";
 // extensions/git-panel/. Sidebar.tsx mounts plugin panels via PluginPanelSlot.
 import { invoke, open as openDialog } from "./lib/ipc";
 import type { AiUsage } from "./hooks/useAI";
-import {
-  useRemoteHosts,
-  type HostGroup,
-  type HostMeta,
-} from "./hooks/useRemoteHosts";
 import { computeGridLayout, computeOccupancy, defaultSizes } from "./lib/grid-layout";
 import { useSettings } from "./settings/useSettings";
 import { findTheme } from "./settings/themes";
@@ -50,6 +44,7 @@ import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import { useThemeVars } from "./hooks/useThemeVars";
 import { useGlobalHotkeys } from "./hooks/useGlobalHotkeys";
 import { insertDictation } from "./lib/insertDictation";
+import { publishTerminalOptions } from "./lib/terminal-options-broadcast";
 import {
   bootExtensionsHostRenderer,
   getTabTypeRegistry,
@@ -68,10 +63,30 @@ interface CtxState {
 }
 
 export default function App() {
+  const settingsBundle = useSettings();
+  const { settings } = settingsBundle;
+  const vaultEnabled =
+    settings.aiEnabled ||
+    (settings.voiceEnabled && settings.voiceEngine === "openai");
+  return (
+    <VaultGateProvider
+      enabled={vaultEnabled}
+      idleLockMs={settings.vaultIdleLockMs}
+    >
+      <AppInner settingsBundle={settingsBundle} />
+    </VaultGateProvider>
+  );
+}
+
+function AppInner({
+  settingsBundle,
+}: {
+  settingsBundle: ReturnType<typeof useSettings>;
+}) {
   const ws = useWorkspace();
   const sys = useSystemInfo();
   const maximized = useMaximized();
-  const { settings, update, reset } = useSettings();
+  const { settings, update, reset } = settingsBundle;
   const theme = useMemo(() => findTheme(settings.themeId), [settings.themeId]);
   const xtermTheme = useMemo(
     () => ({
@@ -105,41 +120,30 @@ export default function App() {
   const [closeConfirm, setCloseConfirm] = useState<{ count: number } | null>(null);
   const [gridGroupId, setGridGroupId] = useState<string | null>(null);
   const [soloTabId, setSoloTabId] = useState<number | null>(null);
-  const [hostModal, setHostModal] = useState<{
-    initial: HostMeta | null;
-    presetGroupId?: string | null;
-  } | null>(null);
-  const [editingHostGroupId, setEditingHostGroupId] = useState<string | null>(null);
-  const [vaultModal, setVaultModal] = useState<{ mode: MasterPasswordMode } | null>(null);
-  const [pendingAfterUnlock, setPendingAfterUnlock] = useState<(() => void) | null>(null);
 
-  const vault = useVault(
-    settings.remoteWorkspaceEnabled ||
-      settings.aiEnabled ||
-      (settings.voiceEnabled && settings.voiceEngine === "openai"),
-  );
+  const vault = useVaultGate();
 
   const requestVault = useCallback(
-    (mode: MasterPasswordMode, after?: () => void) => {
-      if (after) setPendingAfterUnlock(() => after);
-      setVaultModal({ mode });
+    (mode: VaultModalMode, after?: () => void) => {
+      vault.openModal(mode);
+      if (after) {
+        void vault.ensure().then((ok) => {
+          if (ok) after();
+        });
+      }
     },
-    [],
+    [vault],
   );
 
   const ensureVaultUnlocked = useCallback(
     (after: () => void) => {
-      if (!vault.status.exists) {
-        requestVault("init", after);
-        return false;
-      }
-      if (!vault.status.unlocked) {
-        requestVault("unlock", after);
-        return false;
-      }
-      return true;
+      if (vault.status.unlocked) return true;
+      void vault.ensure().then((ok) => {
+        if (ok) after();
+      });
+      return false;
     },
-    [vault.status, requestVault],
+    [vault],
   );
 
   const [ptyMap, setPtyMap] = useState<Map<number, number>>(new Map());
@@ -255,11 +259,6 @@ export default function App() {
       : aiProvider === "ollama"
         ? settings.aiOllamaBaseUrl
         : undefined;
-  const remote = useRemoteHosts(
-    settings.remoteWorkspaceEnabled,
-    vault.status.unlocked,
-  );
-
   const tabsRef = useRef(ws.tabs);
   tabsRef.current = ws.tabs;
   const settingsRef = useRef(settings);
@@ -292,7 +291,7 @@ export default function App() {
       onCoreChange: () => ({ dispose: () => {} }),
     });
     const tabType = (t: { kind: string; customType?: string }): string =>
-      t.kind === "custom" ? t.customType ?? "custom" : t.kind === "remote" ? "remote" : "terminal";
+      t.kind === "custom" ? t.customType ?? "custom" : "terminal";
     setWorkspaceBackend({
       groups: () => wsRef.current.groups.map((g) => ({ id: g.id, label: g.name })),
       activeGroup: () => {
@@ -391,6 +390,28 @@ export default function App() {
   }, []);
 
   useThemeVars(theme, settings);
+
+  useEffect(() => {
+    publishTerminalOptions({
+      fontFamily: settings.fontFamily,
+      fontSize: settings.fontSize,
+      lineHeight: settings.lineHeight,
+      cursorStyle: settings.cursorStyle,
+      cursorBlink: settings.cursorBlink,
+      scrollback: settings.scrollback,
+      copyOnSelect: settings.copyOnSelect,
+      theme: xtermTheme,
+    });
+  }, [
+    settings.fontFamily,
+    settings.fontSize,
+    settings.lineHeight,
+    settings.cursorStyle,
+    settings.cursorBlink,
+    settings.scrollback,
+    settings.copyOnSelect,
+    xtermTheme,
+  ]);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -755,120 +776,6 @@ export default function App() {
     ws.setActive(id);
   };
 
-  const connectToHost = useCallback(
-    (host: HostMeta) => {
-      const needsVault = host.auth === "password" && host.savePassword;
-      const doConnect = () => {
-        const label = host.name?.trim() || `${host.user}@${host.host}`;
-        ws.addRemoteTab(host.id, label);
-        setGridGroupId(null);
-      };
-      if (needsVault && !ensureVaultUnlocked(doConnect)) return;
-      doConnect();
-    },
-    [ws, ensureVaultUnlocked],
-  );
-
-  const openAddHost = (groupId?: string | null) => {
-    if (!vault.status.exists) {
-      requestVault("init", () =>
-        setHostModal({ initial: null, presetGroupId: groupId ?? null }),
-      );
-      return;
-    }
-    setHostModal({ initial: null, presetGroupId: groupId ?? null });
-  };
-
-  const openEditHost = (host: HostMeta) =>
-    setHostModal({ initial: host, presetGroupId: host.groupId ?? null });
-
-  const handleHostSubmit = useCallback(
-    async (host: HostMeta, password?: string) => {
-      const willSavePw = host.auth === "password" && host.savePassword;
-      if (willSavePw && !vault.status.unlocked) {
-        requestVault("unlock", () => {
-          remote.save(host, password).catch(() => {});
-        });
-        throw new Error("vault locked — unlocking...");
-      }
-      await remote.save(host, password);
-    },
-    [remote, vault.status.unlocked, requestVault],
-  );
-
-  const handleHostDelete = useCallback(
-    async (host: HostMeta) => {
-      await remote.remove(host.id);
-    },
-    [remote],
-  );
-
-  const openHostMenu = (host: HostMeta, x: number, y: number) => {
-    const otherGroups = remote.groups.filter((g) => g.id !== host.groupId);
-    const moveItems: MenuItem[] = [];
-    if (host.groupId) {
-      moveItems.push({
-        label: "move to → ungrouped",
-        onSelect: () =>
-          remote.setHostGroup(host.id, null).catch(() => {}),
-      });
-    }
-    for (const g of otherGroups) {
-      moveItems.push({
-        label: `move to → ${g.name}`,
-        onSelect: () =>
-          remote.setHostGroup(host.id, g.id).catch(() => {}),
-      });
-    }
-    const items: MenuItem[] = [
-      { label: "connect", onSelect: () => connectToHost(host) },
-      { label: "edit", onSelect: () => openEditHost(host) },
-      ...(moveItems.length
-        ? [
-            { label: "", onSelect: () => {}, separator: true } as MenuItem,
-            ...moveItems,
-          ]
-        : []),
-      { label: "", onSelect: () => {}, separator: true },
-      {
-        label: "delete",
-        onSelect: () => handleHostDelete(host).catch(() => {}),
-        danger: true,
-      },
-    ];
-    setCtx({ x, y, items });
-  };
-
-  const openHostGroupMenu = (group: HostGroup, x: number, y: number) => {
-    const items: MenuItem[] = [
-      { label: "rename group", onSelect: () => setEditingHostGroupId(group.id) },
-      { label: "new host here", onSelect: () => openAddHost(group.id) },
-      {
-        label: "toggle collapse",
-        onSelect: () => remote.toggleGroup(group.id).catch(() => {}),
-      },
-      { label: "", onSelect: () => {}, separator: true },
-      {
-        label: "change color",
-        submenu: (
-          <ColorPicker
-            value={group.accent}
-            onChange={(hex) =>
-              remote.setGroupAccent(group.id, hex).catch(() => {})
-            }
-          />
-        ),
-      },
-      { label: "", onSelect: () => {}, separator: true },
-      {
-        label: "delete group",
-        onSelect: () => remote.deleteGroup(group.id).catch(() => {}),
-        danger: true,
-      },
-    ];
-    setCtx({ x, y, items });
-  };
-
   const onLockClick = useCallback(() => {
     if (!vault.status.exists) {
       requestVault("init");
@@ -1106,30 +1013,6 @@ export default function App() {
           width={settings.sidebarWidth}
           onResize={(w) => update("sidebarWidth", w)}
           ccStatuses={ccStatuses}
-          remoteSlot={
-            settings.remoteWorkspaceEnabled ? (
-              <RemoteWorkspace
-                hosts={remote.hosts}
-                groups={remote.groups}
-                vault={vault.status}
-                onAddHost={openAddHost}
-                onConnect={connectToHost}
-                onLockClick={onLockClick}
-                onHostContextMenu={openHostMenu}
-                onGroupContextMenu={openHostGroupMenu}
-                onAddGroup={() => remote.addGroup().catch(() => {})}
-                onToggleGroup={(id) => remote.toggleGroup(id).catch(() => {})}
-                onRenameGroup={(id, name) =>
-                  remote.renameGroup(id, name).catch(() => {})
-                }
-                onSetHostGroup={(hid, gid) =>
-                  remote.setHostGroup(hid, gid).catch(() => {})
-                }
-                editingGroupId={editingHostGroupId}
-                setEditingGroupId={setEditingHostGroupId}
-              />
-            ) : null
-          }
         />
 
         <main className="term-main">
@@ -1167,15 +1050,6 @@ export default function App() {
               />
             )}
             {ws.tabs.map((t) => {
-              const remoteHost =
-                t.kind === "remote" && t.remoteHostId
-                  ? remote.hosts.find((h) => h.id === t.remoteHostId)
-                  : undefined;
-              const banner = remoteHost
-                ? `connecting to ${remoteHost.user}@${remoteHost.host}:${remoteHost.port}...`
-                : t.kind === "remote"
-                  ? "connecting to remote host..."
-                  : undefined;
               const isGridContext =
                 gridGroupId !== null && t.groupId === gridGroupId;
               const isSolo = soloTabId === t.id;
@@ -1260,9 +1134,6 @@ export default function App() {
                   shellArgs={shellArgs}
                   showGreeting={settings.showGreeting}
                   copyOnSelect={settings.copyOnSelect}
-                  kind={t.kind === "remote" ? "remote" : "local"}
-                  remoteHostId={t.remoteHostId}
-                  remoteBanner={banner}
                   initialCwd={t.cwd}
                 />
               );
@@ -1290,6 +1161,16 @@ export default function App() {
                     tooltip: voice.error
                       ? `voice error: ${voice.error}`
                       : undefined,
+                  }
+                : undefined
+            }
+            vaultLock={
+              vault.enabled
+                ? {
+                    visible: true,
+                    exists: vault.status.exists,
+                    unlocked: vault.status.unlocked,
+                    onClick: onLockClick,
                   }
                 : undefined
             }
@@ -1403,50 +1284,7 @@ export default function App() {
         />
       )}
 
-      {hostModal && (
-        <RemoteHostModal
-          initial={
-            hostModal.initial ??
-            (hostModal.presetGroupId
-              ? ({
-                  id: "",
-                  name: "",
-                  host: "",
-                  port: 22,
-                  user: "",
-                  auth: "key",
-                  identityPath: "",
-                  savePassword: true,
-                  groupId: hostModal.presetGroupId,
-                } as HostMeta)
-              : null)
-          }
-          vaultUnlocked={vault.status.unlocked}
-          onClose={() => setHostModal(null)}
-          onSubmit={handleHostSubmit}
-          onRequestUnlock={() => requestVault(vault.status.exists ? "unlock" : "init")}
-        />
-      )}
-
-      {vaultModal && (
-        <MasterPasswordModal
-          mode={vaultModal.mode}
-          onClose={() => setVaultModal(null)}
-          onInit={async (pw) => {
-            await vault.init(pw);
-            const after = pendingAfterUnlock;
-            setPendingAfterUnlock(null);
-            if (after) after();
-          }}
-          onUnlock={async (pw) => {
-            await vault.unlock(pw);
-            const after = pendingAfterUnlock;
-            setPendingAfterUnlock(null);
-            if (after) after();
-          }}
-          onChange={(oldPw, newPw) => vault.changePassword(oldPw, newPw)}
-        />
-      )}
+      <VaultModalHost />
 
       {/* Extension system: pending modals/toasts/trust prompts. */}
       <PluginUiHost />

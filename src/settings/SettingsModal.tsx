@@ -5,7 +5,7 @@ import { Appearance } from "./sections/Appearance";
 import { TerminalPanel } from "./sections/TerminalPanel";
 import { ShellPanel } from "./sections/ShellPanel";
 import { BehaviorPanel } from "./sections/BehaviorPanel";
-import { RemotePanel } from "./sections/RemotePanel";
+import { VaultPanel } from "./sections/VaultPanel";
 import { AIPanel } from "./sections/AIPanel";
 import { VoicePanel } from "./sections/VoicePanel";
 import {
@@ -40,9 +40,9 @@ type CoreSection =
   | "terminal"
   | "shell"
   | "behavior"
+  | "vault"
   | "ai"
   | "voice"
-  | "remote"
   | "extensions"
   | "about";
 
@@ -53,9 +53,9 @@ const SECTIONS: ReadonlyArray<readonly [CoreSection, string]> = [
   ["terminal", "Terminal"],
   ["shell", "Shell"],
   ["behavior", "Behavior"],
+  ["vault", "Vault"],
   ["ai", "AI"],
   ["voice", "Voice to Text"],
-  ["remote", "Remote"],
   ["extensions", "Extensions"],
   ["about", "About"],
 ];
@@ -225,6 +225,9 @@ export function SettingsModal({
             {section === "behavior" && (
               <BehaviorPanel settings={settings} update={update} />
             )}
+            {section === "vault" && (
+              <VaultPanel settings={settings} update={update} />
+            )}
             {section === "ai" && (
               <AIPanel
                 settings={settings}
@@ -235,9 +238,6 @@ export function SettingsModal({
             )}
             {section === "voice" && (
               <VoicePanel settings={settings} update={update} {...vaultProps} />
-            )}
-            {section === "remote" && (
-              <RemotePanel settings={settings} update={update} />
             )}
             {section === "extensions" && (
               <ExtensionsOverview

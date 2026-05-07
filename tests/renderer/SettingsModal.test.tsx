@@ -77,7 +77,6 @@ describe("SettingsModal — render & navigation", () => {
       /^Shell$/,
       /^Behavior$/,
       /^AI$/,
-      /^Remote$/,
       /^About$/,
     ]) {
       expect(screen.getAllByRole("button", { name: label }).length).toBeGreaterThan(0);
@@ -112,12 +111,6 @@ describe("SettingsModal — render & navigation", () => {
     expect(screen.getByText(/Confirm close with multiple tabs/i)).toBeTruthy();
     expect(screen.getByText(/Copy on select/i)).toBeTruthy();
     expect(screen.getByText(/mTerminal greeting/i)).toBeTruthy();
-  });
-
-  it("switches to Remote section", () => {
-    render(<SettingsModal {...makeProps()} />);
-    gotoSection(/^Remote$/);
-    expect(screen.getByText(/Remote workspace/i)).toBeTruthy();
   });
 
   it("switches to About section", () => {
@@ -300,25 +293,6 @@ describe("SettingsModal — Behavior toggles", () => {
     expect(toggles[0].getAttribute("aria-checked")).toBe("true");
     expect(toggles[1].getAttribute("aria-checked")).toBe("false");
     expect(toggles[2].getAttribute("aria-checked")).toBe("true");
-  });
-});
-
-describe("SettingsModal — Remote workspace toggle", () => {
-  it("emits update when clicked", () => {
-    const props = makeProps({ settings: { ...DEFAULT_SETTINGS, remoteWorkspaceEnabled: false } });
-    render(<SettingsModal {...props} />);
-    gotoSection(/^Remote$/);
-    const toggle = screen.getByRole("switch");
-    fireEvent.click(toggle);
-    expect(props.update).toHaveBeenCalledWith("remoteWorkspaceEnabled", true);
-  });
-
-  it("toggle reflects current state", () => {
-    const props = makeProps({ settings: { ...DEFAULT_SETTINGS, remoteWorkspaceEnabled: true } });
-    render(<SettingsModal {...props} />);
-    gotoSection(/^Remote$/);
-    const toggle = screen.getByRole("switch");
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
   });
 });
 

@@ -2,7 +2,6 @@ import {
   Fragment,
   type DragEvent as RDragEvent,
   type PointerEvent as RPointerEvent,
-  type ReactNode,
   useRef,
   useState,
 } from "react";
@@ -38,7 +37,6 @@ interface Props {
   onOpenSettings: () => void;
   activeGroupId: string | null;
   onSelectGroup: (id: string) => void;
-  remoteSlot?: ReactNode;
   width: number;
   onResize: (w: number) => void;
   ccStatuses?: Map<number, CcStatus>;
@@ -111,7 +109,6 @@ export function Sidebar(props: Props) {
     onOpenSettings,
     activeGroupId,
     onSelectGroup,
-    remoteSlot,
     width,
     onResize,
     ccStatuses,
@@ -140,8 +137,7 @@ export function Sidebar(props: Props) {
     document.addEventListener("pointerup", up);
   };
 
-  const localTabs = tabs.filter((t) => t.kind !== "remote");
-  const remoteTabs = tabs.filter((t) => t.kind === "remote");
+  const localTabs = tabs;
 
   const [dragTabId, setDragTabId] = useState<number | null>(null);
   const [dragGroupId, setDragGroupId] = useState<string | null>(null);
@@ -629,16 +625,6 @@ export function Sidebar(props: Props) {
           </div>
         )}
 
-        {remoteSlot}
-
-        {remoteTabs.length > 0 && (
-          <div className="term-remote-tabs">
-            <div className="term-side-section term-side-section-row term-side-subsection">
-              <span>remote sessions</span>
-            </div>
-            {remoteTabs.map((t) => renderTab(t, remoteTabs))}
-          </div>
-        )}
       </div>
 
       <div

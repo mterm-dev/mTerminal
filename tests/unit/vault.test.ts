@@ -15,9 +15,15 @@ import {
   getAiKey,
   setAiKey,
   clearAiKey,
-  getHostPassword,
-  setHostPassword,
-  clearHostPassword,
+  getSecret,
+  setSecret,
+  clearSecret,
+  listSecretKeys,
+  getExtSecret,
+  setExtSecret,
+  clearExtSecret,
+  listExtSecretKeys,
+  purgeExtSecrets,
   isUnlocked,
   zero,
 } from '../../electron/main/vault'
@@ -65,7 +71,7 @@ describe('vault', () => {
         exists: boolean
         unlocked: boolean
       }
-      expect(status).toEqual({ exists: false, unlocked: false })
+      expect(status).toEqual({ exists: false, unlocked: false, dev: false })
     }
   )
 
@@ -88,7 +94,7 @@ describe('vault', () => {
         exists: boolean
         unlocked: boolean
       }
-      expect(status).toEqual({ exists: true, unlocked: true })
+      expect(status).toEqual({ exists: true, unlocked: true, dev: false })
       expect(
         fs.existsSync(path.join(tmpDir, 'mterminal', 'vault.bin'))
       ).toBe(true)
@@ -117,7 +123,7 @@ describe('vault', () => {
         exists: boolean
         unlocked: boolean
       }
-      expect(lockedStatus).toEqual({ exists: true, unlocked: false })
+      expect(lockedStatus).toEqual({ exists: true, unlocked: false, dev: false })
 
       await expect(
         invoke('vault:unlock', { masterPassword: 'wrong' })
@@ -135,7 +141,7 @@ describe('vault', () => {
         exists: boolean
         unlocked: boolean
       }
-      expect(unlocked).toEqual({ exists: true, unlocked: true })
+      expect(unlocked).toEqual({ exists: true, unlocked: true, dev: false })
     }
   )
 
@@ -151,26 +157,22 @@ describe('vault', () => {
         exists: boolean
         unlocked: boolean
       }
-      expect(status).toEqual({ exists: true, unlocked: false })
+      expect(status).toEqual({ exists: true, unlocked: false, dev: false })
     }
   )
 
   it(
-    'host password and ai key round-trip across lock+unlock',
+    'ai key round-trips across lock+unlock',
     { timeout: TEST_TIMEOUT },
     async () => {
       await invoke('vault:init', { masterPassword: 'pw' })
-      setHostPassword('host-1', 'sekrit')
       setAiKey('anthropic', 'sk-ant-xxx')
-      expect(getHostPassword('host-1')).toBe('sekrit')
       expect(getAiKey('anthropic')).toBe('sk-ant-xxx')
 
       await invoke('vault:lock')
       await invoke('vault:unlock', { masterPassword: 'pw' })
 
-      expect(getHostPassword('host-1')).toBe('sekrit')
       expect(getAiKey('anthropic')).toBe('sk-ant-xxx')
-      expect(getHostPassword('missing')).toBeNull()
       expect(getAiKey('missing')).toBeNull()
     }
   )
@@ -223,40 +225,306 @@ describe('vault', () => {
   )
 
   it(
-    'getAiKey/setAiKey/getHostPassword/setHostPassword throw when locked',
+    'getAiKey/setAiKey throw when locked',
     { timeout: TEST_TIMEOUT },
     async () => {
       await invoke('vault:init', { masterPassword: 'pw' })
       await invoke('vault:lock')
       expect(() => getAiKey('anthropic')).toThrow(/vault locked/)
       expect(() => setAiKey('anthropic', 'k')).toThrow(/vault locked/)
-      expect(() => getHostPassword('h')).toThrow(/vault locked/)
-      expect(() => setHostPassword('h', 'p')).toThrow(/vault locked/)
       expect(() => clearAiKey('anthropic')).toThrow(/vault locked/)
-      expect(() => clearHostPassword('h')).toThrow(/vault locked/)
     }
   )
 
   it(
-    'clearAiKey and clearHostPassword remove entries',
+    'clearAiKey removes entries',
     { timeout: TEST_TIMEOUT },
     async () => {
       await invoke('vault:init', { masterPassword: 'pw' })
       setAiKey('anthropic', 'sk-ant-xxx')
-      setHostPassword('host-1', 'sekrit')
       expect(getAiKey('anthropic')).toBe('sk-ant-xxx')
-      expect(getHostPassword('host-1')).toBe('sekrit')
 
       clearAiKey('anthropic')
-      clearHostPassword('host-1')
       expect(getAiKey('anthropic')).toBeNull()
-      expect(getHostPassword('host-1')).toBeNull()
 
 
       await invoke('vault:lock')
       await invoke('vault:unlock', { masterPassword: 'pw' })
       expect(getAiKey('anthropic')).toBeNull()
-      expect(getHostPassword('host-1')).toBeNull()
+    }
+  )
+})
+
+describe('vault generic API', () => {
+  beforeEach(() => {
+    tmpDir = freshTmpDir()
+    process.env.XDG_CONFIG_HOME = tmpDir
+    __reset()
+    registerVaultHandlers()
+  })
+
+  afterEach(async () => {
+    try {
+      await invoke('vault:lock')
+    } catch {}
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    } catch {}
+  })
+
+  it(
+    'getSecret returns null for missing key',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      expect(getSecret('ai_keys', 'nope')).toBeNull()
+      expect(getSecret('passwords', 'nope')).toBeNull()
+      expect(getSecret('ext:foo', 'nope')).toBeNull()
+    }
+  )
+
+  it(
+    'setSecret/getSecret round-trip survives lock/unlock',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      setSecret('ai_keys', 'anthropic', 'sk-x')
+      setSecret('passwords', 'host-a', 'pwd')
+      setSecret('ext:plug', 'token', 'gh_y')
+      await invoke('vault:lock')
+      await invoke('vault:unlock', { masterPassword: 'pw' })
+      expect(getSecret('ai_keys', 'anthropic')).toBe('sk-x')
+      expect(getSecret('passwords', 'host-a')).toBe('pwd')
+      expect(getSecret('ext:plug', 'token')).toBe('gh_y')
+    }
+  )
+
+  it(
+    'clearSecret removes the entry',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      setSecret('ai_keys', 'openai', 'sk-1')
+      clearSecret('ai_keys', 'openai')
+      expect(getSecret('ai_keys', 'openai')).toBeNull()
+    }
+  )
+
+  it(
+    'listSecretKeys returns only keys for the requested namespace',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      setSecret('ai_keys', 'a', '1')
+      setSecret('ai_keys', 'b', '2')
+      setSecret('passwords', 'h', 'p')
+      setSecret('ext:foo', 'k1', 'v')
+      expect(listSecretKeys('ai_keys').sort()).toEqual(['a', 'b'])
+      expect(listSecretKeys('passwords')).toEqual(['h'])
+      expect(listSecretKeys('ext:foo')).toEqual(['k1'])
+      expect(listSecretKeys('ext:bar')).toEqual([])
+    }
+  )
+
+  it(
+    'invalid namespace throws',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      expect(() => getSecret('bogus', 'k')).toThrow(/invalid vault namespace/)
+      expect(() => setSecret('bogus', 'k', 'v')).toThrow(/invalid vault namespace/)
+      expect(() => getSecret('ext:', 'k')).toThrow(/empty extension id/)
+    }
+  )
+
+  it(
+    'all generic ops throw when locked',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      await invoke('vault:lock')
+      expect(() => getSecret('ai_keys', 'a')).toThrow(/vault locked/)
+      expect(() => setSecret('ai_keys', 'a', 'v')).toThrow(/vault locked/)
+      expect(() => clearSecret('ai_keys', 'a')).toThrow(/vault locked/)
+      expect(() => listSecretKeys('ai_keys')).toThrow(/vault locked/)
+    }
+  )
+})
+
+describe('vault extension namespace', () => {
+  beforeEach(() => {
+    tmpDir = freshTmpDir()
+    process.env.XDG_CONFIG_HOME = tmpDir
+    __reset()
+    registerVaultHandlers()
+  })
+
+  afterEach(async () => {
+    try {
+      await invoke('vault:lock')
+    } catch {}
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    } catch {}
+  })
+
+  it(
+    'isolates secrets across extensions',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      setExtSecret('ext-a', 'k', 'v-a')
+      setExtSecret('ext-b', 'k', 'v-b')
+      expect(getExtSecret('ext-a', 'k')).toBe('v-a')
+      expect(getExtSecret('ext-b', 'k')).toBe('v-b')
+      expect(listExtSecretKeys('ext-a')).toEqual(['k'])
+      expect(listExtSecretKeys('ext-c')).toEqual([])
+    }
+  )
+
+  it(
+    'clearExtSecret only affects target extension',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      setExtSecret('ext-a', 'k', 'v')
+      setExtSecret('ext-b', 'k', 'v')
+      clearExtSecret('ext-a', 'k')
+      expect(getExtSecret('ext-a', 'k')).toBeNull()
+      expect(getExtSecret('ext-b', 'k')).toBe('v')
+    }
+  )
+
+  it(
+    'purgeExtSecrets removes only target extension and leaves core untouched',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      setAiKey('anthropic', 'sk')
+      setExtSecret('ext-a', 'k', 'v')
+      setExtSecret('ext-b', 'k', 'v')
+      purgeExtSecrets('ext-a')
+      expect(listExtSecretKeys('ext-a')).toEqual([])
+      expect(listExtSecretKeys('ext-b')).toEqual(['k'])
+      expect(getAiKey('anthropic')).toBe('sk')
+    }
+  )
+
+  it(
+    'ext secrets persist across lock/unlock cycle',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      setExtSecret('ext-a', 'k', 'persistent')
+      await invoke('vault:lock')
+      await invoke('vault:unlock', { masterPassword: 'pw' })
+      expect(getExtSecret('ext-a', 'k')).toBe('persistent')
+    }
+  )
+
+  it(
+    'ext ops throw when locked',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      await invoke('vault:lock')
+      expect(() => getExtSecret('ext-a', 'k')).toThrow(/vault locked/)
+      expect(() => setExtSecret('ext-a', 'k', 'v')).toThrow(/vault locked/)
+      expect(() => listExtSecretKeys('ext-a')).toThrow(/vault locked/)
+      expect(() => purgeExtSecrets('ext-a')).toThrow(/vault locked/)
+    }
+  )
+})
+
+describe('vault:dev-reset', () => {
+  beforeEach(() => {
+    tmpDir = freshTmpDir()
+    process.env.XDG_CONFIG_HOME = tmpDir
+    __reset()
+    registerVaultHandlers()
+  })
+
+  afterEach(async () => {
+    delete process.env.NODE_ENV
+    delete process.env.ELECTRON_RENDERER_URL
+    try {
+      await invoke('vault:lock')
+    } catch {}
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    } catch {}
+  })
+
+  it(
+    'in dev mode uses vault.dev.bin and lets dev-reset delete it',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      process.env.NODE_ENV = 'development'
+      __reset()
+      registerVaultHandlers()
+      await invoke('vault:init', { masterPassword: 'pw' })
+      const devPath = path.join(tmpDir, 'mterminal', 'vault.dev.bin')
+      const prodPath = path.join(tmpDir, 'mterminal', 'vault.bin')
+      expect(fs.existsSync(devPath)).toBe(true)
+      expect(fs.existsSync(prodPath)).toBe(false)
+
+      await invoke('vault:dev-reset')
+      expect(fs.existsSync(devPath)).toBe(false)
+      const status = (await invoke('vault:status')) as {
+        exists: boolean
+        unlocked: boolean
+        dev: boolean
+      }
+      expect(status).toEqual({ exists: false, unlocked: false, dev: true })
+    }
+  )
+
+  it(
+    'rejects dev-reset outside development mode',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      delete process.env.NODE_ENV
+      delete process.env.ELECTRON_RENDERER_URL
+      __reset()
+      registerVaultHandlers()
+      await invoke('vault:init', { masterPassword: 'pw' })
+      await expect(invoke('vault:dev-reset')).rejects.toThrow(
+        /only available in development/
+      )
+    }
+  )
+})
+
+describe('vault backwards compat with old format', () => {
+  beforeEach(() => {
+    tmpDir = freshTmpDir()
+    process.env.XDG_CONFIG_HOME = tmpDir
+    __reset()
+    registerVaultHandlers()
+  })
+
+  afterEach(async () => {
+    try {
+      await invoke('vault:lock')
+    } catch {}
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    } catch {}
+  })
+
+  it(
+    'unlocks pre-1.1 vault file (no ext field) without throwing; ext namespace seeds empty',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      await invoke('vault:init', { masterPassword: 'pw' })
+      setAiKey('anthropic', 'sk-old')
+      await invoke('vault:lock')
+      await invoke('vault:unlock', { masterPassword: 'pw' })
+      expect(getAiKey('anthropic')).toBe('sk-old')
+      expect(getExtSecret('ext-fresh', 'anything')).toBeNull()
+      expect(listExtSecretKeys('ext-fresh')).toEqual([])
+      setExtSecret('ext-fresh', 'k', 'v')
+      expect(getExtSecret('ext-fresh', 'k')).toBe('v')
     }
   )
 })

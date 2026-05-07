@@ -549,33 +549,6 @@ describe("Sidebar - sub label and inline edit", () => {
   });
 });
 
-describe("Sidebar - remote tabs", () => {
-  it("26. remote tabs render under a 'remote sessions' subsection, not in local list", () => {
-    const tabs: Tab[] = [
-      makeTab({ id: 1, label: "local" }),
-      makeTab({
-        id: 2,
-        label: "ssh-host",
-        kind: "remote",
-        autoLabel: false,
-        sub: "remote",
-        remoteHostId: "h1",
-      }),
-    ];
-    const { container } = renderSidebar({ tabs });
-    expect(screen.getByText("remote sessions")).toBeTruthy();
-    const remoteSection = container.querySelector(".term-remote-tabs")!;
-    expect(remoteSection.querySelector('[data-tab-id="2"]')).toBeTruthy();
-    expect(remoteSection.querySelector('[data-tab-id="1"]')).toBeNull();
-  });
-
-  it("27. with only an ungrouped local tab, no 'remote sessions' header renders", () => {
-    const tabs = [makeTab({ id: 1 })];
-    renderSidebar({ tabs });
-    expect(screen.queryByText("remote sessions")).toBeNull();
-  });
-});
-
 describe("Sidebar - settings footer", () => {
   it("28. clicking the Settings button calls onOpenSettings", () => {
     const { handlers } = renderSidebar();
