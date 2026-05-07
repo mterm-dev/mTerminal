@@ -12,6 +12,12 @@ export default defineConfig({
       rollupOptions: {
         input: resolve(__dirname, 'electron/main/index.ts'),
         external: mainExternals,
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js',
+          chunkFileNames: '[name]-[hash].js',
+          assetFileNames: '[name]-[hash][extname]',
+        },
       },
     },
   },
@@ -21,6 +27,12 @@ export default defineConfig({
       outDir: 'out/preload',
       rollupOptions: {
         input: resolve(__dirname, 'electron/preload/index.ts'),
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js',
+          chunkFileNames: '[name]-[hash].js',
+          assetFileNames: '[name]-[hash][extname]',
+        },
       },
     },
   },
