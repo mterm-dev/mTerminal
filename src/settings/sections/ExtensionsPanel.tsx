@@ -88,14 +88,14 @@ export function ExtensionsOverview({
     const hasSettings = withSettingsIds.has(id);
     const items: MenuItem[] = [];
     if (hasSettings) {
-      items.push({ label: "open settings", onSelect: () => onPickExtension(id) });
+      items.push({ label: "Open settings", onSelect: () => onPickExtension(id) });
       items.push({ label: "", separator: true });
     }
     items.push({
-      label: snap.enabled ? "disable" : "enable",
+      label: snap.enabled ? "Disable" : "Enable",
       onSelect: () => void toggleEnabled(snap),
     });
-    items.push({ label: "reload", onSelect: () => void reloadOne(snap) });
+    items.push({ label: "Reload", onSelect: () => void reloadOne(snap) });
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menu, withSettingsIds]);
@@ -107,16 +107,16 @@ export function ExtensionsOverview({
           <div className="ext-toolbar">
             <button type="button" className="ext-marketplace-btn" onClick={onOpenMarketplace}>
               <span className="ext-marketplace-btn-icon">⬡</span>
-              <span>browse marketplace</span>
+              <span>Browse marketplace</span>
               <span className="ext-marketplace-btn-hint">{marketplaceHotkeyLabel()}</span>
             </button>
           </div>
         )}
         <div className="ext-empty">
           <div className="ext-empty-icon">⬡</div>
-          <div className="ext-empty-title">no extensions installed</div>
+          <div className="ext-empty-title">No extensions installed</div>
           <div className="ext-empty-sub">
-            install from the marketplace, or drop a folder into{" "}
+            Install from the marketplace, or drop a folder into{" "}
             <code>~/.mterminal/extensions/&lt;id&gt;/</code> and reload.
           </div>
         </div>
@@ -130,7 +130,7 @@ export function ExtensionsOverview({
         <div className="ext-toolbar">
           <button type="button" className="ext-marketplace-btn" onClick={onOpenMarketplace}>
             <span className="ext-marketplace-btn-icon">⬡</span>
-            <span>browse marketplace</span>
+            <span>Browse marketplace</span>
             <span className="ext-marketplace-btn-hint">{marketplaceHotkeyLabel()}</span>
           </button>
         </div>
@@ -154,7 +154,7 @@ export function ExtensionsOverview({
                 e.stopPropagation();
                 setMenu({ x: e.clientX, y: e.clientY, snap });
               }}
-              title={hasSettings ? "open settings · right-click for actions" : "right-click for actions"}
+              title={hasSettings ? "Open settings · right-click for actions" : "Right-click for actions"}
             >
               <div className="ext-card-head">
                 <span className="ext-card-name">{m.displayName ?? m.id}</span>
@@ -162,18 +162,18 @@ export function ExtensionsOverview({
               </div>
               <div className="ext-card-chips">
                 {m.source === "built-in" && (
-                  <span className="ext-chip ext-chip--builtin">built-in</span>
+                  <span className="ext-chip ext-chip--builtin">Built-in</span>
                 )}
-                {!snap.enabled && <span className="ext-chip ext-chip--muted">disabled</span>}
-                {!snap.trusted && <span className="ext-chip ext-chip--warn">untrusted</span>}
-                {snap.state === "error" && <span className="ext-chip ext-chip--error">error</span>}
+                {!snap.enabled && <span className="ext-chip ext-chip--muted">Disabled</span>}
+                {!snap.trusted && <span className="ext-chip ext-chip--warn">Untrusted</span>}
+                {snap.state === "error" && <span className="ext-chip ext-chip--error">Error</span>}
                 {snap.state === "active" && snap.enabled && snap.trusted && (
-                  <span className="ext-chip ext-chip--active">● active</span>
+                  <span className="ext-chip ext-chip--active">● Active</span>
                 )}
-                {isBusy && <span className="ext-chip ext-chip--muted">working…</span>}
+                {isBusy && <span className="ext-chip ext-chip--muted">Working…</span>}
               </div>
               <div className="ext-card-sub">{summarize(m)}</div>
-              {hasSettings && <div className="ext-card-cta">⚙ open settings →</div>}
+              {hasSettings && <div className="ext-card-cta">⚙ Open settings →</div>}
             </button>
           );
         })}
@@ -199,5 +199,5 @@ function summarize(m: ManifestSnapshot["manifest"]): string {
   if (m.contributes.tabTypes.length) parts.push(`${m.contributes.tabTypes.length} tab types`);
   if (m.contributes.decorators.length)
     parts.push(`${m.contributes.decorators.length} decorators`);
-  return parts.length ? parts.join(" · ") : "no contributions";
+  return parts.length ? parts.join(" · ") : "No contributions";
 }

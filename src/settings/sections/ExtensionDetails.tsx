@@ -71,7 +71,7 @@ export function ExtensionSettingsForm({
     declaredBindings.length === 0;
   if (nothingToShow) {
     return (
-      <Field label="no settings available" desc={`${extId} declares no schema or is disabled.`}>
+      <Field label="No settings available" desc={`${extId} declares no schema or is disabled.`}>
         <span />
       </Field>
     );
@@ -242,7 +242,7 @@ function SecretField({
           type={reveal ? "text" : "password"}
           className="settings-field-input"
           value={value}
-          placeholder={spec.placeholder ?? (stored ? "(stored)" : "")}
+          placeholder={spec.placeholder ?? (stored ? "(Stored)" : "")}
           onChange={(e) => {
             setValue(e.target.value);
             setDirty(true);
@@ -255,7 +255,7 @@ function SecretField({
           className="ghost-btn small"
           onClick={() => setReveal((r) => !r)}
         >
-          {reveal ? "hide" : "show"}
+          {reveal ? "Hide" : "Show"}
         </button>
         <button
           type="button"
@@ -263,7 +263,7 @@ function SecretField({
           onClick={() => void save()}
           disabled={busy || !dirty}
         >
-          {stored && !dirty ? "saved" : "save"}
+          {stored && !dirty ? "Saved" : "Save"}
         </button>
         {stored && (
           <button
@@ -272,7 +272,7 @@ function SecretField({
             onClick={() => void clear()}
             disabled={busy}
           >
-            clear
+            Clear
           </button>
         )}
       </div>

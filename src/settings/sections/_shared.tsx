@@ -53,8 +53,8 @@ export function Group({ children }: { children: ReactNode }) {
 export function Toggle({
   checked,
   onChange,
-  offLabel = "off",
-  onLabel = "on",
+  offLabel = "Off",
+  onLabel = "On",
 }: {
   checked: boolean;
   onChange: (b: boolean) => void;

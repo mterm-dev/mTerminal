@@ -6,11 +6,11 @@ import { SliderRow } from "./_rows";
 export function Appearance({ settings, update }: SectionProps) {
   return (
     <>
-      <SectionLabel>theme</SectionLabel>
+      <SectionLabel>Theme</SectionLabel>
       <Group>
         <Field
-          label="color palette"
-          desc="applies to ui chrome and terminal colors"
+          label="Color palette"
+          desc="Applies to UI chrome and terminal colors"
           stack
         >
           <div className="theme-grid">
@@ -45,11 +45,11 @@ export function Appearance({ settings, update }: SectionProps) {
         </Field>
       </Group>
 
-      <SectionLabel>chrome</SectionLabel>
+      <SectionLabel>Chrome</SectionLabel>
       <Group>
         <SliderRow
-          label="ui font size"
-          desc="affects sidebar, settings, status bar, and other ui chrome"
+          label="UI font size"
+          desc="Affects sidebar, settings, status bar, and other UI chrome"
           value={settings.uiFontSize}
           min={11}
           max={16}
@@ -58,8 +58,8 @@ export function Appearance({ settings, update }: SectionProps) {
           onChange={(v) => update("uiFontSize", v)}
         />
         <SliderRow
-          label="window opacity"
-          desc="lower values let the desktop show through behind the terminal"
+          label="Window opacity"
+          desc="Lower values let the desktop show through behind the terminal"
           value={settings.windowOpacity}
           min={0.6}
           max={1}

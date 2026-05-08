@@ -46,15 +46,15 @@ type CoreSection =
 type Section = CoreSection | `extension:${string}`;
 
 const SECTIONS: ReadonlyArray<readonly [CoreSection, string]> = [
-  ["appearance", "appearance"],
-  ["terminal", "terminal & shell"],
-  ["general", "general"],
-  ["vault", "vault"],
-  ["ai", "ai"],
-  ["voice", "voice"],
-  ["extensions", "extensions"],
-  ["danger", "danger zone"],
-  ["about", "about"],
+  ["appearance", "Appearance"],
+  ["terminal", "Terminal & Shell"],
+  ["general", "General"],
+  ["vault", "Vault"],
+  ["ai", "AI"],
+  ["voice", "Voice"],
+  ["extensions", "Extensions"],
+  ["danger", "Danger Zone"],
+  ["about", "About"],
 ];
 
 const SEPARATOR_BEFORE: ReadonlySet<CoreSection> = new Set(["danger"]);
@@ -159,10 +159,10 @@ export function SettingsModal({
         className="settings-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="settings"
+        aria-label="Settings"
       >
         <aside className="settings-nav">
-          <div className="settings-nav-h">settings</div>
+          <div className="settings-nav-h">Settings</div>
           {SECTIONS.map(([k, label]) => {
             const sep = SEPARATOR_BEFORE.has(k) ? (
               <div key={`sep-${k}`} className="settings-nav-sep" aria-hidden="true" />
@@ -196,7 +196,7 @@ export function SettingsModal({
                     <div className="settings-nav-sub">
                       {extEntries.length === 0 && (
                         <div className="settings-nav-empty">
-                          no extension settings yet
+                          No extension settings yet
                         </div>
                       )}
                       {extEntries.map((entry) => {
@@ -239,7 +239,7 @@ export function SettingsModal({
         <main className="settings-body">
           <header className="settings-body-h">
             <span>{headerLabel(section, currentExtEntry)}</span>
-            <button className="winctl-btn" aria-label="close" onClick={onClose}>
+            <button className="winctl-btn" aria-label="Close" onClick={onClose}>
               <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
                 <path
                   d="M4 4l8 8M12 4l-8 8"
@@ -302,7 +302,7 @@ export function SettingsModal({
 
 function headerLabel(s: Section, ext: SettingsSchemaEntry | null | undefined): string {
   if (s.startsWith("extension:")) {
-    return `extensions › ${ext?.displayName ?? s.slice("extension:".length)}`;
+    return `Extensions › ${ext?.displayName ?? s.slice("extension:".length)}`;
   }
   return SECTIONS.find(([k]) => k === s)?.[1] ?? s;
 }

@@ -22,9 +22,9 @@ function agent(): AgentApi | null {
 }
 
 const STATUS_LABEL: Record<HooksStatus["claude"], string> = {
-  installed: "installed",
-  missing: "not installed",
-  mismatch: "outdated",
+  installed: "Installed",
+  missing: "Not installed",
+  mismatch: "Outdated",
 };
 
 interface RowProps {
@@ -51,10 +51,10 @@ function IntegrationRow({
   const installBusy = busy === `${target}-install`;
   const uninstallBusy = busy === `${target}-uninstall`;
   const installLabel = installBusy
-    ? "installing…"
+    ? "Installing…"
     : state === "mismatch"
-      ? "reinstall"
-      : "install";
+      ? "Reinstall"
+      : "Install";
 
   return (
     <div className="aip-int-row">
@@ -89,7 +89,7 @@ function IntegrationRow({
             disabled={busy !== null}
             onClick={() => onAction(target, "uninstall")}
           >
-            {uninstallBusy ? "removing…" : "uninstall"}
+            {uninstallBusy ? "Removing…" : "Uninstall"}
           </button>
         )}
       </div>
@@ -148,8 +148,8 @@ export function AgentIntegrations() {
         <h3>Agent integrations</h3>
         <span className="aip-sub">
           {status
-            ? "detect activity via push events instead of polling output"
-            : "loading…"}
+            ? "Detect activity via push events instead of polling output"
+            : "Loading…"}
         </span>
       </div>
 
@@ -200,7 +200,7 @@ export function AgentIntegrations() {
 
           {status.bridgeSocket && (
             <div className="aip-int-bridge">
-              bridge: {status.bridgeSocket}
+              Bridge: {status.bridgeSocket}
             </div>
           )}
 

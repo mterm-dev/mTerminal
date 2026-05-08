@@ -287,7 +287,7 @@ export function FilePickerRow({
           autoComplete="off"
         />
         <button type="button" className="st-btn" disabled={disabled} onClick={pick}>
-          pick…
+          Pick…
         </button>
       </div>
     </Field>
@@ -389,9 +389,9 @@ export function ApiKeyRow({
 
   if (!vaultUnlocked) {
     return (
-      <Field label={label} desc={desc ?? hint ?? "unlock vault to manage"}>
+      <Field label={label} desc={desc ?? hint ?? "Unlock vault to manage"}>
         <span className="st-pill" data-tone="off">
-          locked
+          Locked
         </span>
       </Field>
     );
@@ -402,7 +402,7 @@ export function ApiKeyRow({
       <Field label={label} desc={desc} hint={hint}>
         <span className="st-pill" data-tone="ok">
           <span className="st-pill-dot" />
-          saved
+          Saved
         </span>
         <button
           type="button"
@@ -413,7 +413,7 @@ export function ApiKeyRow({
             setInput("");
           }}
         >
-          replace
+          Replace
         </button>
         <button
           type="button"
@@ -428,7 +428,7 @@ export function ApiKeyRow({
             }
           }}
         >
-          remove
+          Remove
         </button>
       </Field>
     );
@@ -441,7 +441,7 @@ export function ApiKeyRow({
           type="password"
           className="st-input text-grow"
           value={input}
-          placeholder={placeholder ?? "paste api key"}
+          placeholder={placeholder ?? "Paste API key"}
           onChange={(e) => setInput(e.target.value)}
           autoComplete="off"
           spellCheck={false}
@@ -461,7 +461,7 @@ export function ApiKeyRow({
             }
           }}
         >
-          save
+          Save
         </button>
         {hasKey && (
           <button
@@ -473,7 +473,7 @@ export function ApiKeyRow({
               setInput("");
             }}
           >
-            cancel
+            Cancel
           </button>
         )}
       </div>

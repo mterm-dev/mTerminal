@@ -42,18 +42,18 @@ export function AIPanel({
   };
 
   const vaultLabel = !vaultExists
-    ? "vault not initialized"
+    ? "Vault not initialized"
     : !vaultUnlocked
-      ? "vault locked"
+      ? "Vault locked"
       : null;
 
   return (
     <>
-      <SectionLabel>master switch</SectionLabel>
+      <SectionLabel>Master switch</SectionLabel>
       <Group>
         <ToggleRow
-          label="enable ai"
-          desc="turns on the ai panel, command palette, and right-click explain"
+          label="Enable AI"
+          desc="Turns on the AI panel, command palette, and right-click explain"
           checked={settings.aiEnabled}
           onChange={(b) => update("aiEnabled", b)}
         />
@@ -65,17 +65,17 @@ export function AIPanel({
             <Group>
               <Field
                 label={vaultLabel}
-                desc="api keys are stored encrypted in the vault. unlock to manage them."
+                desc="API keys are stored encrypted in the vault. Unlock to manage them."
               >
                 <button type="button" className="st-btn primary" onClick={onRequestVault}>
-                  {!vaultExists ? "set up" : "unlock"}
+                  {!vaultExists ? "Set up" : "Unlock"}
                 </button>
               </Field>
             </Group>
           )}
 
           <SectionLabel>
-            providers · {providers.length === 0 ? "none available" : `${providers.length} available`}
+            Providers · {providers.length === 0 ? "none available" : `${providers.length} available`}
           </SectionLabel>
           {providers.length === 0 ? (
             <Group>
@@ -107,39 +107,39 @@ export function AIPanel({
 
           <AgentIntegrations />
 
-          <SectionLabel>completion sound</SectionLabel>
+          <SectionLabel>Completion sound</SectionLabel>
           <Group>
             <AgentSound settings={settings} update={update} />
           </Group>
 
-          <SectionLabel>behavior</SectionLabel>
+          <SectionLabel>Behavior</SectionLabel>
           <Group>
             <ToggleRow
-              label="attach terminal output to chat"
-              desc="inject the active tab's recent output as context for chat questions"
+              label="Attach terminal output to chat"
+              desc="Inject the active tab's recent output as context for chat questions"
               checked={settings.aiAttachContext}
               onChange={(b) => update("aiAttachContext", b)}
             />
             <ToggleRow
-              label="right-click explain"
-              desc="show 'explain' in the terminal context menu when text is selected"
+              label="Right-click explain"
+              desc="Show 'Explain' in the terminal context menu when text is selected"
               checked={settings.aiExplainEnabled}
               onChange={(b) => update("aiExplainEnabled", b)}
             />
             <ToggleRow
-              label="detect ai agent sessions"
-              desc="watch tabs running claude / codex / codex-cli to badge them and notify when they finish or wait for input"
+              label="Detect AI agent sessions"
+              desc="Watch tabs running Claude / Codex / Codex-CLI to badge them and notify when they finish or wait for input"
               checked={settings.claudeCodeDetectionEnabled}
               onChange={(b) => update("claudeCodeDetectionEnabled", b)}
             />
             <ToggleRow
-              label="mcp server"
+              label="MCP server"
               desc={
                 settings.mcpServerEnabled && mcpStatus?.running && mcpStatus.socketPath
-                  ? `socket: ${mcpStatus.socketPath}`
+                  ? `Socket: ${mcpStatus.socketPath}`
                   : settings.mcpServerEnabled
-                    ? "starting…"
-                    : "expose mTerminal as a tool for external agents (claude code, codex…)"
+                    ? "Starting…"
+                    : "Expose mTerminal as a tool for external agents (Claude Code, Codex…)"
               }
               checked={settings.mcpServerEnabled}
               onChange={(b) => update("mcpServerEnabled", b)}

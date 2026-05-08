@@ -9,9 +9,9 @@ import type { SectionProps } from "../_shared";
 import { playAgentSound, type AgentSoundType } from "../../../lib/agentSound";
 
 const SOUND_OPTIONS: OptionItem<AgentSoundType>[] = [
-  { value: "bell", label: "bell" },
-  { value: "chime", label: "chime" },
-  { value: "ping", label: "ping" },
+  { value: "bell", label: "Bell" },
+  { value: "chime", label: "Chime" },
+  { value: "ping", label: "Ping" },
 ];
 
 export function AgentSound({ settings, update }: SectionProps) {
@@ -22,8 +22,8 @@ export function AgentSound({ settings, update }: SectionProps) {
   return (
     <>
       <ToggleRow
-        label="play sound on agent done"
-        desc="fires for every tab when an agent finishes (not just background)"
+        label="Play sound on agent done"
+        desc="Fires for every tab when an agent finishes (not just background)"
         checked={settings.agentSoundEnabled}
         onChange={(b) => update("agentSoundEnabled", b)}
       />
@@ -31,13 +31,13 @@ export function AgentSound({ settings, update }: SectionProps) {
       {settings.agentSoundEnabled && (
         <>
           <SegmentedRow
-            label="sound"
+            label="Sound"
             value={settings.agentSoundType}
             onChange={(v) => update("agentSoundType", v)}
             options={SOUND_OPTIONS}
           />
           <SliderRow
-            label="volume"
+            label="Volume"
             value={settings.agentSoundVolume}
             onChange={(v) => update("agentSoundVolume", v)}
             min={0}
@@ -46,8 +46,8 @@ export function AgentSound({ settings, update }: SectionProps) {
             format={(v) => `${Math.round(v * 100)}%`}
           />
           <ButtonRow
-            label="preview"
-            actionLabel="play sound"
+            label="Preview"
+            actionLabel="Play sound"
             onClick={handlePreview}
           />
         </>

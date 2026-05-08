@@ -36,10 +36,10 @@ export function ProviderCard({
   const requiresVault = entry.requiresVault !== false;
 
   let pill: { kind: "default" | "ok" | "warn" | "muted"; label: string };
-  if (isDefault) pill = { kind: "default", label: "default" };
-  else if (!requiresVault) pill = { kind: "muted", label: "no auth" };
-  else if (hasKey) pill = { kind: "ok", label: "key saved" };
-  else pill = { kind: "warn", label: vaultUnlocked ? "no key" : "vault locked" };
+  if (isDefault) pill = { kind: "default", label: "Default" };
+  else if (!requiresVault) pill = { kind: "muted", label: "No auth" };
+  else if (hasKey) pill = { kind: "ok", label: "Key saved" };
+  else pill = { kind: "warn", label: vaultUnlocked ? "No key" : "Vault locked" };
 
   return (
     <div className={`aip-card ${isDefault ? "aip-card-default" : ""}`}>
@@ -94,7 +94,7 @@ export function ProviderCard({
       <div className="aip-card-foot">
         {!isDefault && (
           <button className="ghost-btn" onClick={onSetDefault}>
-            set as default
+            Set as default
           </button>
         )}
         <span className="aip-spacer" />

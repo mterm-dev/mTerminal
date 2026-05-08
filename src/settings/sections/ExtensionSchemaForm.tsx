@@ -127,7 +127,7 @@ export function writeExtValue(
 function humanize(s: string): string {
   return s
     .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (c) => c.toLowerCase())
+    .replace(/^./, (c) => c.toUpperCase())
     .trim();
 }
 

@@ -16,33 +16,33 @@ export function GeneralPanel({ settings, update }: SectionProps) {
 
   return (
     <>
-      <SectionLabel>workflow</SectionLabel>
+      <SectionLabel>Workflow</SectionLabel>
       <Group>
         <ToggleRow
-          label="confirm close with multiple tabs"
-          desc="ask before quitting if more than one tab is open"
+          label="Confirm close with multiple tabs"
+          desc="Ask before quitting if more than one tab is open"
           checked={settings.confirmCloseMultipleTabs}
           onChange={(b) => update("confirmCloseMultipleTabs", b)}
         />
         <ToggleRow
-          label="copy on select"
-          desc="automatically copy terminal selection to the system clipboard"
+          label="Copy on select"
+          desc="Automatically copy terminal selection to the system clipboard"
           checked={settings.copyOnSelect}
           onChange={(b) => update("copyOnSelect", b)}
         />
         <ToggleRow
-          label="shell greeting banner"
-          desc="show the themed banner on startup (fish only)"
+          label="Shell greeting banner"
+          desc="Show the themed banner on startup (fish only)"
           checked={settings.showGreeting}
           onChange={(b) => update("showGreeting", b)}
         />
       </Group>
 
-      <SectionLabel>marketplace</SectionLabel>
+      <SectionLabel>Marketplace</SectionLabel>
       <Group>
         <TextRow
-          label="endpoint"
-          desc="custom marketplace api base url; leave empty to use the default"
+          label="Endpoint"
+          desc="Custom marketplace API base URL; leave empty to use the default"
           value={endpoint}
           placeholder="https://marketplace.example.com"
           onChange={(v) => {

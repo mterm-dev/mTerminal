@@ -7,50 +7,50 @@ const VAULT_IDLE_OPTIONS = [
   { label: "15 minutes", value: "900000" },
   { label: "30 minutes", value: "1800000" },
   { label: "1 hour", value: "3600000" },
-  { label: "never", value: "0" },
+  { label: "Never", value: "0" },
 ];
 
 export function VaultPanel({ settings, update }: SectionProps) {
   const vault = useVaultGate();
   const { exists, unlocked, dev } = vault.status;
 
-  const statusLabel = !exists ? "not initialized" : unlocked ? "unlocked" : "locked";
+  const statusLabel = !exists ? "Not initialized" : unlocked ? "Unlocked" : "Locked";
   const statusTone: StatusTone = !exists ? "warn" : unlocked ? "ok" : "off";
 
   return (
     <>
-      <SectionLabel>state</SectionLabel>
+      <SectionLabel>State</SectionLabel>
       <Group>
         <StatusRow
-          label="vault"
-          desc="encrypted store backing api keys, ssh passwords, and plugin secrets"
+          label="Vault"
+          desc="Encrypted store backing API keys, SSH passwords, and plugin secrets"
           status={{ label: statusLabel, tone: statusTone }}
         >
           {dev && (
             <span className="st-pill" data-tone="dev">
-              dev
+              Dev
             </span>
           )}
         </StatusRow>
 
         <Field
-          label="master password"
+          label="Master password"
           desc={
             !exists
-              ? "set a master password to start storing secrets"
+              ? "Set a master password to start storing secrets"
               : unlocked
-                ? "you can lock the vault now or change the password"
-                : "vault is initialized but currently locked"
+                ? "You can lock the vault now or change the password"
+                : "Vault is initialized but currently locked"
           }
         >
           {!exists && (
             <button type="button" className="st-btn primary" onClick={() => vault.openModal("init")}>
-              set
+              Set
             </button>
           )}
           {exists && !unlocked && (
             <button type="button" className="st-btn" onClick={() => vault.openModal("unlock")}>
-              unlock
+              Unlock
             </button>
           )}
           {exists && unlocked && (
@@ -62,25 +62,25 @@ export function VaultPanel({ settings, update }: SectionProps) {
                   void vault.lock();
                 }}
               >
-                lock
+                Lock
               </button>
               <button
                 type="button"
                 className="st-btn"
                 onClick={() => vault.openModal("change")}
               >
-                change
+                Change
               </button>
             </>
           )}
         </Field>
       </Group>
 
-      <SectionLabel>auto-lock</SectionLabel>
+      <SectionLabel>Auto-lock</SectionLabel>
       <Group>
         <SelectRow
-          label="idle timeout"
-          desc="lock the vault after this much keyboard and mouse inactivity"
+          label="Idle timeout"
+          desc="Lock the vault after this much keyboard and mouse inactivity"
           value={String(settings.vaultIdleLockMs)}
           options={VAULT_IDLE_OPTIONS}
           onChange={(v) => update("vaultIdleLockMs", Number(v))}

@@ -9,7 +9,7 @@ const VOICE_KEY_PROVIDER = "voice-openai";
 
 const ENGINE_OPTIONS: { label: string; value: VoiceEngineId; icon: string }[] = [
   { label: "whisper.cpp (local)", value: "whisper-cpp", icon: "◎" },
-  { label: "openai whisper", value: "openai", icon: "☁" },
+  { label: "OpenAI Whisper", value: "openai", icon: "☁" },
 ];
 
 export function VoicePanel({
@@ -67,11 +67,11 @@ export function VoicePanel({
 
   return (
     <>
-      <SectionLabel>master switch</SectionLabel>
+      <SectionLabel>Master switch</SectionLabel>
       <Group>
         <ToggleRow
-          label="enable voice to text"
-          desc="turn on dictation; pick an engine below to choose where transcription runs"
+          label="Enable voice to text"
+          desc="Turn on dictation; pick an engine below to choose where transcription runs"
           checked={settings.voiceEnabled}
           onChange={(b) => update("voiceEnabled", b)}
         />
@@ -79,29 +79,29 @@ export function VoicePanel({
 
       {settings.voiceEnabled && (
         <>
-          <SectionLabel>engine</SectionLabel>
+          <SectionLabel>Engine</SectionLabel>
           <Group>
             <SegmentedRow
-              label="transcription engine"
-              desc="local runs offline via whisper.cpp; openai uses the hosted whisper api"
+              label="Transcription engine"
+              desc="Local runs offline via whisper.cpp; OpenAI uses the hosted Whisper API"
               value={settings.voiceEngine}
               options={ENGINE_OPTIONS}
               onChange={(v) => update("voiceEngine", v)}
             />
             <TextRow
-              label="language"
-              desc='iso 639-1 code (e.g. "pl", "en") or "auto" to detect per-utterance'
+              label="Language"
+              desc='ISO 639-1 code (e.g. "pl", "en") or "auto" to detect per-utterance'
               value={settings.voiceLanguage}
               placeholder="auto"
               onChange={(v) => update("voiceLanguage", v)}
             />
           </Group>
 
-          <SectionLabel>controls</SectionLabel>
+          <SectionLabel>Controls</SectionLabel>
           <Group>
             <Field
-              label="hotkey"
-              desc="press a combination to bind it; backspace clears"
+              label="Hotkey"
+              desc="Press a combination to bind it; Backspace clears"
             >
               <input
                 type="text"
@@ -115,14 +115,14 @@ export function VoicePanel({
               />
             </Field>
             <ToggleRow
-              label="microphone in status bar"
-              desc="show the click-to-dictate button next to the clock"
+              label="Microphone in status bar"
+              desc="Show the click-to-dictate button next to the clock"
               checked={settings.voiceShowMicButton}
               onChange={(b) => update("voiceShowMicButton", b)}
             />
             <ToggleRow
-              label="auto-insert space"
-              desc="add a space before/after dictated text when needed for readability"
+              label="Auto-insert space"
+              desc="Add a space before/after dictated text when needed for readability"
               checked={settings.voiceAutoSpace}
               onChange={(b) => update("voiceAutoSpace", b)}
             />
@@ -133,14 +133,14 @@ export function VoicePanel({
               <SectionLabel>whisper.cpp</SectionLabel>
               <Group>
                 <FilePickerRow
-                  label="binary"
-                  desc="path to the whisper-cli (or main) executable"
+                  label="Binary"
+                  desc="Path to the whisper-cli (or main) executable"
                   value={settings.voiceWhisperCppBinPath}
                   placeholder="/path/to/whisper-cli"
                   onChange={(v) => update("voiceWhisperCppBinPath", v)}
                 />
                 <FilePickerRow
-                  label="model file"
+                  label="Model file"
                   desc="ggml-*.bin model used for transcription"
                   value={settings.voiceWhisperCppModelPath}
                   placeholder="/path/to/ggml-base.bin"
@@ -152,11 +152,11 @@ export function VoicePanel({
 
           {showOpenAi && (
             <>
-              <SectionLabel>openai whisper</SectionLabel>
+              <SectionLabel>OpenAI Whisper</SectionLabel>
               <Group>
                 <ApiKeyRow
-                  label="api key"
-                  desc="stored encrypted in the vault, separate from the chat ai key"
+                  label="API key"
+                  desc="Stored encrypted in the vault, separate from the chat AI key"
                   hasKey={hasVoiceKey}
                   vaultUnlocked={vaultUnlocked}
                   onSet={setKey}
@@ -164,34 +164,34 @@ export function VoicePanel({
                 />
                 {!vaultExists && (
                   <Field
-                    label="vault not initialized"
-                    desc="set up the vault first so the api key can be stored encrypted"
+                    label="Vault not initialized"
+                    desc="Set up the vault first so the API key can be stored encrypted"
                   >
                     <button type="button" className="st-btn primary" onClick={onRequestVault}>
-                      set up
+                      Set up
                     </button>
                   </Field>
                 )}
                 {vaultExists && !vaultUnlocked && (
                   <Field
-                    label="vault locked"
-                    desc="unlock the vault to read or update the api key"
+                    label="Vault locked"
+                    desc="Unlock the vault to read or update the API key"
                   >
                     <button type="button" className="st-btn" onClick={onRequestVault}>
-                      unlock
+                      Unlock
                     </button>
                   </Field>
                 )}
                 <TextRow
-                  label="model"
-                  desc="whisper api model id"
+                  label="Model"
+                  desc="Whisper API model id"
                   value={settings.voiceOpenaiModel}
                   placeholder="whisper-1"
                   onChange={(v) => update("voiceOpenaiModel", v)}
                 />
                 <TextRow
-                  label="base url"
-                  desc="override for openai-compatible endpoints (e.g. groq, azure proxy)"
+                  label="Base URL"
+                  desc="Override for OpenAI-compatible endpoints (e.g. Groq, Azure proxy)"
                   value={settings.voiceOpenaiBaseUrl}
                   placeholder="https://api.openai.com/v1"
                   onChange={(v) => update("voiceOpenaiBaseUrl", v)}

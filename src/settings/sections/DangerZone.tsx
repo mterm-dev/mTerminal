@@ -25,40 +25,40 @@ export function DangerZone({ onResetSettings }: { onResetSettings: () => void })
         }
       }
     }
-    notify.success({ title: "ai keys cleared", message: `${removed} keys removed` });
+    notify.success({ title: "AI keys cleared", message: `${removed} keys removed` });
   };
 
   const resetDevVault = async () => {
     try {
       await vault.devReset();
-      notify.success({ title: "vault reset", message: "development vault cleared" });
+      notify.success({ title: "Vault reset", message: "Development vault cleared" });
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
-      notify.error({ title: "vault reset failed", message: e.message, details: e.stack });
+      notify.error({ title: "Vault reset failed", message: e.message, details: e.stack });
     }
   };
 
   return (
     <>
-      <SectionLabel>destructive actions</SectionLabel>
+      <SectionLabel>Destructive actions</SectionLabel>
       <Group>
         <DangerRow
-          label="reset all settings"
-          desc="restore defaults for every preference. ui state (sidebar width, ai panel state) is untouched."
-          actionLabel="reset"
+          label="Reset all settings"
+          desc="Restore defaults for every preference. UI state (sidebar width, AI panel state) is untouched."
+          actionLabel="Reset"
           confirm="Reset all settings to defaults?"
           onClick={onResetSettings}
         />
         <DangerRow
-          label="clear ai api keys"
+          label="Clear AI API keys"
           desc={
             unlocked
               ? keyCount > 0
                 ? `${keyCount} provider keys are stored in the vault and will be deleted`
-                : "no keys are currently stored"
-              : "unlock the vault first"
+                : "No keys are currently stored"
+              : "Unlock the vault first"
           }
-          actionLabel="clear keys"
+          actionLabel="Clear keys"
           disabled={!unlocked || keyCount === 0}
           confirm="Remove all stored AI API keys?"
           onClick={() => {
@@ -67,9 +67,9 @@ export function DangerZone({ onResetSettings }: { onResetSettings: () => void })
         />
         {dev && (
           <DangerRow
-            label="reset development vault"
-            desc="delete vault.dev.bin and start fresh. only affects dev mode; the production vault is left alone."
-            actionLabel="reset dev vault"
+            label="Reset development vault"
+            desc="Delete vault.dev.bin and start fresh. Only affects dev mode; the production vault is left alone."
+            actionLabel="Reset dev vault"
             confirm="Delete the development vault?"
             onClick={() => {
               void resetDevVault();
