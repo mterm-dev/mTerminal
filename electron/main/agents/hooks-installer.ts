@@ -7,10 +7,14 @@
  *     `_mterminal: <version>` so uninstall can target only our additions
  *     while leaving any user-defined hooks alone.
  *
- *   - Codex: edits `~/.codex/config.toml` to add an `[mcp_servers.mterminal]`
- *     section pointing at `mterminal-mcp.cjs`. Codex inherits the parent
- *     PTY's env, which carries `MTERMINAL_TAB_ID` (and we additionally pin
- *     `MTERMINAL_BRIDGE` in the section's `env` table).
+ *   - Codex: edits `~/.codex/config.toml` to add native lifecycle hooks
+ *     (https://developers.openai.com/codex/hooks) — Codex now ships the
+ *     same hook surface as Claude Code (verified in
+ *     `codex-rs/hooks/src/events/`). We register Stop / UserPromptSubmit /
+ *     SessionStart / PermissionRequest pointing at `mterminal-bridge.cjs`,
+ *     and additionally drop a small MCP server block with
+ *     `default_tools_approval_mode = "approve"` so any agent-callable tools
+ *     skip the per-tool permission prompt.
  *
  * The bridge scripts ship inside the app — `getResourcePath()` resolves to
  * `<app>/out/main/resources/agent-bridge/<name>` in dev and inside
@@ -46,6 +50,21 @@ const CLAUDE_LIFECYCLE_EVENTS: Array<{ key: string; cli: string }> = [
   { key: 'SubagentStop', cli: 'subagent_stop' },
   { key: 'SessionStart', cli: 'session_start' },
   { key: 'SessionEnd', cli: 'session_end' },
+]
+
+// Codex hook surface (https://developers.openai.com/codex/hooks). Same shape
+// as Claude's. Note that Codex's `Stop` is sometimes bypassed on aborts and
+// stream errors (https://github.com/openai/codex/issues/14203), so we
+// additionally subscribe to `PermissionRequest` (used as awaiting-input
+// signal) — and the process-watcher catches the orphaned cases by detecting
+// when the codex binary exits.
+const CODEX_LIFECYCLE_EVENTS: Array<{ key: string; cli: string }> = [
+  { key: 'SessionStart', cli: 'session_start' },
+  { key: 'UserPromptSubmit', cli: 'user_prompt_submit' },
+  { key: 'PreToolUse', cli: 'pre_tool_use' },
+  { key: 'PostToolUse', cli: 'post_tool_use' },
+  { key: 'PermissionRequest', cli: 'permission_request' },
+  { key: 'Stop', cli: 'stop' },
 ]
 
 function claudeSettingsPath(): string {
@@ -142,7 +161,7 @@ export function installClaudeHooks(): void {
     filtered.push({
       matcher: '*',
       _mterminal: BRIDGE_VERSION,
-      hooks: [{ type: 'command', command: `${cmdPrefix} ${ev.cli}` }],
+      hooks: [{ type: 'command', command: `${cmdPrefix} ${ev.cli} claude` }],
     })
     settings.hooks[ev.key] = filtered
   }
@@ -190,115 +209,143 @@ export function getClaudeHooksStatus(): 'missing' | 'installed' | 'mismatch' {
   return outdated ? 'mismatch' : 'installed'
 }
 
-// ── Codex MCP install/uninstall ────────────────────────────────────────────
+// ── Codex install/uninstall ────────────────────────────────────────────────
+//
+// Native hooks (https://developers.openai.com/codex/hooks) are the primary
+// signal — same shape as Claude. The MCP server stays as a passive backup
+// for future agent-callable tools (auto-approved so it doesn't prompt).
 
-const AGENTS_BLOCK_BEGIN = '<!-- mterminal-agent-bridge:begin -->'
-const AGENTS_BLOCK_END = '<!-- mterminal-agent-bridge:end -->'
-const AGENTS_INSTRUCTIONS = `${AGENTS_BLOCK_BEGIN}
-## mTerminal integration
-
-You are running inside mTerminal, which exposes an MCP server named \`mterminal\` with a single tool \`status\`. This tool drives the per-tab activity indicator in the sidebar.
-
-Call \`mterminal.status\` at minimum TWICE per turn:
-
-1. **Beginning of every turn** — \`status({ phase: "start", message: "<one-sentence preview of what you are about to do>" })\`, BEFORE any other tool call or reasoning output.
-2. **End of every turn** — \`status({ phase: "complete", message: "<one-sentence summary of what you accomplished>" })\`, as the very last thing you do before yielding control.
-
-If you need the user to make a decision before continuing, call \`status({ phase: "awaiting_input", message: "<the question>" })\` instead of just printing the question.
-
-Skipping these calls breaks the UI — the user will not see that you are working or finished, and notifications will not fire. Always include them, even for trivial turns.
-${AGENTS_BLOCK_END}
-`
-
-function codexAgentsPath(): string {
-  return join(homedir(), '.codex', 'AGENTS.md')
+interface CodexHookEntry {
+  matcher?: string
+  hooks: Array<{ type: 'command'; command: string; timeout?: number }>
+  _mterminal?: string
+  [k: string]: unknown
 }
 
-function writeAgentsBlock(): void {
-  const path = codexAgentsPath()
-  const existing = existsSync(path) ? readFileSync(path, 'utf8') : ''
-  const beginIdx = existing.indexOf(AGENTS_BLOCK_BEGIN)
-  const endIdx = existing.indexOf(AGENTS_BLOCK_END)
-  let next: string
-  if (beginIdx !== -1 && endIdx !== -1 && endIdx > beginIdx) {
-    next =
-      existing.slice(0, beginIdx) +
-      AGENTS_INSTRUCTIONS.trim() +
-      existing.slice(endIdx + AGENTS_BLOCK_END.length)
-  } else {
-    next = (existing.trimEnd() + '\n\n' + AGENTS_INSTRUCTIONS).trimStart()
-  }
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, next.endsWith('\n') ? next : next + '\n', 'utf8')
+interface CodexHookConfig {
+  [eventName: string]: CodexHookEntry[]
 }
 
-function removeAgentsBlock(): void {
-  const path = codexAgentsPath()
-  if (!existsSync(path)) return
-  const existing = readFileSync(path, 'utf8')
-  const beginIdx = existing.indexOf(AGENTS_BLOCK_BEGIN)
-  const endIdx = existing.indexOf(AGENTS_BLOCK_END)
-  if (beginIdx === -1 || endIdx === -1 || endIdx <= beginIdx) return
-  const next = (
-    existing.slice(0, beginIdx).trimEnd() +
-    '\n' +
-    existing.slice(endIdx + AGENTS_BLOCK_END.length).trimStart()
-  ).trim()
-  writeFileSync(path, next ? next + '\n' : '', 'utf8')
+function buildCodexHookCommand(): string {
+  const { command, envExtra } = nodeBinary()
+  const script = getResourcePath('mterminal-bridge.cjs')
+  const sock = agentBridge.socketPath() || ''
+  const envPrefix = Object.entries(envExtra)
+    .map(([k, v]) => `${k}=${shellQuote(v)}`)
+    .join(' ')
+  const exportSock = `MTERMINAL_BRIDGE=${shellQuote(sock)}`
+  return (
+    (envPrefix ? envPrefix + ' ' : '') +
+    exportSock +
+    ' ' +
+    shellQuote(command) +
+    ' ' +
+    shellQuote(script)
+  )
 }
 
-export function installCodexMcp(): void {
+export function installCodex(): void {
   const path = codexConfigPath()
   const cfg = readTomlSafe(path)
   const { command, envExtra } = nodeBinary()
-  const script = getResourcePath('mterminal-mcp.cjs')
+  const mcpScript = getResourcePath('mterminal-mcp.cjs')
   const sock = agentBridge.socketPath() || ''
 
+  // Recent Codex builds gate the hooks system behind a feature flag
+  // (regression #19199). Enable it explicitly — harmless on builds where
+  // the flag is already a no-op.
+  if (!cfg.features || typeof cfg.features !== 'object') cfg.features = {}
+  ;(cfg.features as Record<string, unknown>).codex_hooks = true
+
+  // Hooks: stamp our entries (tagged with `_mterminal` for clean uninstall),
+  // preserve any user-defined hooks. Same idempotent merge pattern we use
+  // for Claude.
+  if (!cfg.hooks || typeof cfg.hooks !== 'object') cfg.hooks = {}
+  const hooks = cfg.hooks as CodexHookConfig
+  const cmdPrefix = buildCodexHookCommand()
+  for (const ev of CODEX_LIFECYCLE_EVENTS) {
+    const list = (Array.isArray(hooks[ev.key]) ? hooks[ev.key] : []) as CodexHookEntry[]
+    const filtered = list.filter((e) => !e._mterminal)
+    filtered.push({
+      _mterminal: BRIDGE_VERSION,
+      hooks: [
+        {
+          type: 'command',
+          command: `${cmdPrefix} ${ev.cli} codex`,
+          timeout: 5,
+        },
+      ],
+    })
+    hooks[ev.key] = filtered
+  }
+
+  // MCP server: passive — exists so future agent-callable tools (notify,
+  // open_url, etc.) work. `default_tools_approval_mode = "approve"` skips
+  // the per-tool permission prompt that user complained about.
   if (!cfg.mcp_servers || typeof cfg.mcp_servers !== 'object') cfg.mcp_servers = {}
   const servers = cfg.mcp_servers as Record<string, unknown>
   servers.mterminal = {
     command,
-    args: [script],
+    args: [mcpScript],
     env: { ...envExtra, MTERMINAL_BRIDGE: sock, _MTERMINAL_VERSION: BRIDGE_VERSION },
+    default_tools_approval_mode: 'approve',
   }
-  writeToml(path, cfg)
 
-  // Inject (or refresh) the AGENTS.md instruction that nudges Codex to call
-  // task_complete at end of every turn — without it the agent has no reason
-  // to invoke our tool.
-  try {
-    writeAgentsBlock()
-  } catch (err) {
-    console.error('[agent] writing AGENTS.md block failed:', err)
-  }
+  writeToml(path, cfg)
 }
 
-export function uninstallCodexMcp(): void {
+export function uninstallCodex(): void {
   const path = codexConfigPath()
-  if (existsSync(path)) {
-    const cfg = readTomlSafe(path)
-    if (cfg.mcp_servers && typeof cfg.mcp_servers === 'object') {
-      delete (cfg.mcp_servers as Record<string, unknown>).mterminal
-      if (Object.keys(cfg.mcp_servers as Record<string, unknown>).length === 0) {
-        delete cfg.mcp_servers
+  if (!existsSync(path)) return
+  const cfg = readTomlSafe(path)
+
+  if (cfg.hooks && typeof cfg.hooks === 'object') {
+    const hooks = cfg.hooks as CodexHookConfig
+    for (const ev of CODEX_LIFECYCLE_EVENTS) {
+      const list = hooks[ev.key]
+      if (!Array.isArray(list)) continue
+      const filtered = list.filter((e) => !e._mterminal)
+      if (filtered.length === 0) delete hooks[ev.key]
+      else hooks[ev.key] = filtered
+    }
+    if (Object.keys(hooks).length === 0) delete cfg.hooks
+  }
+
+  if (cfg.mcp_servers && typeof cfg.mcp_servers === 'object') {
+    delete (cfg.mcp_servers as Record<string, unknown>).mterminal
+    if (Object.keys(cfg.mcp_servers as Record<string, unknown>).length === 0) {
+      delete cfg.mcp_servers
+    }
+  }
+
+  // Leave `features.codex_hooks` alone — user may rely on it.
+}
+
+export function getCodexStatus(): 'missing' | 'installed' | 'mismatch' {
+  const cfg = readTomlSafe(codexConfigPath())
+  const hooks = cfg.hooks as CodexHookConfig | undefined
+  const servers = cfg.mcp_servers as Record<string, unknown> | undefined
+  const mcp = servers?.mterminal as { env?: Record<string, string> } | undefined
+
+  let foundHook = false
+  let hookOutdated = false
+  if (hooks) {
+    for (const ev of CODEX_LIFECYCLE_EVENTS) {
+      const list = hooks[ev.key]
+      if (!Array.isArray(list)) continue
+      for (const entry of list) {
+        if (entry._mterminal) {
+          foundHook = true
+          if (entry._mterminal !== BRIDGE_VERSION) hookOutdated = true
+        }
       }
     }
-    writeToml(path, cfg)
   }
-  try {
-    removeAgentsBlock()
-  } catch {
-    /* ignore */
-  }
-}
 
-export function getCodexMcpStatus(): 'missing' | 'installed' | 'mismatch' {
-  const cfg = readTomlSafe(codexConfigPath())
-  const servers = cfg.mcp_servers as Record<string, unknown> | undefined
-  const ours = servers?.mterminal as { env?: Record<string, string> } | undefined
-  if (!ours) return 'missing'
-  if (ours.env?._MTERMINAL_VERSION !== BRIDGE_VERSION) return 'mismatch'
-  return 'installed'
+  if (!foundHook && !mcp) return 'missing'
+  if (hookOutdated) return 'mismatch'
+  if (mcp && mcp.env?._MTERMINAL_VERSION !== BRIDGE_VERSION) return 'mismatch'
+  return foundHook ? 'installed' : 'mismatch'
 }
 
 // ── IPC ────────────────────────────────────────────────────────────────────
@@ -323,11 +370,11 @@ export function refreshAgentInstalls(): void {
       console.error('[agent] refresh Claude hooks failed:', err)
     }
   }
-  if (getCodexMcpStatus() !== 'missing') {
+  if (getCodexStatus() !== 'missing') {
     try {
-      installCodexMcp()
+      installCodex()
     } catch (err) {
-      console.error('[agent] refresh Codex MCP failed:', err)
+      console.error('[agent] refresh Codex install failed:', err)
     }
   }
 }
@@ -335,20 +382,20 @@ export function refreshAgentInstalls(): void {
 export function registerHooksInstallerHandlers(): void {
   ipcMain.handle('agent:hooks:status', () => ({
     claude: getClaudeHooksStatus(),
-    codex: getCodexMcpStatus(),
+    codex: getCodexStatus(),
     bridgeSocket: agentBridge.socketPath(),
     version: BRIDGE_VERSION,
   }))
 
   ipcMain.handle('agent:hooks:install', (_e, args: { target: 'claude' | 'codex' }) => {
     if (args.target === 'claude') installClaudeHooks()
-    else if (args.target === 'codex') installCodexMcp()
+    else if (args.target === 'codex') installCodex()
     else throw new Error('Unknown target: ' + args.target)
   })
 
   ipcMain.handle('agent:hooks:uninstall', (_e, args: { target: 'claude' | 'codex' }) => {
     if (args.target === 'claude') uninstallClaudeHooks()
-    else if (args.target === 'codex') uninstallCodexMcp()
+    else if (args.target === 'codex') uninstallCodex()
     else throw new Error('Unknown target: ' + args.target)
   })
 }

@@ -24,6 +24,10 @@ import {
   startProcessWatcher,
   stopProcessWatcher,
 } from './agents/process-watcher'
+import {
+  startCodexRolloutWatcher,
+  stopCodexRolloutWatcher,
+} from './agents/codex-rollout-watcher'
 import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
 import { setupAppMenu } from './menu'
 import { registerWorkspaceHandlers } from './workspace'
@@ -128,6 +132,7 @@ app
     // Process-tree watcher catches Codex sessions (no hook system) and acts
     // as a fallback for Claude when hooks aren't installed.
     startProcessWatcher()
+    startCodexRolloutWatcher()
     registerMcpHandlers()
     registerWorkspaceHandlers()
     registerSettingsHandlers()
@@ -137,6 +142,7 @@ app
       void stopMcpServer()
       try {
         stopProcessWatcher()
+        stopCodexRolloutWatcher()
         agentBridge.stop()
       } catch {
         /* ignore */

@@ -20,7 +20,6 @@
  *   - on every `tools/call`  → send `tool_use` (and `awaiting_input`/`done`
  *                              if it was `notify_user`)
  *   - on stdin close         → send `done`, exit
- *   - 30s idle heartbeat     → send `idle`
  *
  * Self-contained — uses Node built-ins only. Hand-rolled JSON-RPC keeps the
  * resource bundle tiny and avoids dragging the MCP SDK into a packaged CJS
@@ -141,13 +140,6 @@ function postEvent(event, detail) {
 }
 
 let lastActivityTs = Date.now()
-const HEARTBEAT_MS = 30_000
-const HEARTBEAT_IDLE_AFTER_MS = 30_000
-const heartbeat = setInterval(() => {
-  if (Date.now() - lastActivityTs >= HEARTBEAT_IDLE_AFTER_MS) {
-    postEvent('idle')
-  }
-}, HEARTBEAT_MS)
 
 // ── JSON-RPC over stdio ────────────────────────────────────────────────────
 
@@ -163,27 +155,26 @@ function err(id, code, message) {
   send({ jsonrpc: '2.0', id, error: { code, message } })
 }
 
+// Lifecycle detection now flows through native Codex hooks (see
+// hooks-installer.ts). The MCP server is kept around as a passive surface
+// for optional agent-callable notifications. `default_tools_approval_mode
+// = "approve"` is set on the server entry so calls don't prompt.
 const TOOLS = [
   {
-    name: 'status',
+    name: 'notify_user',
     description:
-      'REQUIRED — drives the per-tab activity indicator in mTerminal. Call this tool TWICE per turn:\n  1. With phase="start" at the very beginning, before any other tool call or reasoning output.\n  2. With phase="complete" as the very last thing before yielding control.\nUse phase="awaiting_input" when you need the user to make a decision before you can continue. Use phase="progress" for optional mid-task updates.\nThe `message` is a one-sentence summary of what you are doing / did / need.',
+      'Optional — send an out-of-band notification to the user about progress, results, or attention needed. Use sparingly; lifecycle status (turn start/end) is already tracked automatically.',
     inputSchema: {
       type: 'object',
       properties: {
-        phase: {
+        message: { type: 'string', description: 'Short message shown to the user.' },
+        level: {
           type: 'string',
-          enum: ['start', 'progress', 'complete', 'awaiting_input'],
-          description:
-            'Lifecycle phase. "start" at the very start of a turn, "complete" at the end, "awaiting_input" when blocked on the user, "progress" for optional mid-task updates.',
-        },
-        message: {
-          type: 'string',
-          description:
-            'One-sentence description (preview at start, summary at complete, question at awaiting_input).',
+          enum: ['info', 'warn', 'error'],
+          description: 'Severity. "warn" routes as awaiting-input.',
         },
       },
-      required: ['phase', 'message'],
+      required: ['message'],
     },
   },
 ]
@@ -208,19 +199,12 @@ function handleCallTool(req) {
   lastActivityTs = Date.now()
   postEvent('tool_use', { tool: name })
 
-  if (name === 'status') {
-    const phase = String(args.phase || 'progress')
+  if (name === 'notify_user') {
     const message = String(args.message || '')
-    const evKind =
-      phase === 'complete'
-        ? 'done'
-        : phase === 'awaiting_input'
-          ? 'awaiting_input'
-          : 'thinking'
+    const level = String(args.level || 'info')
+    const evKind = level === 'warn' ? 'awaiting_input' : 'thinking'
     postEvent(evKind, { message })
-    ok(req.id, {
-      content: [{ type: 'text', text: 'ack' }],
-    })
+    ok(req.id, { content: [{ type: 'text', text: 'ack' }] })
     return
   }
 
@@ -273,9 +257,5 @@ process.on('SIGINT', () => {
   setTimeout(() => process.exit(0), 50)
 })
 
-// Lifetime safety: in case stdin never closes but parent dies.
-process.on('beforeExit', () => {
-  clearInterval(heartbeat)
-})
 
 ensureBridge()

@@ -9,6 +9,7 @@
 
 import { ipcMain, type BrowserWindow } from 'electron'
 import { agentBridge, type AgentEvent } from './bridge-server'
+import { recordCodexSession } from './codex-rollout-watcher'
 
 export type AgentState = 'idle' | 'thinking' | 'awaitingInput' | 'done'
 
@@ -70,6 +71,14 @@ function handle(evt: AgentEvent): void {
   const agent = evt.agent === 'claude' || evt.agent === 'codex' ? evt.agent : null
   const ts = evt.ts ?? Date.now()
   const detail = evt.detail
+
+  // Hook payloads carry sessionId — feed it into the rollout watcher so we
+  // can route TurnAborted events back to the right tab.
+  if (agent === 'codex') {
+    const sessionId = (detail as { sessionId?: string } | undefined)?.sessionId
+    if (sessionId) recordCodexSession(sessionId, evt.tabId)
+  }
+
   switch (evt.event) {
     case 'session_start':
       set(evt.tabId, { state: 'thinking', agent, lastChangeMs: ts, detail })
