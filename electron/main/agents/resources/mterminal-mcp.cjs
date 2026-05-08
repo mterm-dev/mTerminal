@@ -35,9 +35,73 @@
 'use strict'
 
 const net = require('node:net')
+const fs = require('node:fs')
 
-const tabId = Number(process.env.MTERMINAL_TAB_ID || 0)
-const sockPath = process.env.MTERMINAL_BRIDGE || ''
+/**
+ * Codex spawns MCP children with a clean env (only what's in the
+ * [mcp_servers.<name>.env] TOML table reaches us). MTERMINAL_BRIDGE is
+ * pinned by the installer, but MTERMINAL_TAB_ID is per-tab — it lives in
+ * the PTY shell's env. We walk up the process tree on Linux reading
+ * /proc/<pid>/environ to find the first ancestor that has it set.
+ */
+function findTabIdFromAncestors() {
+  const own = Number(process.env.MTERMINAL_TAB_ID || 0)
+  if (own > 0) return own
+  if (process.platform !== 'linux') return 0
+  let pid = process.ppid
+  for (let i = 0; i < 32 && pid > 1; i++) {
+    try {
+      const env = fs.readFileSync('/proc/' + pid + '/environ', 'utf8')
+      for (const entry of env.split('\0')) {
+        if (entry.startsWith('MTERMINAL_TAB_ID=')) {
+          const v = Number(entry.slice('MTERMINAL_TAB_ID='.length))
+          if (v > 0) return v
+        }
+      }
+      const stat = fs.readFileSync('/proc/' + pid + '/stat', 'utf8')
+      // stat format: <pid> (<comm>) <state> <ppid> ...
+      const closeParen = stat.lastIndexOf(')')
+      if (closeParen < 0) break
+      const fields = stat.slice(closeParen + 2).split(' ')
+      const ppid = Number(fields[1])
+      if (!ppid || ppid === pid) break
+      pid = ppid
+    } catch {
+      break
+    }
+  }
+  return 0
+}
+
+function findBridgeFromAncestors() {
+  const own = process.env.MTERMINAL_BRIDGE || ''
+  if (own) return own
+  if (process.platform !== 'linux') return ''
+  let pid = process.ppid
+  for (let i = 0; i < 32 && pid > 1; i++) {
+    try {
+      const env = fs.readFileSync('/proc/' + pid + '/environ', 'utf8')
+      for (const entry of env.split('\0')) {
+        if (entry.startsWith('MTERMINAL_BRIDGE=')) {
+          return entry.slice('MTERMINAL_BRIDGE='.length)
+        }
+      }
+      const stat = fs.readFileSync('/proc/' + pid + '/stat', 'utf8')
+      const closeParen = stat.lastIndexOf(')')
+      if (closeParen < 0) break
+      const fields = stat.slice(closeParen + 2).split(' ')
+      const ppid = Number(fields[1])
+      if (!ppid || ppid === pid) break
+      pid = ppid
+    } catch {
+      break
+    }
+  }
+  return ''
+}
+
+const tabId = findTabIdFromAncestors()
+const sockPath = findBridgeFromAncestors()
 
 let bridgeSock = null
 let bridgeReady = false
@@ -101,20 +165,25 @@ function err(id, code, message) {
 
 const TOOLS = [
   {
-    name: 'notify_user',
+    name: 'status',
     description:
-      'Send a notification to the mTerminal user when the agent finishes a task or wants attention. Use level="info" for completion, level="warn" for awaiting input/clarification, level="error" for failures.',
+      'REQUIRED — drives the per-tab activity indicator in mTerminal. Call this tool TWICE per turn:\n  1. With phase="start" at the very beginning, before any other tool call or reasoning output.\n  2. With phase="complete" as the very last thing before yielding control.\nUse phase="awaiting_input" when you need the user to make a decision before you can continue. Use phase="progress" for optional mid-task updates.\nThe `message` is a one-sentence summary of what you are doing / did / need.',
     inputSchema: {
       type: 'object',
       properties: {
-        message: { type: 'string', description: 'Short message shown to the user.' },
-        level: {
+        phase: {
           type: 'string',
-          enum: ['info', 'warn', 'error'],
-          description: 'Severity of the notification.',
+          enum: ['start', 'progress', 'complete', 'awaiting_input'],
+          description:
+            'Lifecycle phase. "start" at the very start of a turn, "complete" at the end, "awaiting_input" when blocked on the user, "progress" for optional mid-task updates.',
+        },
+        message: {
+          type: 'string',
+          description:
+            'One-sentence description (preview at start, summary at complete, question at awaiting_input).',
         },
       },
-      required: ['message'],
+      required: ['phase', 'message'],
     },
   },
 ]
@@ -139,13 +208,18 @@ function handleCallTool(req) {
   lastActivityTs = Date.now()
   postEvent('tool_use', { tool: name })
 
-  if (name === 'notify_user') {
+  if (name === 'status') {
+    const phase = String(args.phase || 'progress')
     const message = String(args.message || '')
-    const level = String(args.level || 'info')
-    const evKind = level === 'warn' ? 'awaiting_input' : level === 'error' ? 'done' : 'done'
+    const evKind =
+      phase === 'complete'
+        ? 'done'
+        : phase === 'awaiting_input'
+          ? 'awaiting_input'
+          : 'thinking'
     postEvent(evKind, { message })
     ok(req.id, {
-      content: [{ type: 'text', text: 'Notified user: ' + message }],
+      content: [{ type: 'text', text: 'ack' }],
     })
     return
   }

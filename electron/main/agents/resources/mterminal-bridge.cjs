@@ -21,9 +21,14 @@
 
 const net = require('node:net')
 
+// Map Claude lifecycle hooks → AgentEvent kinds.
+//
+// Note: `post_tool_use` stays in `thinking` state on purpose — the turn is
+// not over yet (Claude may invoke another tool or write the final response).
+// Only `stop` / `subagent_stop` / `session_end` flip to `done`.
 const HOOK_TO_EVENT = {
   pre_tool_use: 'thinking',
-  post_tool_use: 'idle',
+  post_tool_use: 'thinking',
   user_prompt_submit: 'thinking',
   notification: 'awaiting_input',
   stop: 'done',

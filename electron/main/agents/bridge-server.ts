@@ -12,7 +12,7 @@ import { EventEmitter } from 'node:events'
 import { createServer, type Server, type Socket } from 'node:net'
 import { existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { tmpdir, userInfo } from 'node:os'
 
 export type AgentEventKind =
   | 'session_start'
@@ -36,13 +36,22 @@ class AgentBridge extends EventEmitter {
   private server: Server | null = null
   private path = ''
 
-  /** Returns the socket path / pipe name. Idempotent. */
+  /**
+   * Returns the socket path / pipe name. Idempotent.
+   *
+   * The path is stable per-user (uses uid/username, NOT process.pid) so the
+   * Claude/Codex configs we write don't go stale on app restart. Stale socket
+   * files left from a crashed previous run are unlinked before bind.
+   */
   start(): string {
     if (this.server) return this.path
+    const u = userInfo()
+    const tag =
+      typeof u.uid === 'number' && u.uid >= 0 ? String(u.uid) : (u.username || 'user')
     this.path =
       process.platform === 'win32'
-        ? `\\\\.\\pipe\\mterminal-agent-${process.pid}`
-        : join(tmpdir(), `mterminal-agent-${process.pid}.sock`)
+        ? `\\\\.\\pipe\\mterminal-agent-${tag}`
+        : join(tmpdir(), `mterminal-agent-${tag}.sock`)
     if (process.platform !== 'win32' && existsSync(this.path)) {
       try {
         unlinkSync(this.path)
@@ -54,7 +63,9 @@ class AgentBridge extends EventEmitter {
     this.server.on('error', (err) => {
       console.error('[agent-bridge] server error:', err)
     })
-    this.server.listen(this.path)
+    this.server.listen(this.path, () => {
+      console.log('[agent-bridge] listening on ' + this.path)
+    })
     return this.path
   }
 

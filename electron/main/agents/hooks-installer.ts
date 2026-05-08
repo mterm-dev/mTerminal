@@ -192,6 +192,61 @@ export function getClaudeHooksStatus(): 'missing' | 'installed' | 'mismatch' {
 
 // ── Codex MCP install/uninstall ────────────────────────────────────────────
 
+const AGENTS_BLOCK_BEGIN = '<!-- mterminal-agent-bridge:begin -->'
+const AGENTS_BLOCK_END = '<!-- mterminal-agent-bridge:end -->'
+const AGENTS_INSTRUCTIONS = `${AGENTS_BLOCK_BEGIN}
+## mTerminal integration
+
+You are running inside mTerminal, which exposes an MCP server named \`mterminal\` with a single tool \`status\`. This tool drives the per-tab activity indicator in the sidebar.
+
+Call \`mterminal.status\` at minimum TWICE per turn:
+
+1. **Beginning of every turn** — \`status({ phase: "start", message: "<one-sentence preview of what you are about to do>" })\`, BEFORE any other tool call or reasoning output.
+2. **End of every turn** — \`status({ phase: "complete", message: "<one-sentence summary of what you accomplished>" })\`, as the very last thing you do before yielding control.
+
+If you need the user to make a decision before continuing, call \`status({ phase: "awaiting_input", message: "<the question>" })\` instead of just printing the question.
+
+Skipping these calls breaks the UI — the user will not see that you are working or finished, and notifications will not fire. Always include them, even for trivial turns.
+${AGENTS_BLOCK_END}
+`
+
+function codexAgentsPath(): string {
+  return join(homedir(), '.codex', 'AGENTS.md')
+}
+
+function writeAgentsBlock(): void {
+  const path = codexAgentsPath()
+  const existing = existsSync(path) ? readFileSync(path, 'utf8') : ''
+  const beginIdx = existing.indexOf(AGENTS_BLOCK_BEGIN)
+  const endIdx = existing.indexOf(AGENTS_BLOCK_END)
+  let next: string
+  if (beginIdx !== -1 && endIdx !== -1 && endIdx > beginIdx) {
+    next =
+      existing.slice(0, beginIdx) +
+      AGENTS_INSTRUCTIONS.trim() +
+      existing.slice(endIdx + AGENTS_BLOCK_END.length)
+  } else {
+    next = (existing.trimEnd() + '\n\n' + AGENTS_INSTRUCTIONS).trimStart()
+  }
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, next.endsWith('\n') ? next : next + '\n', 'utf8')
+}
+
+function removeAgentsBlock(): void {
+  const path = codexAgentsPath()
+  if (!existsSync(path)) return
+  const existing = readFileSync(path, 'utf8')
+  const beginIdx = existing.indexOf(AGENTS_BLOCK_BEGIN)
+  const endIdx = existing.indexOf(AGENTS_BLOCK_END)
+  if (beginIdx === -1 || endIdx === -1 || endIdx <= beginIdx) return
+  const next = (
+    existing.slice(0, beginIdx).trimEnd() +
+    '\n' +
+    existing.slice(endIdx + AGENTS_BLOCK_END.length).trimStart()
+  ).trim()
+  writeFileSync(path, next ? next + '\n' : '', 'utf8')
+}
+
 export function installCodexMcp(): void {
   const path = codexConfigPath()
   const cfg = readTomlSafe(path)
@@ -207,19 +262,34 @@ export function installCodexMcp(): void {
     env: { ...envExtra, MTERMINAL_BRIDGE: sock, _MTERMINAL_VERSION: BRIDGE_VERSION },
   }
   writeToml(path, cfg)
+
+  // Inject (or refresh) the AGENTS.md instruction that nudges Codex to call
+  // task_complete at end of every turn — without it the agent has no reason
+  // to invoke our tool.
+  try {
+    writeAgentsBlock()
+  } catch (err) {
+    console.error('[agent] writing AGENTS.md block failed:', err)
+  }
 }
 
 export function uninstallCodexMcp(): void {
   const path = codexConfigPath()
-  if (!existsSync(path)) return
-  const cfg = readTomlSafe(path)
-  if (cfg.mcp_servers && typeof cfg.mcp_servers === 'object') {
-    delete (cfg.mcp_servers as Record<string, unknown>).mterminal
-    if (Object.keys(cfg.mcp_servers as Record<string, unknown>).length === 0) {
-      delete cfg.mcp_servers
+  if (existsSync(path)) {
+    const cfg = readTomlSafe(path)
+    if (cfg.mcp_servers && typeof cfg.mcp_servers === 'object') {
+      delete (cfg.mcp_servers as Record<string, unknown>).mterminal
+      if (Object.keys(cfg.mcp_servers as Record<string, unknown>).length === 0) {
+        delete cfg.mcp_servers
+      }
     }
+    writeToml(path, cfg)
   }
-  writeToml(path, cfg)
+  try {
+    removeAgentsBlock()
+  } catch {
+    /* ignore */
+  }
 }
 
 export function getCodexMcpStatus(): 'missing' | 'installed' | 'mismatch' {
@@ -238,6 +308,28 @@ function shellQuote(v: string): string {
     return '"' + v.replace(/(["\\])/g, '\\$1') + '"'
   }
   return "'" + v.replace(/'/g, "'\\''") + "'"
+}
+
+/**
+ * On startup, refresh existing installations with the current bridge socket
+ * path. The socket path is stable per-user but the resource paths or node
+ * binary location may have changed (dev vs packaged). Idempotent.
+ */
+export function refreshAgentInstalls(): void {
+  if (getClaudeHooksStatus() !== 'missing') {
+    try {
+      installClaudeHooks()
+    } catch (err) {
+      console.error('[agent] refresh Claude hooks failed:', err)
+    }
+  }
+  if (getCodexMcpStatus() !== 'missing') {
+    try {
+      installCodexMcp()
+    } catch (err) {
+      console.error('[agent] refresh Codex MCP failed:', err)
+    }
+  }
 }
 
 export function registerHooksInstallerHandlers(): void {

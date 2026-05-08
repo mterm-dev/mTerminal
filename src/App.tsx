@@ -191,7 +191,7 @@ function AppInner({
     pendingCommandsRef.current.delete(tabId);
   }, []);
 
-  const agentStatuses = useAgentStatus(ws.activeId, {
+  const agentStatuses = useAgentStatus(ptyMap, ws.activeId, {
     enabled: settings.claudeCodeDetectionEnabled,
     notifyOnAwaitingInput: true,
     notifyOnDone: true,

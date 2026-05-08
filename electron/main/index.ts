@@ -16,7 +16,14 @@ import { registerVaultHandlers } from './vault'
 import { registerAiHandlers } from './ai'
 import { agentBridge } from './agents/bridge-server'
 import { registerStatusTracker } from './agents/status-tracker'
-import { registerHooksInstallerHandlers } from './agents/hooks-installer'
+import {
+  refreshAgentInstalls,
+  registerHooksInstallerHandlers,
+} from './agents/hooks-installer'
+import {
+  startProcessWatcher,
+  stopProcessWatcher,
+} from './agents/process-watcher'
 import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
 import { setupAppMenu } from './menu'
 import { registerWorkspaceHandlers } from './workspace'
@@ -115,6 +122,12 @@ app
     }
     registerStatusTracker(() => mainWindow)
     registerHooksInstallerHandlers()
+    // Re-stamp existing Claude/Codex installs with the live bridge path +
+    // resource paths (dev vs packaged). No-op if user never clicked install.
+    refreshAgentInstalls()
+    // Process-tree watcher catches Codex sessions (no hook system) and acts
+    // as a fallback for Claude when hooks aren't installed.
+    startProcessWatcher()
     registerMcpHandlers()
     registerWorkspaceHandlers()
     registerSettingsHandlers()
@@ -123,6 +136,7 @@ app
     app.on('before-quit', () => {
       void stopMcpServer()
       try {
+        stopProcessWatcher()
         agentBridge.stop()
       } catch {
         /* ignore */

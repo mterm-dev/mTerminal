@@ -22,16 +22,80 @@ function agent(): AgentApi | null {
 }
 
 const STATUS_LABEL: Record<HooksStatus["claude"], string> = {
-  installed: "● installed",
-  missing: "○ not installed",
-  mismatch: "⚠ outdated",
+  installed: "installed",
+  missing: "not installed",
+  mismatch: "outdated",
 };
 
-const STATUS_COLOR: Record<HooksStatus["claude"], string> = {
-  installed: "var(--c-green)",
-  missing: "color-mix(in oklch, currentColor 50%, transparent)",
-  mismatch: "var(--c-orange)",
-};
+interface RowProps {
+  target: "claude" | "codex";
+  name: string;
+  initials: string;
+  configPath: string;
+  state: HooksStatus["claude"];
+  version: string;
+  busy: string | null;
+  onAction(target: "claude" | "codex", op: "install" | "uninstall"): void;
+}
+
+function IntegrationRow({
+  target,
+  name,
+  initials,
+  configPath,
+  state,
+  version,
+  busy,
+  onAction,
+}: RowProps) {
+  const installBusy = busy === `${target}-install`;
+  const uninstallBusy = busy === `${target}-uninstall`;
+  const installLabel = installBusy
+    ? "installing…"
+    : state === "mismatch"
+      ? "reinstall"
+      : "install";
+
+  return (
+    <div className="aip-int-row">
+      <span className={`aip-int-row-icon aip-int-${target}`}>{initials}</span>
+      <div className="aip-int-row-body">
+        <div className="aip-int-row-name">
+          {name}
+          <span className={`aip-int-status ${state}`}>
+            {STATUS_LABEL[state]}
+            {state === "installed" && ` · v${version}`}
+          </span>
+        </div>
+        <div className="aip-int-row-sub" title={configPath}>
+          {configPath}
+        </div>
+      </div>
+      <div className="aip-int-row-actions">
+        {state !== "installed" && (
+          <button
+            type="button"
+            className="ghost-btn"
+            disabled={busy !== null}
+            onClick={() => onAction(target, "install")}
+          >
+            {installLabel}
+          </button>
+        )}
+        {state !== "missing" && (
+          <button
+            type="button"
+            className="ghost-btn"
+            disabled={busy !== null}
+            onClick={() => onAction(target, "uninstall")}
+          >
+            {uninstallBusy ? "removing…" : "uninstall"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Settings → AI → Agent integrations.
@@ -60,82 +124,22 @@ export function AgentIntegrations() {
     void refresh();
   }, [refresh]);
 
-  const run = async (
-    target: "claude" | "codex",
-    op: "install" | "uninstall",
-  ): Promise<void> => {
-    const api = agent();
-    if (!api) return;
-    setBusy(`${target}-${op}`);
-    setErr(null);
-    try {
-      await api.hooks[op](target);
-      await refresh();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  if (!status) {
-    return (
-      <div className="aip-section-h">
-        <h3>Agent integrations</h3>
-        <span className="aip-sub">loading…</span>
-      </div>
-    );
-  }
-
-  const Row = ({
-    target,
-    name,
-    sub,
-    state,
-  }: {
-    target: "claude" | "codex";
-    name: string;
-    sub: string;
-    state: HooksStatus["claude"];
-  }) => (
-    <div className="aip-card" style={{ display: "flex", gap: 12, alignItems: "center" }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 600 }}>{name}</div>
-        <div className="aip-sub" style={{ fontSize: 12 }}>
-          {sub}
-        </div>
-        <div style={{ fontSize: 11, color: STATUS_COLOR[state], marginTop: 4 }}>
-          {STATUS_LABEL[state]}
-          {state !== "missing" && ` (v${status.version})`}
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        {state !== "installed" && (
-          <button
-            type="button"
-            className="ghost-btn"
-            disabled={busy !== null}
-            onClick={() => void run(target, "install")}
-          >
-            {busy === `${target}-install`
-              ? "installing…"
-              : state === "mismatch"
-                ? "reinstall"
-                : "install"}
-          </button>
-        )}
-        {state !== "missing" && (
-          <button
-            type="button"
-            className="ghost-btn"
-            disabled={busy !== null}
-            onClick={() => void run(target, "uninstall")}
-          >
-            {busy === `${target}-uninstall` ? "removing…" : "uninstall"}
-          </button>
-        )}
-      </div>
-    </div>
+  const onAction = useCallback(
+    async (target: "claude" | "codex", op: "install" | "uninstall") => {
+      const api = agent();
+      if (!api) return;
+      setBusy(`${target}-${op}`);
+      setErr(null);
+      try {
+        await api.hooks[op](target);
+        await refresh();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [refresh],
   );
 
   return (
@@ -143,36 +147,48 @@ export function AgentIntegrations() {
       <div className="aip-section-h">
         <h3>Agent integrations</h3>
         <span className="aip-sub">
-          detect agent activity via push events, not output polling
+          {status
+            ? "detect activity via push events instead of polling output"
+            : "loading…"}
         </span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <Row
-          target="claude"
-          name="Claude Code hooks"
-          sub="~/.claude/settings.json — PreToolUse, Stop, Notification, …"
-          state={status.claude}
-        />
-        <Row
-          target="codex"
-          name="OpenAI Codex MCP server"
-          sub="~/.codex/config.toml — [mcp_servers.mterminal]"
-          state={status.codex}
-        />
+      {status && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <IntegrationRow
+            target="claude"
+            name="Claude Code hooks"
+            initials="cc"
+            configPath="~/.claude/settings.json"
+            state={status.claude}
+            version={status.version}
+            busy={busy}
+            onAction={onAction}
+          />
+          <IntegrationRow
+            target="codex"
+            name="OpenAI Codex MCP server"
+            initials="cx"
+            configPath="~/.codex/config.toml — [mcp_servers.mterminal]"
+            state={status.codex}
+            version={status.version}
+            busy={busy}
+            onAction={onAction}
+          />
 
-        {status.bridgeSocket && (
-          <div className="settings-note" style={{ fontSize: 11 }}>
-            bridge socket: <code>{status.bridgeSocket}</code>
-          </div>
-        )}
+          {status.bridgeSocket && (
+            <div className="aip-int-bridge">
+              bridge: {status.bridgeSocket}
+            </div>
+          )}
 
-        {err && (
-          <div className="settings-note" style={{ color: "var(--c-orange)" }}>
-            {err}
-          </div>
-        )}
-      </div>
+          {err && (
+            <div className="settings-note" style={{ color: "var(--c-orange)" }}>
+              {err}
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }

@@ -392,6 +392,105 @@ export const CSS = `
   background: var(--bg-active);
 }
 
+/* ─── agent integrations rows ──────────────────────────────────────── */
+.aip-int-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--bg-raised, var(--bg-base));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.aip-int-row-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  background: var(--bg-active);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  letter-spacing: -0.5px;
+}
+.aip-int-row-icon.aip-int-claude {
+  background: oklch(76.5% .177 163.223 / 0.16);
+  color: oklch(76.5% .177 163.223);
+  border-color: oklch(76.5% .177 163.223 / 0.4);
+}
+.aip-int-row-icon.aip-int-codex {
+  background: oklch(74.6% .160 232.661 / 0.18);
+  color: oklch(78.9% .154 211.530);
+  border-color: oklch(74.6% .160 232.661 / 0.45);
+}
+.aip-int-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.aip-int-row-name {
+  font-weight: 600;
+  font-size: var(--t-sm);
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.aip-int-row-sub {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.aip-int-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+}
+.aip-int-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-active);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  font-family: var(--font-sans);
+}
+.aip-int-status.installed { color: oklch(76.5% .177 163.223); border-color: oklch(76.5% .177 163.223 / 0.4); background: oklch(76.5% .177 163.223 / 0.12); }
+.aip-int-status.mismatch  { color: oklch(82.8% .189 84.429); border-color: oklch(82.8% .189 84.429 / 0.4); background: oklch(82.8% .189 84.429 / 0.12); }
+.aip-int-status.missing   { color: var(--fg-dim); }
+
+.aip-int-bridge {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--fg-dim);
+  padding: 6px 10px;
+  background: var(--bg-muted, var(--bg-base));
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm, 6px);
+  word-break: break-all;
+}
+
+@container aip-root (max-width: 520px) {
+  .aip-int-row { flex-wrap: wrap; }
+  .aip-int-row-actions { width: 100%; justify-content: flex-end; }
+}
+
 /* ─── misc ─────────────────────────────────────────────────────────── */
 .aip-toggles {
   display: flex;

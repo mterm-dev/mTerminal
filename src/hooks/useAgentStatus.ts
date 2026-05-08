@@ -15,6 +15,7 @@ export interface AgentStatus {
 }
 
 interface AgentEv {
+  /** PTY session id (= MTERMINAL_TAB_ID). The hook translates to workspace tab id. */
   tabId: number;
   state: AgentState;
   agent: "claude" | "codex" | null;
@@ -41,14 +42,28 @@ interface Options {
 
 /**
  * Subscribes to push events from the agent bridge (Claude Code hooks +
- * Codex MCP server). Replaces the old `useClaudeCodeStatus` polling.
+ * Codex MCP server). The bridge keys events by PTY session id (which is
+ * what `MTERMINAL_TAB_ID` carries); this hook translates those to
+ * workspace tab ids so the Sidebar can match against `tab.id`.
  */
-export function useAgentStatus(activeTabId: number | null, opts: Options) {
+export function useAgentStatus(
+  ptySessionIds: Map<number, number>,
+  activeTabId: number | null,
+  opts: Options,
+) {
   const [statuses, setStatuses] = useState<Map<number, AgentStatus>>(new Map());
   const lastNotifiedRef = useRef<Map<number, { state: AgentState; ts: number }>>(
     new Map(),
   );
   const permissionRef = useRef<boolean | null>(null);
+  const ptyToTabRef = useRef<Map<number, number>>(new Map());
+
+  // Keep a ptyId → workspaceTabId reverse map fresh.
+  useEffect(() => {
+    const reverse = new Map<number, number>();
+    for (const [tabId, ptyId] of ptySessionIds) reverse.set(ptyId, tabId);
+    ptyToTabRef.current = reverse;
+  }, [ptySessionIds]);
 
   useEffect(() => {
     if (!opts.enabled) return;
@@ -75,16 +90,27 @@ export function useAgentStatus(activeTabId: number | null, opts: Options) {
     const a = api();
     if (!a) return;
 
+    const translate = (ptyId: number): number | null =>
+      ptyToTabRef.current.get(ptyId) ?? null;
+
     let cancelled = false;
     void a.snapshot().then((rows) => {
       if (cancelled) return;
-      setStatuses(new Map(rows));
+      const next = new Map<number, AgentStatus>();
+      for (const [ptyId, status] of rows) {
+        const tabId = translate(ptyId);
+        if (tabId != null) next.set(tabId, status);
+      }
+      setStatuses(next);
     });
 
     const off = a.onStatus((ev) => {
+      const tabId = translate(ev.tabId);
+      if (tabId == null) return;
+
       setStatuses((prev) => {
         const next = new Map(prev);
-        next.set(ev.tabId, {
+        next.set(tabId, {
           state: ev.state,
           agent: ev.agent,
           lastChangeMs: ev.lastChangeMs,
@@ -94,24 +120,24 @@ export function useAgentStatus(activeTabId: number | null, opts: Options) {
       });
 
       if (!permissionRef.current) return;
-      if (ev.tabId === activeTabId) return;
+      if (tabId === activeTabId) return;
 
       if (ev.state === "awaitingInput" && opts.notifyOnAwaitingInput) {
-        const last = lastNotifiedRef.current.get(ev.tabId);
+        const last = lastNotifiedRef.current.get(tabId);
         if (!last || last.state !== "awaitingInput" || Date.now() - last.ts > 30_000) {
-          lastNotifiedRef.current.set(ev.tabId, { state: ev.state, ts: Date.now() });
+          lastNotifiedRef.current.set(tabId, { state: ev.state, ts: Date.now() });
           sendNotification({
             title: `${ev.agent ?? "agent"} waiting`,
-            body: ev.detail?.message ?? `tab ${ev.tabId} needs your input`,
+            body: ev.detail?.message ?? `tab ${tabId} needs your input`,
           });
         }
       } else if (ev.state === "done" && opts.notifyOnDone) {
-        const last = lastNotifiedRef.current.get(ev.tabId);
+        const last = lastNotifiedRef.current.get(tabId);
         if (!last || last.state !== "done") {
-          lastNotifiedRef.current.set(ev.tabId, { state: ev.state, ts: Date.now() });
+          lastNotifiedRef.current.set(tabId, { state: ev.state, ts: Date.now() });
           sendNotification({
             title: `${ev.agent ?? "agent"} finished`,
-            body: ev.detail?.message ?? `tab ${ev.tabId}`,
+            body: ev.detail?.message ?? `tab ${tabId}`,
           });
         }
       }
