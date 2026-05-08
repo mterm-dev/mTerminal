@@ -48,8 +48,10 @@ describe.skipIf(!process.env.MARKETPLACE_E2E)('installer e2e', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mt-installer-e2e-'))
     process.env.HOME = tmp
     const electron = await import('electron')
-    ;(electron.app as { getPath: (k: string) => string }).getPath = (k: string) =>
-      k === 'home' ? tmp : tmp
+    ;(electron.app as { getPath: (k: string) => string; isPackaged: boolean }).getPath = (
+      k: string,
+    ) => (k === 'home' ? tmp : tmp)
+    ;(electron.app as { isPackaged: boolean }).isPackaged = true
 
     const installer = createInstaller(tmp)
 
@@ -79,8 +81,10 @@ describe.skipIf(!process.env.MARKETPLACE_E2E)('installer e2e', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mt-installer-multi-'))
     process.env.HOME = tmp
     const electron = await import('electron')
-    ;(electron.app as { getPath: (k: string) => string }).getPath = (k: string) =>
-      k === 'home' ? tmp : tmp
+    ;(electron.app as { getPath: (k: string) => string; isPackaged: boolean }).getPath = (
+      k: string,
+    ) => (k === 'home' ? tmp : tmp)
+    ;(electron.app as { isPackaged: boolean }).isPackaged = true
 
     const installer = createInstaller(tmp)
 

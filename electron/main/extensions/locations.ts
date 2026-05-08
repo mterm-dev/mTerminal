@@ -5,23 +5,29 @@ import fs from 'node:fs/promises'
 /**
  * Filesystem layout for the extension system.
  *
- *   ~/.mterminal/                              userRoot()
- *   ├── extensions/                            userExtensionsDir()
- *   │   └── <id>/                              extensionDir(id)
- *   │       ├── package.json                   manifestPath(id)
- *   │       └── data/                          extensionDataDir(id)
- *   ├── trust.json                             trustFilePath()
- *   ├── disabled.json                          disabledFilePath()
- *   └── settings.backup-pre-extensions.json    settingsMigrationBackupPath()
+ *   ~/.mterminal/        (packaged)         userRoot()
+ *   ~/.mterminal-dev/    (pnpm dev)         userRoot()
+ *   ├── extensions/                         userExtensionsDir()
+ *   │   └── <id>/                           extensionDir(id)
+ *   │       ├── package.json                manifestPath(id)
+ *   │       └── data/                       extensionDataDir(id)
+ *   ├── trust.json                          trustFilePath()
+ *   ├── disabled.json                       disabledFilePath()
+ *   └── settings.backup-pre-extensions.json settingsMigrationBackupPath()
  *
- *   <app>/extensions/                          builtInExtensionsDir()
- *   └── <id>/...                               (read-only, shipped with the app)
+ *   <app>/extensions/                       builtInExtensionsDir()
+ *   └── <id>/...                            (read-only, shipped with the app)
  */
 
-const USER_DIR_NAME = '.mterminal'
+const USER_DIR_NAME_PROD = '.mterminal'
+const USER_DIR_NAME_DEV = '.mterminal-dev'
+
+export function userDirName(): string {
+  return app.isPackaged ? USER_DIR_NAME_PROD : USER_DIR_NAME_DEV
+}
 
 export function userRoot(): string {
-  return path.join(app.getPath('home'), USER_DIR_NAME)
+  return path.join(app.getPath('home'), userDirName())
 }
 
 export function userExtensionsDir(): string {
