@@ -300,6 +300,12 @@ export const CSS = `
 }
 .aip-models .aip-model-pill:hover { color: var(--fg); border-color: var(--border-strong); }
 .aip-models .aip-model-pill.aip-model-active { color: var(--fg); border-color: var(--border-strong); background: var(--bg-selected); }
+.aip-models .aip-model-pill.aip-model-more {
+  font-style: italic;
+  color: var(--fg-dim);
+  border-style: dashed;
+}
+.aip-models .aip-model-pill.aip-model-more:hover { color: var(--fg-muted); }
 
 .aip-card-foot {
   display: flex;
