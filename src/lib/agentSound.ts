@@ -1,4 +1,5 @@
-export type AgentSoundType = "bell" | "chime" | "ping";
+export const AGENT_SOUND_TYPES = ["bell", "chime", "ping"] as const;
+export type AgentSoundType = (typeof AGENT_SOUND_TYPES)[number];
 
 let _ctx: AudioContext | null = null;
 
@@ -80,7 +81,5 @@ export function playAgentSound(type: AgentSoundType, volume: number): void {
     } else {
       play();
     }
-  } catch {
-    // AudioContext unavailable (headless test env) — silently skip
-  }
+  } catch {}
 }

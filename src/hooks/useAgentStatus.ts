@@ -123,7 +123,6 @@ export function useAgentStatus(
         return next;
       });
 
-      // Sound fires for every completion (not just background tabs).
       if (ev.state === "done" && opts.soundEnabled) {
         playAgentSound(opts.soundType ?? "chime", opts.soundVolume ?? 0.7);
       }

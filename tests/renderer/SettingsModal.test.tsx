@@ -20,6 +20,17 @@ vi.mock("../../src/hooks/useAIKeys", () => ({
   }),
 }));
 
+vi.mock("../../src/vault/VaultGate", () => ({
+  useVaultGate: () => ({
+    status: { exists: true, unlocked: false, dev: false },
+    openModal: vi.fn(),
+    lock: vi.fn(),
+    devReset: vi.fn(),
+    ensure: vi.fn(),
+  }),
+  VaultGateProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 
 const { listModelsMock } = vi.hoisted(() => ({
   listModelsMock: vi.fn(async (_p: string, _b?: string) => [] as any[]),
@@ -68,62 +79,67 @@ function gotoSection(label: RegExp) {
   fireEvent.click(screen.getByRole("button", { name: label }));
 }
 
+function toggleSwitch(switchEl: HTMLElement): void {
+  const segs = switchEl.querySelectorAll<HTMLButtonElement>(".st-seg");
+  if (segs.length !== 2) {
+    fireEvent.click(switchEl);
+    return;
+  }
+  const isOn = switchEl.getAttribute("aria-checked") === "true";
+  fireEvent.click(isOn ? segs[0] : segs[1]);
+}
+
 describe("SettingsModal — render & navigation", () => {
   it("renders all section nav buttons", () => {
     render(<SettingsModal {...makeProps()} />);
     for (const label of [
-      /^Appearance$/,
-      /^Terminal$/,
-      /^Shell$/,
-      /^Behavior$/,
-      /^AI$/,
-      /^About$/,
+      /^appearance$/,
+      /^terminal & shell$/,
+      /^general$/,
+      /^ai$/,
+      /^danger zone$/,
+      /^about$/,
     ]) {
       expect(screen.getAllByRole("button", { name: label }).length).toBeGreaterThan(0);
     }
   });
 
-  it("opens with Appearance section active by default", () => {
+  it("opens with appearance section active by default", () => {
     render(<SettingsModal {...makeProps()} />);
-    const navBtn = screen.getAllByRole("button", { name: /^Appearance$/ })[0];
+    const navBtn = screen.getAllByRole("button", { name: /^appearance$/ })[0];
     expect(navBtn.className).toContain("active");
-    
-    expect(screen.getByText(/^Theme$/)).toBeTruthy();
+
+    expect(screen.getByText(/^theme$/)).toBeTruthy();
   });
 
-  it("switches to Terminal section when its nav button is clicked", () => {
+  it("switches to terminal & shell section when its nav button is clicked", () => {
     render(<SettingsModal {...makeProps()} />);
-    gotoSection(/^Terminal$/);
-    expect(screen.getByText(/Font family/i)).toBeTruthy();
-    expect(screen.getByText(/Cursor style/i)).toBeTruthy();
+    gotoSection(/^terminal & shell$/);
+    expect(screen.getAllByText(/font family/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/cursor style/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/shell override/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/shell arguments/i).length).toBeGreaterThan(0);
   });
 
-  it("switches to Shell section", () => {
+  it("switches to general section", () => {
     render(<SettingsModal {...makeProps()} />);
-    gotoSection(/^Shell$/);
-    expect(screen.getByText(/Shell override/i)).toBeTruthy();
-    expect(screen.getByText(/Shell arguments/i)).toBeTruthy();
+    gotoSection(/^general$/);
+    expect(screen.getAllByText(/confirm close with multiple tabs/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/copy on select/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/shell greeting banner/i).length).toBeGreaterThan(0);
   });
 
-  it("switches to Behavior section", () => {
+  it("switches to about section", () => {
     render(<SettingsModal {...makeProps()} />);
-    gotoSection(/^Behavior$/);
-    expect(screen.getByText(/Confirm close with multiple tabs/i)).toBeTruthy();
-    expect(screen.getByText(/Copy on select/i)).toBeTruthy();
-    expect(screen.getByText(/mTerminal greeting/i)).toBeTruthy();
-  });
-
-  it("switches to About section", () => {
-    render(<SettingsModal {...makeProps()} />);
-    gotoSection(/^About$/);
+    gotoSection(/^about$/);
     expect(screen.getByText(/^mTerminal$/)).toBeTruthy();
-    expect(screen.getByText(/v0\.1\.0/)).toBeTruthy();
+    expect(screen.getByText(/v0\.3\.5/)).toBeTruthy();
   });
 
-  it("switches to AI section showing master switch", () => {
+  it("switches to ai section showing master switch", () => {
     render(<SettingsModal {...makeProps()} />);
-    gotoSection(/^AI$/);
-    expect(screen.getByText(/Enable AI/i)).toBeTruthy();
+    gotoSection(/^ai$/);
+    expect(screen.getByText(/enable ai/i)).toBeTruthy();
   });
 });
 
@@ -171,7 +187,7 @@ describe("SettingsModal — Terminal fields", () => {
   function renderTerminal(over?: Partial<Settings>) {
     const props = makeProps({ settings: { ...DEFAULT_SETTINGS, ...over } });
     render(<SettingsModal {...props} />);
-    gotoSection(/^Terminal$/);
+    gotoSection(/^terminal & shell$/);
     return props;
   }
 
@@ -204,62 +220,64 @@ describe("SettingsModal — Terminal fields", () => {
     ["underline", "underline"],
   ])("cursor style %s button emits update", (label, value) => {
     const props = renderTerminal({ cursorStyle: "bar" });
-    const btn = screen.getByRole("button", { name: new RegExp(`^${label}$`) });
+    const btn = screen.getByRole("radio", { name: new RegExp(label, "i") });
     fireEvent.click(btn);
     expect(props.update).toHaveBeenCalledWith("cursorStyle", value);
   });
 
   it("cursor style active button reflects current setting", () => {
     renderTerminal({ cursorStyle: "block" });
-    const btn = screen.getByRole("button", { name: /^block$/ });
+    const btn = screen.getByRole("radio", { name: /block/i });
     expect(btn.className).toContain("active");
   });
 
   it("cursor blink toggle emits inverted update", () => {
     const props = renderTerminal({ cursorBlink: true });
     const toggles = screen.getAllByRole("switch");
-    fireEvent.click(toggles[0]);
+    toggleSwitch(toggles[0]);
     expect(props.update).toHaveBeenCalledWith("cursorBlink", false);
   });
 
-  it("scrollback input emits clamped numeric update", () => {
+  it("scrollback input emits numeric update on blur", () => {
     const props = renderTerminal({ scrollback: 5000 });
     const input = screen.getByDisplayValue("5000") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "8000" } });
+    fireEvent.blur(input);
     expect(props.update).toHaveBeenCalledWith("scrollback", 8000);
   });
 
-  it("scrollback clamps to 100000 when too large", () => {
+  it("scrollback rejects out-of-range value (keeps existing)", () => {
     const props = renderTerminal({ scrollback: 5000 });
     const input = screen.getByDisplayValue("5000") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "999999" } });
-    expect(props.update).toHaveBeenCalledWith("scrollback", 100000);
-  });
-
-  it("scrollback clamps negative to 0", () => {
-    const props = renderTerminal({ scrollback: 5000 });
-    const input = screen.getByDisplayValue("5000") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "-50" } });
-    expect(props.update).toHaveBeenCalledWith("scrollback", 0);
+    fireEvent.blur(input);
+    // commit invalid → reverts text and does not call update
+    expect(props.update).not.toHaveBeenCalledWith("scrollback", expect.any(Number));
   });
 });
 
-describe("SettingsModal — Shell fields", () => {
+describe("SettingsModal — Shell fields (in terminal & shell section)", () => {
   it("shell override input emits update", () => {
     const props = makeProps({ settings: { ...DEFAULT_SETTINGS, shellOverride: "" } });
     render(<SettingsModal {...props} />);
-    gotoSection(/^Shell$/);
+    gotoSection(/^terminal & shell$/);
     const inputs = document.querySelectorAll('.settings-body input[type="text"]');
-    fireEvent.change(inputs[0], { target: { value: "/bin/zsh" } });
+    const shellInput = Array.from(inputs).find(
+      (i) => (i as HTMLInputElement).placeholder === "/usr/bin/fish",
+    ) as HTMLInputElement;
+    fireEvent.change(shellInput, { target: { value: "/bin/zsh" } });
     expect(props.update).toHaveBeenCalledWith("shellOverride", "/bin/zsh");
   });
 
   it("shell args input emits update", () => {
     const props = makeProps({ settings: { ...DEFAULT_SETTINGS, shellArgs: "" } });
     render(<SettingsModal {...props} />);
-    gotoSection(/^Shell$/);
+    gotoSection(/^terminal & shell$/);
     const inputs = document.querySelectorAll('.settings-body input[type="text"]');
-    fireEvent.change(inputs[1], { target: { value: "-l" } });
+    const argsInput = Array.from(inputs).find(
+      (i) => (i as HTMLInputElement).placeholder === "--login -i",
+    ) as HTMLInputElement;
+    fireEvent.change(argsInput, { target: { value: "-l" } });
     expect(props.update).toHaveBeenCalledWith("shellArgs", "-l");
   });
 });
@@ -272,9 +290,9 @@ describe("SettingsModal — Behavior toggles", () => {
   ] as const)("toggle %s emits inverted update", (key, idx, current) => {
     const props = makeProps({ settings: { ...DEFAULT_SETTINGS, [key]: current } as Settings });
     render(<SettingsModal {...props} />);
-    gotoSection(/^Behavior$/);
+    gotoSection(/^general$/);
     const toggles = screen.getAllByRole("switch");
-    fireEvent.click(toggles[idx]);
+    toggleSwitch(toggles[idx]);
     expect(props.update).toHaveBeenCalledWith(key, !current);
   });
 
@@ -288,7 +306,7 @@ describe("SettingsModal — Behavior toggles", () => {
       },
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^Behavior$/);
+    gotoSection(/^general$/);
     const toggles = screen.getAllByRole("switch");
     expect(toggles[0].getAttribute("aria-checked")).toBe("true");
     expect(toggles[1].getAttribute("aria-checked")).toBe("false");
@@ -307,7 +325,7 @@ describe.skip("SettingsModal — AI section", () => {
   it("AI section renders only master switch when aiEnabled is false", () => {
     const props = makeProps({ settings: { ...DEFAULT_SETTINGS, aiEnabled: false } });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     expect(screen.getByText(/Enable AI/i)).toBeTruthy();
     
     expect(screen.queryByText(/Default provider/i)).toBeNull();
@@ -316,7 +334,7 @@ describe.skip("SettingsModal — AI section", () => {
   it("clicking master switch emits aiEnabled update", () => {
     const props = makeProps({ settings: { ...DEFAULT_SETTINGS, aiEnabled: false } });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const sw = screen.getByRole("switch");
     fireEvent.click(sw);
     expect(props.update).toHaveBeenCalledWith("aiEnabled", true);
@@ -331,7 +349,7 @@ describe.skip("SettingsModal — AI section", () => {
       },
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const input = screen.getByDisplayValue("https://api.openai.com/v1") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "https://example.com/v1" } });
     expect(props.update).toHaveBeenCalledWith("aiOpenaiBaseUrl", "https://example.com/v1");
@@ -346,7 +364,7 @@ describe.skip("SettingsModal — AI section", () => {
       },
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const input = screen.getByDisplayValue("http://localhost:11434/v1") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "http://example.local/v1" } });
     expect(props.update).toHaveBeenCalledWith("aiOllamaBaseUrl", "http://example.local/v1");
@@ -362,7 +380,7 @@ describe.skip("SettingsModal — AI section", () => {
       settings: { ...DEFAULT_SETTINGS, aiEnabled: true, [key]: false } as Settings,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     
     const toggles = screen.getAllByRole("switch");
     
@@ -382,7 +400,7 @@ describe.skip("SettingsModal — AI section", () => {
       vaultExists: true,
     });
     const { container } = render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const note = container.querySelector(".settings-note") as HTMLElement;
     expect(note.textContent).toMatch(/vault locked/i);
     fireEvent.click(note);
@@ -396,7 +414,7 @@ describe.skip("SettingsModal — AI section", () => {
       vaultExists: false,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     expect(screen.getByText(/vault not initialised/i)).toBeTruthy();
   });
 });
@@ -409,7 +427,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     expect(screen.getAllByText(/no key/i).length).toBeGreaterThan(0);
   });
 
@@ -420,7 +438,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     expect(screen.getAllByText(/key saved/i).length).toBeGreaterThan(0);
   });
 
@@ -432,7 +450,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultExists: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     expect(screen.getAllByText(/vault locked/i).length).toBeGreaterThan(0);
   });
 
@@ -443,7 +461,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const setKeyBtns = screen.getAllByRole("button", { name: /^set key$/ });
     fireEvent.click(setKeyBtns[0]); // anthropic
     const input = screen.getByPlaceholderText(/paste API key/i) as HTMLInputElement;
@@ -461,7 +479,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const setKeyBtns = screen.getAllByRole("button", { name: /^set key$/ });
     fireEvent.click(setKeyBtns[0]);
     await act(async () => {
@@ -477,7 +495,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     fireEvent.click(screen.getAllByRole("button", { name: /^set key$/ })[0]);
     expect(screen.queryByPlaceholderText(/paste API key/i)).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^cancel$/ }));
@@ -491,7 +509,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const removeBtns = screen.getAllByRole("button", { name: /^remove key$/ });
     fireEvent.click(removeBtns[0]);
     expect(clearKeyMock).toHaveBeenCalledWith("anthropic");
@@ -505,7 +523,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultExists: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const btn = screen.getAllByRole("button", {
       name: /^unlock vault to set key$/,
     })[0] as HTMLButtonElement;
@@ -521,7 +539,7 @@ describe.skip("SettingsModal — AI key management", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     
     expect(screen.getByText(/Ollama \(local\)/i)).toBeTruthy();
     
@@ -542,7 +560,7 @@ describe.skip("SettingsModal — list models", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     const listBtns = screen.getAllByRole("button", { name: /^list models$/ });
     await act(async () => {
       fireEvent.click(listBtns[0]);
@@ -561,7 +579,7 @@ describe.skip("SettingsModal — list models", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     await act(async () => {
       fireEvent.click(screen.getAllByRole("button", { name: /^list models$/ })[0]);
     });
@@ -578,7 +596,7 @@ describe.skip("SettingsModal — list models", () => {
       vaultUnlocked: true,
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     await act(async () => {
       fireEvent.click(screen.getAllByRole("button", { name: /^list models$/ })[0]);
     });
@@ -595,19 +613,18 @@ describe("SettingsModal — MCP server status", () => {
       mcpStatus: { running: true, socketPath: "/tmp/mt.sock" },
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     expect(screen.getAllByText(/\/tmp\/mt\.sock/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/add to claude code/i)).toBeTruthy();
   });
 
-  it("shows starting message when mcp not yet running", () => {
+  it("shows starting hint when mcp not yet running", () => {
     const props = makeProps({
       settings: { ...DEFAULT_SETTINGS, aiEnabled: true, mcpServerEnabled: true },
       mcpStatus: { running: false, socketPath: null },
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
-    expect(screen.getByText(/starting MCP server/i)).toBeTruthy();
+    gotoSection(/^ai$/);
+    expect(screen.getByText(/^starting…$/)).toBeTruthy();
   });
 
   it("does not render mcp status block when mcpServerEnabled is false", () => {
@@ -616,16 +633,23 @@ describe("SettingsModal — MCP server status", () => {
       mcpStatus: { running: true, socketPath: "/tmp/mt.sock" },
     });
     render(<SettingsModal {...props} />);
-    gotoSection(/^AI$/);
+    gotoSection(/^ai$/);
     expect(screen.queryAllByText(/\/tmp\/mt\.sock/)).toHaveLength(0);
   });
 });
 
 describe("SettingsModal — reset & close", () => {
-  it("'reset all' button calls reset", () => {
+  it("danger zone reset calls reset", () => {
     const props = makeProps();
     render(<SettingsModal {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: /reset all/i }));
+    gotoSection(/^danger zone$/);
+    const origConfirm = window.confirm;
+    window.confirm = () => true;
+    try {
+      fireEvent.click(screen.getByRole("button", { name: /^reset$/ }));
+    } finally {
+      window.confirm = origConfirm;
+    }
     expect(props.reset).toHaveBeenCalled();
   });
 

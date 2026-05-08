@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from "react";
 import type { Settings } from "../settings/useSettings";
+import type { UiState } from "../settings/useUiState";
 import { matchHotkey } from "../lib/hotkey";
 
 interface Workspace {
@@ -17,7 +18,8 @@ interface Voice {
 interface Args {
   wsRef: RefObject<Workspace>;
   settingsRef: RefObject<Settings>;
-  updateRef: RefObject<<K extends keyof Settings>(k: K, v: Settings[K]) => void>;
+  uiStateRef: RefObject<UiState>;
+  updateUiRef: RefObject<<K extends keyof UiState>(k: K, v: UiState[K]) => void>;
   voiceRef: RefObject<Voice>;
   spawnClaudeTabRef: RefObject<() => void>;
   openPaletteRef: RefObject<() => void>;
@@ -30,7 +32,8 @@ interface Args {
 export function useGlobalHotkeys({
   wsRef,
   settingsRef,
-  updateRef,
+  uiStateRef,
+  updateUiRef,
   voiceRef,
   spawnClaudeTabRef,
   openPaletteRef,
@@ -93,9 +96,9 @@ export function useGlobalHotkeys({
         }
         if (e.key === "b" || e.key === "B") {
           consume();
-          updateRef.current?.(
+          updateUiRef.current?.(
             "sidebarCollapsed",
-            !settingsRef.current!.sidebarCollapsed,
+            !uiStateRef.current!.sidebarCollapsed,
           );
           return;
         }

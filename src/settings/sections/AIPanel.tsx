@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useAIKeys } from "../../hooks/useAIKeys";
 import { useAiProviders } from "../../lib/ai-availability";
-import { Field, Toggle, type VaultSectionProps } from "./_shared";
+import { Field, Group, SectionLabel, type VaultSectionProps } from "./_shared";
+import { ToggleRow } from "./_rows";
 import { ensureStyles } from "./ai/styles";
 import { AgentIntegrations } from "./ai/AgentIntegrations";
 import { AgentSound } from "./ai/AgentSound";
@@ -13,21 +14,6 @@ interface Props extends VaultSectionProps {
   mcpStatus?: { running: boolean; socketPath: string | null };
 }
 
-/**
- * Settings → AI section.
- *
- * After the SDK-as-extension refactor every AI provider is contributed by an
- * installed extension. This panel renders:
- *
- *   • when no provider is registered: an empty-state hero + a 3-up grid of
- *     install cards for the first-party SDK provider extensions;
- *   • when at least one provider is active: one polished `ProviderCard` per
- *     installed provider, plus a slim "+ add another" row that re-shows the
- *     install cards for the SDKs the user hasn't picked up yet.
- *
- * Keys live in the host vault (`ai_keys.<id>`); model + baseUrl per provider
- * live in `settings.aiProviderConfig`.
- */
 export function AIPanel({
   settings,
   update,
@@ -43,7 +29,6 @@ export function AIPanel({
   const providers = useAiProviders();
   const { hasKey, setKey, clearKey } = useAIKeys(vaultUnlocked);
 
-  // Auto-select default if user has none + at least one provider is active.
   useEffect(() => {
     if (!settings.aiDefaultProvider && providers.length > 0) {
       update("aiDefaultProvider", providers[0].id);
@@ -56,40 +41,48 @@ export function AIPanel({
     update("aiProviderConfig", next);
   };
 
-  const vaultBadge = !vaultExists
-    ? "vault not initialised — click to create"
+  const vaultLabel = !vaultExists
+    ? "vault not initialized"
     : !vaultUnlocked
-      ? "vault locked — click to unlock"
+      ? "vault locked"
       : null;
 
   return (
-    <div className="aip-root">
-      <Field label="Enable AI" hint="Master switch for chat, command palette, and explain">
-        <Toggle checked={settings.aiEnabled} onChange={(b) => update("aiEnabled", b)} />
-      </Field>
+    <>
+      <SectionLabel>master switch</SectionLabel>
+      <Group>
+        <ToggleRow
+          label="enable ai"
+          desc="turns on the ai panel, command palette, and right-click explain"
+          checked={settings.aiEnabled}
+          onChange={(b) => update("aiEnabled", b)}
+        />
+      </Group>
 
       {settings.aiEnabled && (
         <>
-          {vaultBadge && (
-            <div className="settings-note" style={{ cursor: "pointer" }} onClick={onRequestVault}>
-              {vaultBadge}. API keys are stored encrypted (Argon2id + XChaCha20-Poly1305) in the
-              same vault as remote-host passwords.
-            </div>
+          {vaultLabel && (
+            <Group>
+              <Field
+                label={vaultLabel}
+                desc="api keys are stored encrypted in the vault. unlock to manage them."
+              >
+                <button type="button" className="st-btn primary" onClick={onRequestVault}>
+                  {!vaultExists ? "set up" : "unlock"}
+                </button>
+              </Field>
+            </Group>
           )}
 
-          <div className="aip-section-h">
-            <h3>Providers</h3>
-            <span className="aip-sub">
-              {providers.length === 0
-                ? "no providers available"
-                : `${providers.length} available`}
-            </span>
-          </div>
-
+          <SectionLabel>
+            providers · {providers.length === 0 ? "none available" : `${providers.length} available`}
+          </SectionLabel>
           {providers.length === 0 ? (
-            <EmptyState />
+            <Group>
+              <EmptyState />
+            </Group>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <Group>
               {providers.map((entry) => {
                 const cfg = settings.aiProviderConfig?.[entry.id] ?? {};
                 return (
@@ -109,89 +102,51 @@ export function AIPanel({
                   />
                 );
               })}
-            </div>
+            </Group>
           )}
 
           <AgentIntegrations />
 
-          <AgentSound settings={settings} update={update} />
+          <SectionLabel>completion sound</SectionLabel>
+          <Group>
+            <AgentSound settings={settings} update={update} />
+          </Group>
 
-          <div className="aip-section-h">
-            <h3>Behavior</h3>
-          </div>
-
-          <div className="aip-toggles">
-                <Field
-                  label="Attach context to chat"
-                  hint="Inject recent terminal output as context when asking AI"
-                >
-                  <Toggle
-                    checked={settings.aiAttachContext}
-                    onChange={(b) => update("aiAttachContext", b)}
-                  />
-                </Field>
-
-                <Field
-                  label="Right-click explain"
-                  hint="Show 'explain' / 'ask AI' on text selection"
-                >
-                  <Toggle
-                    checked={settings.aiExplainEnabled}
-                    onChange={(b) => update("aiExplainEnabled", b)}
-                  />
-                </Field>
-
-                <Field
-                  label="Detect AI agent sessions"
-                  hint="Show badge on tabs running `claude` / `codex`, notify on completion or awaiting input"
-                >
-                  <Toggle
-                    checked={settings.claudeCodeDetectionEnabled}
-                    onChange={(b) => update("claudeCodeDetectionEnabled", b)}
-                  />
-                </Field>
-
-                <Field
-                  label="MCP server"
-                  hint="Expose mTerminal as a tool for external agents (Claude Code, Codex...)"
-                >
-                  <Toggle
-                    checked={settings.mcpServerEnabled}
-                    onChange={(b) => update("mcpServerEnabled", b)}
-                  />
-                </Field>
-          </div>
-
-          {settings.mcpServerEnabled && mcpStatus && (
-            <div className="settings-note">
-              {mcpStatus.running && mcpStatus.socketPath ? (
-                <>
-                  <div>
-                    socket: <code>{mcpStatus.socketPath}</code>
-                  </div>
-                  <div style={{ marginTop: 6 }}>
-                    add to claude code:
-                    <pre
-                      style={{
-                        background: "color-mix(in oklch, currentColor 6%, transparent)",
-                        padding: 6,
-                        borderRadius: 4,
-                        fontSize: 11,
-                        overflow: "auto",
-                        marginTop: 4,
-                      }}
-                    >
-{`claude mcp add mterminal --transport stdio "socat - UNIX-CONNECT:${mcpStatus.socketPath}"`}
-                    </pre>
-                  </div>
-                </>
-              ) : (
-                <span>starting MCP server...</span>
-              )}
-            </div>
-          )}
+          <SectionLabel>behavior</SectionLabel>
+          <Group>
+            <ToggleRow
+              label="attach terminal output to chat"
+              desc="inject the active tab's recent output as context for chat questions"
+              checked={settings.aiAttachContext}
+              onChange={(b) => update("aiAttachContext", b)}
+            />
+            <ToggleRow
+              label="right-click explain"
+              desc="show 'explain' in the terminal context menu when text is selected"
+              checked={settings.aiExplainEnabled}
+              onChange={(b) => update("aiExplainEnabled", b)}
+            />
+            <ToggleRow
+              label="detect ai agent sessions"
+              desc="watch tabs running claude / codex / codex-cli to badge them and notify when they finish or wait for input"
+              checked={settings.claudeCodeDetectionEnabled}
+              onChange={(b) => update("claudeCodeDetectionEnabled", b)}
+            />
+            <ToggleRow
+              label="mcp server"
+              desc={
+                settings.mcpServerEnabled && mcpStatus?.running && mcpStatus.socketPath
+                  ? `socket: ${mcpStatus.socketPath}`
+                  : settings.mcpServerEnabled
+                    ? "starting…"
+                    : "expose mTerminal as a tool for external agents (claude code, codex…)"
+              }
+              checked={settings.mcpServerEnabled}
+              onChange={(b) => update("mcpServerEnabled", b)}
+            />
+          </Group>
         </>
       )}
-    </div>
+    </>
   );
 }

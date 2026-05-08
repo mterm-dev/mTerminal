@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import type { Theme } from "../settings/themes";
 import type { Settings } from "../settings/useSettings";
 
-export function useThemeVars(theme: Theme, settings: Settings) {
+export function useThemeVars(theme: Theme, settings: Settings, sidebarWidth: number) {
   useEffect(() => {
     const root = document.documentElement.style;
     for (const [k, v] of Object.entries(theme.cssVars)) {
@@ -35,9 +35,9 @@ export function useThemeVars(theme: Theme, settings: Settings) {
   }, [settings.windowOpacity]);
 
   useEffect(() => {
-    const w = Math.max(200, Math.min(600, settings.sidebarWidth || 300));
+    const w = Math.max(200, Math.min(600, sidebarWidth || 300));
     document.documentElement.style.setProperty("--side-w", `${w}px`);
-  }, [settings.sidebarWidth]);
+  }, [sidebarWidth]);
 
   useEffect(() => {
     const apply = () => {

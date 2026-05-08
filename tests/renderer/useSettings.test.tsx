@@ -53,12 +53,12 @@ describe("useSettings - initial load", () => {
   it("merges localStorage payload over defaults", () => {
     window.localStorage.setItem(
       KEY,
-      JSON.stringify({ themeId: "dracula", fontSize: 16 }),
+      JSON.stringify({ settingsSchemaVersion: 2, themeId: "dracula", fontSize: 16 }),
     );
     const { result } = renderHook(() => useSettings());
     expect(result.current.settings.themeId).toBe("dracula");
     expect(result.current.settings.fontSize).toBe(16);
-    
+
     expect(result.current.settings.fontFamily).toBe(DEFAULT_SETTINGS.fontFamily);
     expect(result.current.settings.cursorStyle).toBe(DEFAULT_SETTINGS.cursorStyle);
   });
@@ -70,12 +70,15 @@ describe("useSettings - initial load", () => {
   });
 
   it("partial localStorage object is merged with defaults (missing keys filled in)", () => {
-    window.localStorage.setItem(KEY, JSON.stringify({ aiPanelOpen: true }));
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ settingsSchemaVersion: 2, aiEnabled: true }),
+    );
     const { result } = renderHook(() => useSettings());
-    expect(result.current.settings.aiPanelOpen).toBe(true);
-    
+    expect(result.current.settings.aiEnabled).toBe(true);
+
     for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof typeof DEFAULT_SETTINGS)[]) {
-      if (k === "aiPanelOpen") continue;
+      if (k === "aiEnabled") continue;
       expect(result.current.settings[k]).toEqual(DEFAULT_SETTINGS[k]);
     }
   });
@@ -116,7 +119,7 @@ describe("useSettings - reset", () => {
   it("reverts to DEFAULT_SETTINGS and persists", () => {
     window.localStorage.setItem(
       KEY,
-      JSON.stringify({ themeId: "custom", fontSize: 99 }),
+      JSON.stringify({ settingsSchemaVersion: 2, themeId: "custom", fontSize: 16 }),
     );
     const { result } = renderHook(() => useSettings());
     expect(result.current.settings.themeId).toBe("custom");

@@ -3,16 +3,17 @@ import type { Settings } from "./useSettings";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { Appearance } from "./sections/Appearance";
 import { TerminalPanel } from "./sections/TerminalPanel";
-import { ShellPanel } from "./sections/ShellPanel";
-import { BehaviorPanel } from "./sections/BehaviorPanel";
+import { GeneralPanel } from "./sections/GeneralPanel";
 import { VaultPanel } from "./sections/VaultPanel";
 import { AIPanel } from "./sections/AIPanel";
 import { VoicePanel } from "./sections/VoicePanel";
+import { DangerZone } from "./sections/DangerZone";
 import {
   ExtensionsOverview,
   ExtensionSettingsForm,
 } from "./sections/ExtensionsPanel";
 import { About } from "./sections/About";
+import { SECTION_ICONS } from "./sectionIcons";
 import { getRendererHost } from "../extensions";
 import {
   getSettingsSchemaRegistry,
@@ -31,35 +32,32 @@ interface Props {
   onOpenMarketplace?: () => void;
 }
 
-/**
- * Section identifiers. Top-level sections are flat strings; per-extension
- * sub-sections take the shape `extension:<id>` so navigation can stay in
- * useState<string>.
- */
 type CoreSection =
   | "appearance"
   | "terminal"
-  | "shell"
-  | "behavior"
+  | "general"
   | "vault"
   | "ai"
   | "voice"
   | "extensions"
+  | "danger"
   | "about";
 
 type Section = CoreSection | `extension:${string}`;
 
 const SECTIONS: ReadonlyArray<readonly [CoreSection, string]> = [
-  ["appearance", "Appearance"],
-  ["terminal", "Terminal"],
-  ["shell", "Shell"],
-  ["behavior", "Behavior"],
-  ["vault", "Vault"],
-  ["ai", "AI"],
-  ["voice", "Voice to Text"],
-  ["extensions", "Extensions"],
-  ["about", "About"],
+  ["appearance", "appearance"],
+  ["terminal", "terminal & shell"],
+  ["general", "general"],
+  ["vault", "vault"],
+  ["ai", "ai"],
+  ["voice", "voice"],
+  ["extensions", "extensions"],
+  ["danger", "danger zone"],
+  ["about", "about"],
 ];
+
+const SEPARATOR_BEFORE: ReadonlySet<CoreSection> = new Set(["danger"]);
 
 export function SettingsModal({
   settings,
@@ -75,6 +73,7 @@ export function SettingsModal({
   const [section, setSection] = useState<Section>("appearance");
   const [extensionsOpen, setExtensionsOpen] = useState(false);
   const downOnOverlay = useRef(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEscapeKey(onClose);
 
@@ -99,9 +98,6 @@ export function SettingsModal({
     };
   }, []);
 
-  // If the user is sitting on a per-extension page and that extension goes
-  // away (uninstalled / disabled), bounce them back to the overview so the
-  // dead `extension:<id>` doesn't render an empty page.
   useEffect(() => {
     if (!section.startsWith("extension:")) return;
     const id = section.slice("extension:".length);
@@ -109,6 +105,35 @@ export function SettingsModal({
       setSection("extensions");
     }
   }, [section, extEntries]);
+
+  // Focus trap: Tab cycles within the dialog.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusable = dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const arr = Array.from(focusable).filter(
+        (el) => !el.hasAttribute("disabled") && el.tabIndex !== -1,
+      );
+      if (arr.length === 0) return;
+      const first = arr[0];
+      const last = arr[arr.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKey);
+    return () => dialog.removeEventListener("keydown", onKey);
+  }, []);
 
   const vaultProps = { vaultUnlocked, vaultExists, onRequestVault };
 
@@ -129,14 +154,27 @@ export function SettingsModal({
         downOnOverlay.current = false;
       }}
     >
-      <div className="settings-dialog" role="dialog" aria-label="Settings">
+      <div
+        ref={dialogRef}
+        className="settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="settings"
+      >
         <aside className="settings-nav">
-          <div className="settings-nav-h">Settings</div>
+          <div className="settings-nav-h">settings</div>
           {SECTIONS.map(([k, label]) => {
+            const sep = SEPARATOR_BEFORE.has(k) ? (
+              <div key={`sep-${k}`} className="settings-nav-sep" aria-hidden="true" />
+            ) : null;
+
+            const icon = SECTION_ICONS[k];
+
             if (k === "extensions") {
               const isActive = section === "extensions" || isExtensionSub;
               return (
                 <div key={k}>
+                  {sep}
                   <button
                     className={`settings-nav-item ${isActive ? "active" : ""}`}
                     onClick={() => {
@@ -144,9 +182,9 @@ export function SettingsModal({
                       setSection("extensions");
                     }}
                     aria-expanded={extensionsOpen}
-                    style={{ display: "flex", alignItems: "center", gap: 6 }}
                   >
-                    <span>{label}</span>
+                    <span className="settings-nav-icon">{icon}</span>
+                    <span style={{ flex: 1 }}>{label}</span>
                     <span
                       className="settings-nav-counter"
                       title={`${loadedCount} loaded`}
@@ -172,7 +210,8 @@ export function SettingsModal({
                             onClick={() => setSection(subKey)}
                             title={entry.extId}
                           >
-                            {entry.displayName}
+                            <span className="settings-nav-icon" />
+                            <span>{entry.displayName}</span>
                           </button>
                         );
                       })}
@@ -183,20 +222,18 @@ export function SettingsModal({
             }
 
             return (
-              <button
-                key={k}
-                className={`settings-nav-item ${section === k ? "active" : ""}`}
-                onClick={() => setSection(k)}
-              >
-                {label}
-              </button>
+              <div key={k}>
+                {sep}
+                <button
+                  className={`settings-nav-item ${section === k ? "active" : ""}`}
+                  onClick={() => setSection(k)}
+                >
+                  <span className="settings-nav-icon">{icon}</span>
+                  <span>{label}</span>
+                </button>
+              </div>
             );
           })}
-          <div className="settings-nav-foot">
-            <button className="ghost-btn" onClick={reset}>
-              reset all
-            </button>
-          </div>
         </aside>
 
         <main className="settings-body">
@@ -214,18 +251,15 @@ export function SettingsModal({
             </button>
           </header>
 
-          <div className="settings-scroll">
+          <div className="settings-scroll st-body">
             {section === "appearance" && (
               <Appearance settings={settings} update={update} />
             )}
             {section === "terminal" && (
               <TerminalPanel settings={settings} update={update} />
             )}
-            {section === "shell" && (
-              <ShellPanel settings={settings} update={update} />
-            )}
-            {section === "behavior" && (
-              <BehaviorPanel settings={settings} update={update} />
+            {section === "general" && (
+              <GeneralPanel settings={settings} update={update} />
             )}
             {section === "vault" && (
               <VaultPanel settings={settings} update={update} />
@@ -257,6 +291,7 @@ export function SettingsModal({
                 update={update}
               />
             )}
+            {section === "danger" && <DangerZone onResetSettings={reset} />}
             {section === "about" && <About />}
           </div>
         </main>
@@ -267,7 +302,7 @@ export function SettingsModal({
 
 function headerLabel(s: Section, ext: SettingsSchemaEntry | null | undefined): string {
   if (s.startsWith("extension:")) {
-    return `Extensions › ${ext?.displayName ?? s.slice("extension:".length)}`;
+    return `extensions › ${ext?.displayName ?? s.slice("extension:".length)}`;
   }
   return SECTIONS.find(([k]) => k === s)?.[1] ?? s;
 }

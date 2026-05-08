@@ -39,6 +39,8 @@ import type { AiUsage } from "./hooks/useAI";
 import { getAiProviderRegistry } from "./extensions/registries/providers-ai";
 import { computeGridLayout, computeOccupancy, defaultSizes } from "./lib/grid-layout";
 import { useSettings } from "./settings/useSettings";
+import { useUiState } from "./settings/useUiState";
+import { onCoreChange, onExtChange } from "./settings/event-bus";
 import { findTheme } from "./settings/themes";
 import { SettingsModal } from "./settings/SettingsModal";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
@@ -92,6 +94,7 @@ function AppInner({
   const sys = useSystemInfo();
   const maximized = useMaximized();
   const { settings, update, reset } = settingsBundle;
+  const { uiState, updateUi } = useUiState();
   const theme = useMemo(() => findTheme(settings.themeId), [settings.themeId]);
   const xtermTheme = useMemo(
     () => ({
@@ -291,6 +294,10 @@ function AppInner({
   wsRef.current = ws;
   const updateRef = useRef(update);
   updateRef.current = update;
+  const uiStateRef = useRef(uiState);
+  uiStateRef.current = uiState;
+  const updateUiRef = useRef(updateUi);
+  updateUiRef.current = updateUi;
 
   useEffect(() => {
     (window as unknown as { __MT_HOME?: string }).__MT_HOME = `/home/${sys.user}`;
@@ -309,10 +316,10 @@ function AppInner({
         next[extId] = { ...(next[extId] ?? {}), [key]: value };
         updateRef.current("extensions", next);
       },
-      onChange: () => ({ dispose: () => {} }),
+      onChange: (extId, cb) => ({ dispose: onExtChange(extId, cb) }),
       readCore: <T = unknown,>(key: string): T | undefined =>
         (settingsRef.current as unknown as Record<string, T>)[key],
-      onCoreChange: () => ({ dispose: () => {} }),
+      onCoreChange: (cb) => ({ dispose: onCoreChange(cb) }),
     });
     const tabType = (t: { kind: string; customType?: string }): string =>
       t.kind === "custom" ? t.customType ?? "custom" : "terminal";
@@ -413,7 +420,7 @@ function AppInner({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useThemeVars(theme, settings);
+  useThemeVars(theme, settings, uiState.sidebarWidth);
 
   useEffect(() => {
     publishTerminalOptions({
@@ -817,7 +824,7 @@ function AppInner({
   };
 
   const toggleSidebar = () =>
-    update("sidebarCollapsed", !settings.sidebarCollapsed);
+    updateUi("sidebarCollapsed", !uiState.sidebarCollapsed);
 
   const shq = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
   const spawnClaudeTab = useCallback(() => {
@@ -842,20 +849,20 @@ function AppInner({
       setShowSettings(true);
       return;
     }
-    if (settings.aiPanelOpen) {
-      update("aiPanelOpen", false);
+    if (uiState.aiPanelOpen) {
+      updateUi("aiPanelOpen", false);
       return;
     }
-    const doOpen = () => update("aiPanelOpen", true);
+    const doOpen = () => updateUi("aiPanelOpen", true);
     const needsVault =
       getAiProviderRegistry().get(settings.aiDefaultProvider)?.requiresVault === true;
     if (needsVault && !ensureVaultUnlocked(doOpen)) return;
     doOpen();
   }, [
     settings.aiEnabled,
-    settings.aiPanelOpen,
+    uiState.aiPanelOpen,
     settings.aiDefaultProvider,
-    update,
+    updateUi,
     ensureVaultUnlocked,
   ]);
   const toggleAIPanelRef = useRef(toggleAIPanel);
@@ -864,7 +871,8 @@ function AppInner({
   useGlobalHotkeys({
     wsRef,
     settingsRef,
-    updateRef,
+    uiStateRef,
+    updateUiRef,
     voiceRef,
     spawnClaudeTabRef,
     openPaletteRef,
@@ -972,7 +980,7 @@ function AppInner({
   const shellCls = [
     "term-shell",
     maximized ? "maximized" : "",
-    settings.sidebarCollapsed ? "sidebar-collapsed" : "",
+    uiState.sidebarCollapsed ? "sidebar-collapsed" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -981,7 +989,7 @@ function AppInner({
     <div className={shellCls}>
       <Titlebar
         title={`mTerminal — ${labelLower} — ${titleSize}`}
-        sidebarCollapsed={settings.sidebarCollapsed}
+        sidebarCollapsed={uiState.sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
       />
 
@@ -1027,8 +1035,8 @@ function AppInner({
           onOpenSettings={() => setShowSettings(true)}
           activeGroupId={gridGroupId}
           onSelectGroup={selectGroup}
-          width={settings.sidebarWidth}
-          onResize={(w) => update("sidebarWidth", w)}
+          width={uiState.sidebarWidth}
+          onResize={(w) => updateUi("sidebarWidth", w)}
           agentStatuses={agentStatuses}
         />
 
@@ -1240,7 +1248,7 @@ function AppInner({
         />
       )}
 
-      {settings.aiEnabled && settings.aiPanelOpen && (
+      {settings.aiEnabled && uiState.aiPanelOpen && (
         <AIPanel
           defaultProvider={aiProvider}
           defaultModel={aiModel}
@@ -1249,7 +1257,7 @@ function AppInner({
           activeTabId={ws.activeId}
           activePtyId={ws.activeId != null ? ptyMap.get(ws.activeId) ?? null : null}
           cwd={activeTab?.cwd}
-          onClose={() => update("aiPanelOpen", false)}
+          onClose={() => updateUi("aiPanelOpen", false)}
           onUsage={accumulateUsage}
         />
       )}

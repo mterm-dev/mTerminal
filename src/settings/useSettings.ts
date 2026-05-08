@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { AgentSoundType } from "../lib/agentSound";
+import { emitCoreChange, emitExtChange } from "./event-bus";
+import { CURRENT_SCHEMA_VERSION, migrateSettings } from "./migration";
+import { normalizeSettings } from "./normalize";
 
 export type CursorStyle = "block" | "bar" | "underline";
 /**
@@ -16,6 +20,7 @@ export interface AiProviderConfig {
 }
 
 export interface Settings {
+  settingsSchemaVersion: number;
   themeId: string;
   fontFamily: string;
   fontSize: number;
@@ -29,30 +34,19 @@ export interface Settings {
   windowOpacity: number;
   confirmCloseMultipleTabs: boolean;
   copyOnSelect: boolean;
-  sidebarCollapsed: boolean;
-  sidebarWidth: number;
   showGreeting: boolean;
   aiEnabled: boolean;
-  /** Empty string when no provider extension is installed/selected. */
   aiDefaultProvider: AiProviderId;
-  /** Per-provider model + baseUrl, keyed by provider id. */
   aiProviderConfig: Record<string, AiProviderConfig>;
   aiAttachContext: boolean;
-  aiPanelOpen: boolean;
   aiExplainEnabled: boolean;
   claudeCodeDetectionEnabled: boolean;
   mcpServerEnabled: boolean;
   agentSoundEnabled: boolean;
-  agentSoundType: "bell" | "chime" | "ping";
+  agentSoundType: AgentSoundType;
   agentSoundVolume: number;
   gitPanelEnabled: boolean;
-  gitPanelCollapsed: boolean;
-  gitPanelTreeView: boolean;
-  gitPanelHeight: number;
-  gitCommitMsgHeight: number;
-  /** Empty string when no provider chosen for commit messages. */
   gitCommitProvider: AiProviderId;
-  /** Per-provider override for commit message generation. */
   gitCommitProviderConfig: Record<string, AiProviderConfig>;
   gitCommitSystemPrompt: string;
   gitPullStrategy: "ff-only" | "merge" | "rebase";
@@ -79,6 +73,7 @@ Rules:
 - Never include code fences, quotes, or commentary. Output ONLY the commit message text.`;
 
 export const DEFAULT_SETTINGS: Settings = {
+  settingsSchemaVersion: CURRENT_SCHEMA_VERSION,
   themeId: "mterminal",
   fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   fontSize: 13,
@@ -92,14 +87,11 @@ export const DEFAULT_SETTINGS: Settings = {
   windowOpacity: 1,
   confirmCloseMultipleTabs: true,
   copyOnSelect: false,
-  sidebarCollapsed: false,
-  sidebarWidth: 300,
   showGreeting: true,
   aiEnabled: false,
   aiDefaultProvider: "",
   aiProviderConfig: {},
   aiAttachContext: true,
-  aiPanelOpen: false,
   aiExplainEnabled: true,
   claudeCodeDetectionEnabled: true,
   mcpServerEnabled: false,
@@ -107,10 +99,6 @@ export const DEFAULT_SETTINGS: Settings = {
   agentSoundType: "chime",
   agentSoundVolume: 0.7,
   gitPanelEnabled: false,
-  gitPanelCollapsed: false,
-  gitPanelTreeView: true,
-  gitPanelHeight: 340,
-  gitCommitMsgHeight: 72,
   gitCommitProvider: "",
   gitCommitProviderConfig: {},
   gitCommitSystemPrompt: DEFAULT_COMMIT_PROMPT,
@@ -129,6 +117,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 const KEY = "mterminal:settings:v1";
+const UI_STATE_KEY = "mterminal:ui-state:v1";
 
 interface SettingsMtApi {
   loadSync?: () => string | null;
@@ -143,134 +132,120 @@ function settingsMtApi(): SettingsMtApi | null {
 
 function readRawSettings(): string | null {
   const api = settingsMtApi();
-  if (api?.loadSync) {
-    try {
-      const v = api.loadSync();
-      if (typeof v === "string" && v.length > 0) return v;
-    } catch {}
+  if (!api?.loadSync) {
+    if (typeof window !== "undefined") {
+      try {
+        return window.localStorage.getItem(KEY);
+      } catch (e) {
+        console.warn("[settings] localStorage unavailable:", e);
+        return null;
+      }
+    }
+    return null;
   }
-  if (typeof window !== "undefined") {
-    try {
-      const raw = window.localStorage.getItem(KEY);
-      if (raw) return raw;
-    } catch {}
+  try {
+    const v = api.loadSync();
+    return typeof v === "string" && v.length > 0 ? v : null;
+  } catch (e) {
+    console.warn("[settings] load failed:", e);
+    return null;
   }
-  return null;
 }
 
 function persistRawSettings(json: string): void {
   const api = settingsMtApi();
-  if (api?.save) {
-    try {
-      const r = api.save(json);
-      if (r && typeof (r as Promise<void>).catch === "function") {
-        (r as Promise<void>).catch(() => {});
+  if (!api?.save) {
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(KEY, json);
+      } catch (e) {
+        console.warn("[settings] localStorage write failed:", e);
       }
-      return;
-    } catch {}
+    }
+    return;
   }
-  if (typeof window !== "undefined") {
-    try {
-      window.localStorage.setItem(KEY, json);
-    } catch {}
+  try {
+    const r = api.save(json);
+    if (r && typeof (r as Promise<void>).catch === "function") {
+      (r as Promise<void>).catch((e) => console.warn("[settings] save rejected:", e));
+    }
+  } catch (e) {
+    console.warn("[settings] save failed:", e);
   }
 }
 
-/**
- * One-shot migration from the legacy per-provider fields (aiAnthropicModel
- * etc.) to the dynamic `aiProviderConfig` map. Removes the legacy keys from
- * the parsed object so they don't keep getting persisted forward.
- */
-function migrateLegacyAiFields(raw: Record<string, unknown>): void {
-  const aiCfg: Record<string, AiProviderConfig> = {
-    ...(typeof raw.aiProviderConfig === "object" && raw.aiProviderConfig
-      ? (raw.aiProviderConfig as Record<string, AiProviderConfig>)
-      : {}),
-  };
-  const ensure = (id: string): AiProviderConfig => (aiCfg[id] ??= {});
-
-  if (typeof raw.aiAnthropicModel === "string" && raw.aiAnthropicModel) {
-    ensure("anthropic").model ??= raw.aiAnthropicModel;
+function maybePersistMigratedUiState(uiState: Record<string, unknown> | null): void {
+  if (!uiState || typeof window === "undefined") return;
+  try {
+    const existing = window.localStorage.getItem(UI_STATE_KEY);
+    const parsed = existing ? JSON.parse(existing) : {};
+    window.localStorage.setItem(UI_STATE_KEY, JSON.stringify({ ...parsed, ...uiState }));
+  } catch (e) {
+    console.warn("[settings] failed to persist migrated ui-state:", e);
   }
-  if (typeof raw.aiOpenaiModel === "string" && raw.aiOpenaiModel) {
-    ensure("openai").model ??= raw.aiOpenaiModel;
-  }
-  if (typeof raw.aiOpenaiBaseUrl === "string" && raw.aiOpenaiBaseUrl) {
-    ensure("openai").baseUrl ??= raw.aiOpenaiBaseUrl;
-  }
-  if (typeof raw.aiOllamaModel === "string" && raw.aiOllamaModel) {
-    ensure("ollama").model ??= raw.aiOllamaModel;
-  }
-  if (typeof raw.aiOllamaBaseUrl === "string" && raw.aiOllamaBaseUrl) {
-    ensure("ollama").baseUrl ??= raw.aiOllamaBaseUrl;
-  }
-
-  delete raw.aiAnthropicModel;
-  delete raw.aiOpenaiModel;
-  delete raw.aiOpenaiBaseUrl;
-  delete raw.aiOllamaModel;
-  delete raw.aiOllamaBaseUrl;
-  raw.aiProviderConfig = aiCfg;
-
-  const gitCfg: Record<string, AiProviderConfig> = {
-    ...(typeof raw.gitCommitProviderConfig === "object" && raw.gitCommitProviderConfig
-      ? (raw.gitCommitProviderConfig as Record<string, AiProviderConfig>)
-      : {}),
-  };
-  const ensureGit = (id: string): AiProviderConfig => (gitCfg[id] ??= {});
-
-  if (typeof raw.gitCommitAnthropicModel === "string" && raw.gitCommitAnthropicModel) {
-    ensureGit("anthropic").model ??= raw.gitCommitAnthropicModel;
-  }
-  if (typeof raw.gitCommitOpenaiModel === "string" && raw.gitCommitOpenaiModel) {
-    ensureGit("openai").model ??= raw.gitCommitOpenaiModel;
-  }
-  if (typeof raw.gitCommitOpenaiBaseUrl === "string" && raw.gitCommitOpenaiBaseUrl) {
-    ensureGit("openai").baseUrl ??= raw.gitCommitOpenaiBaseUrl;
-  }
-  if (typeof raw.gitCommitOllamaModel === "string" && raw.gitCommitOllamaModel) {
-    ensureGit("ollama").model ??= raw.gitCommitOllamaModel;
-  }
-  if (typeof raw.gitCommitOllamaBaseUrl === "string" && raw.gitCommitOllamaBaseUrl) {
-    ensureGit("ollama").baseUrl ??= raw.gitCommitOllamaBaseUrl;
-  }
-
-  delete raw.gitCommitAnthropicModel;
-  delete raw.gitCommitOpenaiModel;
-  delete raw.gitCommitOpenaiBaseUrl;
-  delete raw.gitCommitOllamaModel;
-  delete raw.gitCommitOllamaBaseUrl;
-  raw.gitCommitProviderConfig = gitCfg;
 }
 
 function loadInitial(): Settings {
   const raw = readRawSettings();
   if (!raw) return DEFAULT_SETTINGS;
+  let parsed: Record<string, unknown>;
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    migrateLegacyAiFields(parsed);
-    return { ...DEFAULT_SETTINGS, ...(parsed as Partial<Settings>) };
-  } catch {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch (e) {
+    console.warn("[settings] parse failed, using defaults:", e);
     return DEFAULT_SETTINGS;
+  }
+  const { settings: migrated, uiState } = migrateSettings(parsed);
+  maybePersistMigratedUiState(uiState);
+  return normalizeSettings(migrated);
+}
+
+function diffAndEmit(prev: Settings, next: Settings): void {
+  for (const k of Object.keys(next) as (keyof Settings)[]) {
+    if (k === "extensions") continue;
+    if (prev[k] !== next[k]) {
+      emitCoreChange(k as string, next[k]);
+    }
+  }
+
+  const prevExt = prev.extensions ?? {};
+  const nextExt = next.extensions ?? {};
+  const extIds = new Set([...Object.keys(prevExt), ...Object.keys(nextExt)]);
+  for (const extId of extIds) {
+    const prevSub = prevExt[extId] ?? {};
+    const nextSub = nextExt[extId] ?? {};
+    const keys = new Set([...Object.keys(prevSub), ...Object.keys(nextSub)]);
+    for (const k of keys) {
+      if (prevSub[k] !== nextSub[k]) {
+        emitExtChange(extId, k, nextSub[k]);
+      }
+    }
   }
 }
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings>(loadInitial);
   const settingsRef = useRef(settings);
-  settingsRef.current = settings;
+  const prevRef = useRef(settings);
 
   useEffect(() => {
+    diffAndEmit(prevRef.current, settings);
+    prevRef.current = settings;
+    settingsRef.current = settings;
     try {
       persistRawSettings(JSON.stringify(settings));
-    } catch {}
+    } catch (e) {
+      console.warn("[settings] serialize failed:", e);
+    }
   }, [settings]);
 
   useEffect(() => {
     const flush = (): void => {
       try {
         persistRawSettings(JSON.stringify(settingsRef.current));
-      } catch {}
+      } catch (e) {
+        console.warn("[settings] flush failed:", e);
+      }
     };
     window.addEventListener("pagehide", flush);
     window.addEventListener("beforeunload", flush);
