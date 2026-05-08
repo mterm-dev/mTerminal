@@ -3,8 +3,8 @@ import {
   invoke,
   isPermissionGranted,
   requestPermission,
-  sendNotification,
 } from "../lib/ipc";
+import { notify } from "../lib/notify";
 
 export type CcState = "none" | "idle" | "thinking" | "awaitingInput";
 
@@ -75,9 +75,10 @@ export function useClaudeCodeStatus(
             const now = Date.now();
             if (now - last > 30000) {
               lastNotifiedRef.current.set(tabId, now);
-              sendNotification({
+              notify.notifyOrToast({
                 title: "Claude Code waiting",
                 body: `tab ${tabId} needs your input`,
+                kind: "warn",
               });
             }
           }

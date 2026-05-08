@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { getUiStore, type ToastSpec } from '../api-bridge/ui'
 import type { ModalSpec } from '../api-bridge/ui-types'
 import { TrustModal } from './TrustModal'
+import { ToastView } from './ToastView'
 
 /**
  * Mounts plugin-rendered modals and toasts at the App.tsx root.
@@ -49,34 +50,6 @@ const titleBar: CSSProperties = {
   fontSize: 14,
 }
 
-const toastWrap: CSSProperties = {
-  position: 'fixed',
-  right: 16,
-  bottom: 16,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-  zIndex: 9500,
-}
-
-const toastBase: CSSProperties = {
-  padding: '10px 14px',
-  borderRadius: 6,
-  background: 'var(--surface, #222)',
-  color: 'var(--text, #eee)',
-  border: '1px solid var(--border, #333)',
-  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
-  fontSize: 13,
-  maxWidth: 380,
-}
-
-const toastKindStyles: Record<ToastSpec['kind'], CSSProperties> = {
-  info: {},
-  success: { borderColor: '#3b8c4e' },
-  warn: { borderColor: '#c79534' },
-  error: { borderColor: '#c0413a' },
-}
-
 export function PluginUiHost() {
   const store = getUiStore()
   const [modals, setModals] = useState<PendingModalView[]>([])
@@ -103,16 +76,9 @@ export function PluginUiHost() {
         <ModalEntry key={m.id} id={m.id} spec={m.spec} />
       ))}
       {toasts.length > 0 && (
-        <div style={toastWrap}>
+        <div className="mt-toast-stack" aria-label="notifications">
           {toasts.map((t) => (
-            <div
-              key={t.id}
-              style={{ ...toastBase, ...toastKindStyles[t.kind] }}
-              onClick={() => store.dismissToast(t.id)}
-              role="alert"
-            >
-              {t.message}
-            </div>
+            <ToastView key={t.id} toast={t} />
           ))}
         </div>
       )}

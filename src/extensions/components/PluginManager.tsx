@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { getRendererHost, type ManifestSnapshot } from '../host-renderer'
+import { notify } from '../../lib/notify'
 
 /**
  * Plugin Manager UI — installed plugins list with enable/disable, reload,
@@ -205,15 +206,22 @@ export function PluginManager() {
 
   const uninstallOne = async (snap: ManifestSnapshot): Promise<void> => {
     if (snap.manifest.source === 'built-in') return
-    if (!window.confirm(`Uninstall extension "${snap.manifest.displayName ?? snap.manifest.id}"?`)) {
-      return
-    }
+    const label = snap.manifest.displayName ?? snap.manifest.id
+    const ok = await notify.confirm({
+      title: 'uninstall extension',
+      message: `Uninstall extension "${label}"? Files will be removed from the user extensions directory.`,
+      confirmLabel: 'uninstall',
+      danger: true,
+    })
+    if (!ok) return
     setBusy(snap.manifest.id)
     try {
       await window.mt.ext.uninstall(snap.manifest.id)
       await host.refreshSnapshots()
+      notify.success({ title: 'extension uninstalled', message: label })
     } catch (err) {
-      window.alert(`Uninstall failed: ${(err as Error).message}`)
+      const e = err instanceof Error ? err : new Error(String(err))
+      notify.error({ title: 'uninstall failed', message: e.message, details: e.stack })
     } finally {
       setBusy(null)
     }

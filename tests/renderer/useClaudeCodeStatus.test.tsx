@@ -10,18 +10,30 @@ vi.mock("../../src/lib/ipc", () => ({
   sendNotification: vi.fn(),
 }));
 
+vi.mock("../../src/lib/notify", () => ({
+  notify: {
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    confirm: vi.fn(),
+    prompt: vi.fn(),
+    notifyOrToast: vi.fn(),
+  },
+}));
+
 import {
   invoke,
   isPermissionGranted,
   requestPermission,
-  sendNotification,
 } from "../../src/lib/ipc";
+import { notify } from "../../src/lib/notify";
 import { useClaudeCodeStatus } from "../../src/hooks/useClaudeCodeStatus";
 
 const mInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
 const mIsGranted = isPermissionGranted as unknown as ReturnType<typeof vi.fn>;
 const mReqPerm = requestPermission as unknown as ReturnType<typeof vi.fn>;
-const mSend = sendNotification as unknown as ReturnType<typeof vi.fn>;
+const mSend = notify.notifyOrToast as unknown as ReturnType<typeof vi.fn>;
 
 function status(state: "none" | "idle" | "thinking" | "awaitingInput") {
   return {
@@ -166,6 +178,7 @@ describe("useClaudeCodeStatus - notification gating", () => {
     expect(mSend).toHaveBeenCalledWith({
       title: "Claude Code waiting",
       body: "tab 2 needs your input",
+      kind: "warn",
     });
   });
 

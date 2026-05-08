@@ -1,20 +1,14 @@
-/**
- * `ctx.ui` — Modal / confirm / prompt / toast helpers.
- *
- * For v1 we expose a thin observable model; the actual rendering happens via
- * `<PluginUiHost>` which is mounted once at the App.tsx root and subscribes
- * to these stores. Until the host mounts, modal calls use a hand-built
- * fallback (browser confirm/prompt + console toast) so plugin code activated
- * before the React tree is ready doesn't crash.
- */
-
-import type { ModalSpec, NotifyApi, UiApi } from './ui-types'
+import type { ModalSpec, NotifyApi, ToastInputObject, UiApi } from './ui-types'
+import { notify } from '../../lib/notify'
 
 export interface ToastSpec {
   id: number
   kind: 'info' | 'success' | 'warn' | 'error'
+  title?: string
   message: string
+  details?: string
   durationMs: number
+  dismissible: boolean
 }
 
 interface PendingModal<T> {
@@ -23,11 +17,20 @@ interface PendingModal<T> {
   resolve: (value: T | undefined) => void
 }
 
+interface DismissTimer {
+  timeout: ReturnType<typeof setTimeout> | null
+  durationMs: number
+  startedAt: number
+  remainingMs: number
+  paused: boolean
+}
+
 type Listener = () => void
 
 class UiStore {
   private modals: Array<PendingModal<unknown>> = []
   private toasts: ToastSpec[] = []
+  private timers = new Map<number, DismissTimer>()
   private nextId = 1
   private listeners = new Set<Listener>()
   private hostMounted = false
@@ -61,21 +64,62 @@ class UiStore {
     return [...this.modals]
   }
 
-  pushToast(toast: Omit<ToastSpec, 'id'>): void {
+  pushToast(toast: Omit<ToastSpec, 'id' | 'dismissible'> & { dismissible?: boolean }): number {
     const id = this.nextId++
-    const entry: ToastSpec = { id, ...toast }
-    this.toasts.push(entry)
-    this.fire()
-    if (toast.durationMs > 0) {
-      setTimeout(() => this.dismissToast(id), toast.durationMs)
+    const entry: ToastSpec = {
+      id,
+      kind: toast.kind,
+      title: toast.title,
+      message: toast.message,
+      details: toast.details,
+      durationMs: toast.durationMs,
+      dismissible: toast.dismissible !== false,
     }
+    this.toasts.push(entry)
+    if (entry.durationMs > 0) {
+      const timer: DismissTimer = {
+        timeout: setTimeout(() => this.dismissToast(id), entry.durationMs),
+        durationMs: entry.durationMs,
+        startedAt: Date.now(),
+        remainingMs: entry.durationMs,
+        paused: false,
+      }
+      this.timers.set(id, timer)
+    }
+    this.fire()
+    return id
   }
 
   dismissToast(id: number): void {
+    const timer = this.timers.get(id)
+    if (timer?.timeout) clearTimeout(timer.timeout)
+    this.timers.delete(id)
     const i = this.toasts.findIndex((t) => t.id === id)
     if (i < 0) return
     this.toasts.splice(i, 1)
     this.fire()
+  }
+
+  pauseDismiss(id: number): void {
+    const timer = this.timers.get(id)
+    if (!timer || timer.paused || !timer.timeout) return
+    clearTimeout(timer.timeout)
+    timer.timeout = null
+    timer.paused = true
+    const elapsed = Date.now() - timer.startedAt
+    timer.remainingMs = Math.max(0, timer.remainingMs - elapsed)
+  }
+
+  resumeDismiss(id: number): void {
+    const timer = this.timers.get(id)
+    if (!timer || !timer.paused) return
+    timer.paused = false
+    timer.startedAt = Date.now()
+    if (timer.remainingMs <= 0) {
+      this.dismissToast(id)
+      return
+    }
+    timer.timeout = setTimeout(() => this.dismissToast(id), timer.remainingMs)
   }
 
   listToasts(): ToastSpec[] {
@@ -104,6 +148,110 @@ export function getUiStore(): UiStore {
   return storeInstance
 }
 
+export interface ConfirmOpts {
+  title: string
+  message: string
+  confirmLabel?: string
+  cancelLabel?: string
+  danger?: boolean
+}
+
+export async function openConfirm(opts: ConfirmOpts): Promise<boolean> {
+  const store = getUiStore()
+  if (!store.isHostMounted()) {
+    return typeof window !== 'undefined'
+      ? window.confirm(`${opts.title}\n\n${opts.message}`)
+      : false
+  }
+  const result = await store.openModal<boolean>({
+    title: opts.title,
+    render: (host, ctrl) => {
+      const wrap = document.createElement('div')
+      wrap.className = 'mt-modal-body'
+      const msg = document.createElement('p')
+      msg.className = 'mt-modal-message'
+      msg.textContent = opts.message
+      wrap.appendChild(msg)
+      const btnRow = document.createElement('div')
+      btnRow.className = 'mt-modal-actions'
+      const cancel = document.createElement('button')
+      cancel.type = 'button'
+      cancel.className = 'mt-modal-btn'
+      cancel.textContent = opts.cancelLabel ?? 'cancel'
+      cancel.onclick = () => ctrl.close(false)
+      const ok = document.createElement('button')
+      ok.type = 'button'
+      ok.className = opts.danger ? 'mt-modal-btn is-danger' : 'mt-modal-btn is-primary'
+      ok.textContent = opts.confirmLabel ?? (opts.danger ? 'delete' : 'confirm')
+      ok.onclick = () => ctrl.close(true)
+      btnRow.appendChild(cancel)
+      btnRow.appendChild(ok)
+      wrap.appendChild(btnRow)
+      host.appendChild(wrap)
+      ok.focus()
+    },
+  })
+  return result === true
+}
+
+export interface PromptOpts {
+  title: string
+  message?: string
+  placeholder?: string
+  defaultValue?: string
+}
+
+export async function openPrompt(opts: PromptOpts): Promise<string | undefined> {
+  const store = getUiStore()
+  if (!store.isHostMounted()) {
+    return typeof window !== 'undefined'
+      ? window.prompt(`${opts.title}${opts.message ? '\n' + opts.message : ''}`, opts.defaultValue ?? '') ?? undefined
+      : undefined
+  }
+  return await store.openModal<string>({
+    title: opts.title,
+    render: (host, ctrl) => {
+      const wrap = document.createElement('div')
+      wrap.className = 'mt-modal-body'
+      if (opts.message) {
+        const msg = document.createElement('p')
+        msg.className = 'mt-modal-message'
+        msg.textContent = opts.message
+        wrap.appendChild(msg)
+      }
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.className = 'mt-modal-input'
+      input.placeholder = opts.placeholder ?? ''
+      input.value = opts.defaultValue ?? ''
+      wrap.appendChild(input)
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') ctrl.close(input.value)
+        if (e.key === 'Escape') ctrl.close(undefined)
+      })
+      host.appendChild(wrap)
+      input.focus()
+    },
+  })
+}
+
+function normalizeToastInput(input: ToastInputObject): {
+  title?: string
+  message: string
+  details?: string
+  durationMs: number
+  dismissible: boolean
+} {
+  const durationMs = input.durationMs ?? 4500
+  return {
+    title: input.title,
+    message: input.message,
+    details: input.details,
+    durationMs,
+    dismissible: input.dismissible !== false,
+  }
+}
+
 export function createUiBridge(): UiApi {
   const store = getUiStore()
   return {
@@ -114,75 +262,16 @@ export function createUiBridge(): UiApi {
       }
       return store.openModal<T>(spec)
     },
-    confirm: async ({ title, message }) => {
+    confirm: openConfirm,
+    prompt: openPrompt,
+    toast: ({ kind = 'info', message, title, details, durationMs, dismissible }) => {
       if (!store.isHostMounted()) {
-        return typeof window !== 'undefined' ? window.confirm(`${title}\n\n${message}`) : false
-      }
-      const result = await store.openModal<boolean>({
-        title,
-        render: (host, ctrl) => {
-          const wrap = document.createElement('div')
-          wrap.style.padding = '16px'
-          const msg = document.createElement('p')
-          msg.textContent = message
-          wrap.appendChild(msg)
-          const btnRow = document.createElement('div')
-          btnRow.style.display = 'flex'
-          btnRow.style.justifyContent = 'flex-end'
-          btnRow.style.gap = '8px'
-          btnRow.style.marginTop = '12px'
-          const cancel = document.createElement('button')
-          cancel.textContent = 'Cancel'
-          cancel.onclick = () => ctrl.close(false)
-          const ok = document.createElement('button')
-          ok.textContent = 'Confirm'
-          ok.onclick = () => ctrl.close(true)
-          btnRow.appendChild(cancel)
-          btnRow.appendChild(ok)
-          wrap.appendChild(btnRow)
-          host.appendChild(wrap)
-        },
-      })
-      return result === true
-    },
-    prompt: async ({ title, message, placeholder, defaultValue }) => {
-      if (!store.isHostMounted()) {
-        return typeof window !== 'undefined'
-          ? window.prompt(`${title}${message ? '\n' + message : ''}`, defaultValue ?? '') ?? undefined
-          : undefined
-      }
-      const result = await store.openModal<string>({
-        title,
-        render: (host, ctrl) => {
-          const wrap = document.createElement('div')
-          wrap.style.padding = '16px'
-          if (message) {
-            const msg = document.createElement('p')
-            msg.textContent = message
-            wrap.appendChild(msg)
-          }
-          const input = document.createElement('input')
-          input.type = 'text'
-          input.placeholder = placeholder ?? ''
-          input.value = defaultValue ?? ''
-          input.style.width = '100%'
-          wrap.appendChild(input)
-          input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') ctrl.close(input.value)
-            if (e.key === 'Escape') ctrl.close(undefined)
-          })
-          host.appendChild(wrap)
-          input.focus()
-        },
-      })
-      return result
-    },
-    toast: ({ kind = 'info', message, durationMs = 3500 }) => {
-      if (!store.isHostMounted()) {
-        console.log(`[ext toast:${kind}]`, message)
+        const head = title ? `${title}: ${message}` : message
+        console.log(`[ext toast:${kind}]`, head, details ?? '')
         return
       }
-      store.pushToast({ kind, message, durationMs })
+      const norm = normalizeToastInput({ title, message, details, durationMs, dismissible })
+      store.pushToast({ kind, ...norm })
     },
   }
 }
@@ -190,8 +279,7 @@ export function createUiBridge(): UiApi {
 export function createNotifyBridge(): NotifyApi {
   return {
     show: ({ title, body, silent }) => {
-      const mt = window.mt as unknown as { notification?: { send: (a: unknown) => Promise<boolean> } }
-      void mt.notification?.send({ title, body, silent }).catch(() => {})
+      notify.notifyOrToast({ title, body, silent })
     },
     requestPermission: async () => 'granted' as const,
   }

@@ -333,9 +333,16 @@ export interface NotifyApi {
 
 export interface UiApi {
   openModal<T = unknown>(spec: { title: string; width?: number; height?: number; render(host: HTMLElement, ctrl: { close(result?: unknown): void; setTitle(t: string): void }): void | (() => void) }): Promise<T | undefined>
-  confirm(opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string }): Promise<boolean>
+  confirm(opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean }): Promise<boolean>
   prompt(opts: { title: string; message?: string; placeholder?: string; defaultValue?: string }): Promise<string | undefined>
-  toast(opts: { kind?: 'info' | 'success' | 'warn' | 'error'; message: string; durationMs?: number }): void
+  toast(opts: {
+    kind?: 'info' | 'success' | 'warn' | 'error'
+    title?: string
+    message: string
+    details?: string
+    durationMs?: number
+    dismissible?: boolean
+  }): void
 }
 
 export interface ServiceProxy<T> {

@@ -1,4 +1,5 @@
 import { useVaultGate } from "../../vault/VaultGate";
+import { notify } from "../../lib/notify";
 import { Field, type SectionProps } from "./_shared";
 
 const VAULT_IDLE_OPTIONS: Array<{ ms: number; label: string }> = [
@@ -21,14 +22,20 @@ export function VaultPanel({ settings, update }: SectionProps) {
   const statusTone = !exists ? "warn" : unlocked ? "ok" : "off";
 
   const handleDevReset = async (): Promise<void> => {
-    const ok = window.confirm(
-      "Reset the development vault?\n\nThis deletes vault.dev.bin and any AI keys / SSH passwords / plugin secrets stored in it. The production vault is not touched.",
-    );
+    const ok = await notify.confirm({
+      title: "reset development vault",
+      message:
+        "This deletes vault.dev.bin and any AI keys / SSH passwords / plugin secrets stored in it. The production vault is not touched.",
+      confirmLabel: "reset",
+      danger: true,
+    });
     if (!ok) return;
     try {
       await vault.devReset();
+      notify.success({ title: "vault reset", message: "development vault cleared" });
     } catch (err) {
-      window.alert(`reset failed: ${(err as Error).message}`);
+      const e = err instanceof Error ? err : new Error(String(err));
+      notify.error({ title: "vault reset failed", message: e.message, details: e.stack });
     }
   };
 
