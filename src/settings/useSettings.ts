@@ -42,6 +42,9 @@ export interface Settings {
   aiExplainEnabled: boolean;
   claudeCodeDetectionEnabled: boolean;
   mcpServerEnabled: boolean;
+  agentSoundEnabled: boolean;
+  agentSoundType: "bell" | "chime" | "ping";
+  agentSoundVolume: number;
   gitPanelEnabled: boolean;
   gitPanelCollapsed: boolean;
   gitPanelTreeView: boolean;
@@ -100,6 +103,9 @@ export const DEFAULT_SETTINGS: Settings = {
   aiExplainEnabled: true,
   claudeCodeDetectionEnabled: true,
   mcpServerEnabled: false,
+  agentSoundEnabled: false,
+  agentSoundType: "chime",
+  agentSoundVolume: 0.7,
   gitPanelEnabled: false,
   gitPanelCollapsed: false,
   gitPanelTreeView: true,

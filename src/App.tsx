@@ -195,6 +195,9 @@ function AppInner({
     enabled: settings.claudeCodeDetectionEnabled,
     notifyOnAwaitingInput: true,
     notifyOnDone: true,
+    soundEnabled: settings.agentSoundEnabled,
+    soundType: settings.agentSoundType,
+    soundVolume: settings.agentSoundVolume,
   });
 
   const mcp = useMcpServer(settings.aiEnabled && settings.mcpServerEnabled);

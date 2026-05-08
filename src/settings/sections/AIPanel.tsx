@@ -4,6 +4,7 @@ import { useAiProviders } from "../../lib/ai-availability";
 import { Field, Toggle, type VaultSectionProps } from "./_shared";
 import { ensureStyles } from "./ai/styles";
 import { AgentIntegrations } from "./ai/AgentIntegrations";
+import { AgentSound } from "./ai/AgentSound";
 import { EmptyState } from "./ai/EmptyState";
 import { ProviderCard } from "./ai/ProviderCard";
 import type { AiProviderConfig } from "../useSettings";
@@ -112,6 +113,8 @@ export function AIPanel({
           )}
 
           <AgentIntegrations />
+
+          <AgentSound settings={settings} update={update} />
 
           <div className="aip-section-h">
             <h3>Behavior</h3>

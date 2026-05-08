@@ -4,6 +4,7 @@ import {
   requestPermission,
   sendNotification,
 } from "../lib/ipc";
+import { playAgentSound, type AgentSoundType } from "../lib/agentSound";
 
 export type AgentState = "idle" | "thinking" | "awaitingInput" | "done";
 
@@ -38,6 +39,9 @@ interface Options {
   enabled: boolean;
   notifyOnAwaitingInput?: boolean;
   notifyOnDone?: boolean;
+  soundEnabled?: boolean;
+  soundType?: AgentSoundType;
+  soundVolume?: number;
 }
 
 /**
@@ -119,6 +123,11 @@ export function useAgentStatus(
         return next;
       });
 
+      // Sound fires for every completion (not just background tabs).
+      if (ev.state === "done" && opts.soundEnabled) {
+        playAgentSound(opts.soundType ?? "chime", opts.soundVolume ?? 0.7);
+      }
+
       if (!permissionRef.current) return;
       if (tabId === activeTabId) return;
 
@@ -147,7 +156,15 @@ export function useAgentStatus(
       cancelled = true;
       off();
     };
-  }, [activeTabId, opts.enabled, opts.notifyOnAwaitingInput, opts.notifyOnDone]);
+  }, [
+    activeTabId,
+    opts.enabled,
+    opts.notifyOnAwaitingInput,
+    opts.notifyOnDone,
+    opts.soundEnabled,
+    opts.soundType,
+    opts.soundVolume,
+  ]);
 
   return statuses;
 }
