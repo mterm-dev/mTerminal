@@ -1,20 +1,15 @@
 /**
  * `ctx.ai` — exposes the host's AI surface to plugins.
  *
- * After the SDK-as-extension refactor there are no built-in providers. Every
- * AI provider in the system is contributed by an extension that called
- * `ctx.ai.registerProvider({...})` during activate(); the registry maps
- * provider id → impl. `complete()` and `stream()` resolve via that registry
- * and throw if no provider matches.
- *
- * The escape hatch for raw SDK access is `ctx.ai.getSdk(providerId)` which
- * peeks at the renderer-side service registry for the well-known service id
- * `ai.sdk.<providerId>` (typically published by the same extension that
- * registers the provider).
+ * Three first-party providers (Anthropic / OpenAI Codex / Ollama) live in
+ * mTerminal core and are seeded into the renderer-side registry on boot.
+ * Extensions can additionally register their own providers via
+ * `ctx.ai.registerProvider({...})`. `complete()` and `stream()` resolve via
+ * the registry and forward through the host IPC for built-ins, or to the
+ * extension's own impl for plugin-registered providers.
  */
 
 import { getAiProviderRegistry, type AiProviderEntry } from '../registries/providers-ai'
-import { getServiceRegistry } from '../services'
 import type { AiApi, Disposable } from '../ctx-types'
 
 export interface AiBridgeDeps {
@@ -40,13 +35,13 @@ function resolveProvider(req: unknown): AiProviderEntry {
   const r = req as CompleteReq
   if (!r.provider) {
     throw new Error(
-      'ai.complete: no provider specified. Install an AI provider extension and pass { provider: "<id>" }.',
+      'ai.complete: no provider specified. Pass { provider: "anthropic" | "openai-codex" | "ollama" | <custom> }.',
     )
   }
   const entry = getAiProviderRegistry().get(r.provider)
   if (!entry) {
     throw new Error(
-      `ai.complete: no AI provider registered with id "${r.provider}". Install the matching SDK extension from Settings → AI.`,
+      `ai.complete: no AI provider registered with id "${r.provider}".`,
     )
   }
   return entry
@@ -89,10 +84,6 @@ export function createAiBridge({ extId }: AiBridgeDeps): AiApi {
         requiresVault: p.requiresVault,
         vaultKeyPath: p.vaultKeyPath,
       }))
-    },
-
-    getSdk<T = unknown>(providerId: string): T | null {
-      return getServiceRegistry().peekImpl<T>(`ai.sdk.${providerId}`)
     },
   }
 }

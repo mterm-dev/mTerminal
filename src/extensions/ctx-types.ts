@@ -278,8 +278,6 @@ export interface AiApi {
   stream(req: unknown): AsyncIterable<unknown>
   registerProvider(p: unknown): Disposable
   listProviders(): AiProviderInfoLite[]
-  /** @since mterminal-api 1.4.0 */
-  getSdk<T = unknown>(providerId: string): T | null
 }
 
 export interface GitApi {

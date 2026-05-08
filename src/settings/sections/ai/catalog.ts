@@ -1,22 +1,18 @@
 /**
- * First-party SDK provider extension catalog.
+ * First-party AI provider catalog.
  *
- * The Settings → AI panel uses this to render install cards for SDK
- * extensions the user has not yet installed, and to attach branded logos
- * to the corresponding live providers once they activate.
- *
- * `marketplaceId` matches the manifest id (what `marketplace.install(id)`
- * accepts), not the npm package name. The npm publish names live in the
- * mTerminal-extensions monorepo as `@mterminal/ext-provider-<id>`.
+ * After cofnięcie SDK-as-extension every entry below is a built-in shipped
+ * inside the app — there is no marketplace install path. The catalog still
+ * powers branded logos, descriptions, and the "where do I get an API key?"
+ * link surfaced inside Settings → AI and inside extension binding cards.
  */
 
 export interface SdkCatalogEntry {
-  marketplaceId: string;
   providerId: string;
   label: string;
   /** Two-letter mark used inside the rounded logo bubble. */
   initials: string;
-  /** One-line description shown on the install card. */
+  /** One-line description shown on the provider card. */
   description: string;
   /** Optional doc / homepage link for "learn more". */
   link?: string;
@@ -30,7 +26,6 @@ export interface SdkCatalogEntry {
 
 export const SDK_CATALOG: SdkCatalogEntry[] = [
   {
-    marketplaceId: "provider-anthropic",
     providerId: "anthropic",
     label: "Anthropic",
     initials: "An",
@@ -42,7 +37,6 @@ export const SDK_CATALOG: SdkCatalogEntry[] = [
     defaultModel: "claude-opus-4-7",
   },
   {
-    marketplaceId: "provider-openai-codex",
     providerId: "openai-codex",
     label: "OpenAI Codex",
     initials: "Cx",
@@ -54,7 +48,6 @@ export const SDK_CATALOG: SdkCatalogEntry[] = [
     defaultModel: "gpt-5-codex",
   },
   {
-    marketplaceId: "provider-ollama",
     providerId: "ollama",
     label: "Ollama",
     initials: "Ol",

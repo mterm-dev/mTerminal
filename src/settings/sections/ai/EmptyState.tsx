@@ -1,10 +1,8 @@
-import { SDK_CATALOG } from "./catalog";
-import { InstallCard } from "./InstallCard";
-
 /**
- * Shown in the AI Settings panel when no provider extension has been
- * registered yet. Hero card + 3-up install grid for the first-party SDK
- * providers.
+ * Fallback rendered if the seeded built-in registry hasn't booted yet (or in
+ * tests where it's intentionally skipped). After cofnięcie SDK-as-extension
+ * the three first-party providers (Anthropic / Codex / Ollama) are always
+ * present, so in practice this only flashes during initial mount.
  */
 export function EmptyState() {
   return (
@@ -15,19 +13,11 @@ export function EmptyState() {
           <span className="aip-cap">Cx</span>
           <span className="aip-cap">Ol</span>
         </div>
-        <div className="aip-hero-title">No AI provider installed</div>
+        <div className="aip-hero-title">Loading providers…</div>
         <div className="aip-hero-sub">
-          mTerminal stays vendor-neutral — pick the AI you want to use and
-          install its SDK as an extension. The chat panel, command palette,
-          and right-click explain all light up automatically once at least one
-          provider is active.
+          Anthropic, OpenAI Codex, and Ollama are bundled with mTerminal and
+          should appear in a moment. Add an API key to start using one.
         </div>
-      </div>
-
-      <div className="aip-install-grid">
-        {SDK_CATALOG.map((entry) => (
-          <InstallCard key={entry.providerId} entry={entry} />
-        ))}
       </div>
     </div>
   );

@@ -106,9 +106,6 @@ async function dispatchInvoke<T = unknown>(
     case 'ai_vault_key_has':
       return (await api.ai.vaultKey.has(a.provider as string)) as T
 
-    case 'claude_code_status':
-      return (await api.claudeCode.status(a.tabId as number)) as T
-
     case 'mcp_server_status':
       return (await api.mcp.status()) as T
     case 'mcp_server_start':

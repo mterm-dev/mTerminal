@@ -50,8 +50,8 @@ const api = {
     /**
      * Encrypted per-provider API key storage. Reads/writes go through the
      * vault (Argon2id + XChaCha20-Poly1305) and require it to be unlocked.
-     * Provider id is whatever the AI provider extension registered with —
-     * commonly "anthropic", "openai-codex", or any custom marketplace plugin.
+     * Provider id is one of the built-ins ("anthropic" | "openai-codex" |
+     * "ollama") or a custom registered by an extension.
      */
     vaultKey: {
       has: (provider: string): Promise<boolean> =>
@@ -61,16 +61,94 @@ const api = {
       clear: (provider: string): Promise<void> =>
         ipcRenderer.invoke('ai:vault-key:clear', { provider }),
     },
+    /** Built-in provider streaming. Routes Anthropic/Codex/Ollama through main. */
+    stream: (req: {
+      id: string
+      provider: string
+      model?: string
+      system?: string | null
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+      apiKey?: string
+      baseUrl?: string
+    }): Promise<void> => ipcRenderer.invoke('ai:stream', req),
+    complete: (req: {
+      id: string
+      provider: string
+      model?: string
+      system?: string | null
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+      apiKey?: string
+      baseUrl?: string
+    }): Promise<{ text: string; usage: { inTokens: number; outTokens: number; costUsd: number } }> =>
+      ipcRenderer.invoke('ai:complete', req),
+    cancel: (id: string): Promise<void> =>
+      ipcRenderer.invoke('ai:cancel', { id }),
+    listModels: (
+      provider: string,
+      opts?: { apiKey?: string; baseUrl?: string },
+    ): Promise<Array<{ id: string; name: string }>> =>
+      ipcRenderer.invoke('ai:list-models', { provider, ...(opts ?? {}) }),
+    listProviders: (): Promise<
+      Array<{
+        id: string
+        label: string
+        requiresVault: boolean
+        vaultKeyPath?: string
+        defaultModel: string
+      }>
+    > => ipcRenderer.invoke('ai:list-providers'),
+    onEvent: (
+      cb: (
+        ev:
+          | { id: string; kind: 'delta'; value: string }
+          | {
+              id: string
+              kind: 'done'
+              value: { inTokens: number; outTokens: number; costUsd: number }
+            }
+          | { id: string; kind: 'error'; value: string },
+      ) => void,
+    ): (() => void) => {
+      const listener = (_: unknown, ev: unknown): void =>
+        cb(ev as Parameters<typeof cb>[0])
+      ipcRenderer.on('ai:event', listener)
+      return () => {
+        ipcRenderer.off('ai:event', listener)
+      }
+    },
   },
-  claudeCode: {
-    status: (
-      tabId: number
-    ): Promise<{
-      state: 'none' | 'idle' | 'thinking' | 'awaitingInput'
-      running: boolean
-      binary: string | null
-      lastActivityMs: number | null
-    }> => ipcRenderer.invoke('claude-code:status', { tabId }),
+  agent: {
+    snapshot: (): Promise<
+      Array<[number, { state: 'idle' | 'thinking' | 'awaitingInput' | 'done'; agent: 'claude' | 'codex' | null; lastChangeMs: number; detail?: { tool?: string; message?: string } }]>
+    > => ipcRenderer.invoke('agent:status:snapshot'),
+    onStatus: (
+      cb: (ev: {
+        tabId: number
+        state: 'idle' | 'thinking' | 'awaitingInput' | 'done'
+        agent: 'claude' | 'codex' | null
+        lastChangeMs: number
+        detail?: { tool?: string; message?: string }
+      }) => void,
+    ): (() => void) => {
+      const listener = (_: unknown, ev: unknown): void =>
+        cb(ev as Parameters<typeof cb>[0])
+      ipcRenderer.on('agent:status', listener)
+      return () => {
+        ipcRenderer.off('agent:status', listener)
+      }
+    },
+    hooks: {
+      status: (): Promise<{
+        claude: 'installed' | 'missing' | 'mismatch'
+        codex: 'installed' | 'missing' | 'mismatch'
+        bridgeSocket: string | null
+        version: string
+      }> => ipcRenderer.invoke('agent:hooks:status'),
+      install: (target: 'claude' | 'codex'): Promise<void> =>
+        ipcRenderer.invoke('agent:hooks:install', { target }),
+      uninstall: (target: 'claude' | 'codex'): Promise<void> =>
+        ipcRenderer.invoke('agent:hooks:uninstall', { target }),
+    },
   },
   mcp: {
     status: (): Promise<{ running: boolean; socketPath: string | null }> =>

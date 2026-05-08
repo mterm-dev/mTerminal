@@ -675,6 +675,26 @@ body.resizing-sidebar * {
   animation: cc-pulse 1s ease-in-out infinite;
 }
 
+.ai-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+.ai-typing > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-dim, #888);
+  animation: ai-typing-bounce 1.2s ease-in-out infinite;
+}
+.ai-typing > span:nth-child(2) { animation-delay: 0.18s; }
+.ai-typing > span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes ai-typing-bounce {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40%           { opacity: 1;    transform: translateY(-3px); }
+}
+
 .ai-panel {
   position: fixed;
   top: 60px;
@@ -774,6 +794,33 @@ body.resizing-sidebar * {
 .term-tab.idle .dot {
   background: var(--n-400);
   box-shadow: none;
+}
+
+/* AI-CLI activity per-tab — overrides the active/idle dot.
+   thinking → yellow (working), idle → green (done), awaitingInput → blue. */
+.term-tab.cc-tab-thinking .dot {
+  background: var(--c-yellow, #d8a657);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--c-yellow, #d8a657) 30%, transparent);
+  animation: cc-pulse 1.4s ease-in-out infinite;
+}
+.term-tab.cc-tab-idle .dot {
+  background: var(--c-green, #89b482);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--c-green, #89b482) 30%, transparent);
+  animation: none;
+}
+.term-tab.cc-tab-awaitingInput .dot {
+  background: var(--c-blue, #7daea3);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--c-blue, #7daea3) 30%, transparent);
+  animation: cc-pulse 0.9s ease-in-out infinite;
+}
+.term-tab.cc-tab-done .dot {
+  background: var(--c-green, #89b482);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--c-green, #89b482) 50%, transparent);
+  animation: cc-done-flash 0.6s ease-out 4;
+}
+@keyframes cc-done-flash {
+  0% { box-shadow: 0 0 0 2px color-mix(in oklch, var(--c-green, #89b482) 80%, transparent); }
+  100% { box-shadow: 0 0 0 6px color-mix(in oklch, var(--c-green, #89b482) 0%, transparent); }
 }
 .term-tab .label-block {
   flex: 1;

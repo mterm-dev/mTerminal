@@ -34,11 +34,15 @@
     "release:major": "node scripts/release.mjs major"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
+    "@iarna/toml": "^2.2.5",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@mterminal/manifest-validator": "^0.1.0",
     "@mterminal/marketplace-types": "^0.1.0",
     "@noble/ciphers": "^1.0.0",
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.5.0",
+    "@openai/codex-sdk": "^0.129.0",
     "@xterm/addon-canvas": "0.8.0-beta.48",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-serialize": "^0.14.0",
@@ -48,6 +52,7 @@
     "fflate": "^0.8.2",
     "highlight.js": "^11.11.1",
     "node-pty": "^1.0.0",
+    "ollama": "^0.6.3",
     "pidtree": "^0.6.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"

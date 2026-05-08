@@ -1,17 +1,15 @@
 /**
- * AI provider plugin registry.
+ * AI provider registry.
  *
- * Every AI provider in mTerminal is contributed by an extension that calls
- * `ctx.ai.registerProvider({...})` during activate(). The renderer-side
- * registry tracks them and surfaces them to:
- *   - the Settings → AI panel (provider list, model picker, vault key entry)
- *   - the chat panel / command palette / explain popover (which provider to
- *     dispatch a completion to)
- *   - any consumer extension that wants the full SDK client via
- *     `ctx.services['ai.sdk.<id>']` or `ctx.ai.getSdk(<id>)`
+ * Three first-party providers (Anthropic, OpenAI Codex, Ollama) ship inside
+ * mTerminal core and are seeded on boot via `seedBuiltinAiProviders()`.
+ * Extensions can additionally register their own via
+ * `ctx.ai.registerProvider({...})`.
  *
- * There are no built-in providers — installing the marketplace SDK extension
- * (Anthropic, OpenAI Codex, Ollama, …) is what makes a provider available.
+ * The Settings → AI panel, AIPanel chat, command palette, explain popover,
+ * and extension `aiBindings` (e.g. git-panel commit message generation) all
+ * read from this registry — built-ins and plugin-registered providers look
+ * the same to consumers.
  */
 
 import type { Disposable } from '../ctx-types'

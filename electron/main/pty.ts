@@ -159,15 +159,31 @@ export function spawnSession(opts: {
   cwd?: string
 }): number {
   const cwd = resolveSpawnCwd(opts.cwd)
+  const id = nextId()
+  // Inject the bridge env so AI agents started inside this PTY (claude /
+  // codex) can talk back to mTerminal. Lazy-required to avoid pulling the
+  // agents subsystem into the PTY bootstrap path during early init.
+  let bridgePath = ''
+  try {
+    const { agentBridge } = require('./agents/bridge-server') as typeof import('./agents/bridge-server')
+    bridgePath = agentBridge.socketPath() ?? ''
+  } catch {
+    /* bridge optional */
+  }
+  const env = {
+    ...opts.env,
+    MTERMINAL_TAB_ID: String(id),
+    ...(bridgePath ? { MTERMINAL_BRIDGE: bridgePath } : {}),
+  }
   const ptyProc = nodePty.spawn(opts.shell, opts.args, {
     name: 'xterm-256color',
     cols: Math.max(1, opts.cols | 0),
     rows: Math.max(1, opts.rows | 0),
     cwd,
-    env: opts.env,
+    env,
   })
 
-  const id = nextId()
+
   const ring = new RingBuffer()
   const session: PtySession = {
     id,

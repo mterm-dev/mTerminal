@@ -38,6 +38,7 @@ export { setWorkspaceBackend, getWorkspaceBackend } from './api-bridge/workspace
 export type { WorkspaceBackend, WorkspaceTab } from './api-bridge/workspace'
 
 import { getRendererHost } from './host-renderer'
+import { seedBuiltinAiProviders } from './builtins/ai-providers'
 
 /**
  * Boot the extension host. Idempotent — safe to call multiple times; only
@@ -47,6 +48,7 @@ let bootPromise: Promise<void> | null = null
 export function bootExtensionsHostRenderer(): Promise<void> {
   if (bootPromise) return bootPromise
   bootPromise = (async () => {
+    seedBuiltinAiProviders()
     const host = getRendererHost()
     await host.boot()
   })()

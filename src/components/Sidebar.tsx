@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { Group, Tab } from "../hooks/useWorkspace";
-import type { CcStatus } from "../hooks/useClaudeCodeStatus";
+import type { AgentStatus } from "../hooks/useAgentStatus";
 import { InlineEdit } from "./InlineEdit";
 import { PluginPanelSlot } from "../extensions/components/PluginPanelSlot";
 
@@ -39,7 +39,7 @@ interface Props {
   onSelectGroup: (id: string) => void;
   width: number;
   onResize: (w: number) => void;
-  ccStatuses?: Map<number, CcStatus>;
+  agentStatuses?: Map<number, AgentStatus>;
 }
 
 type DropMark =
@@ -111,7 +111,7 @@ export function Sidebar(props: Props) {
     onSelectGroup,
     width,
     onResize,
-    ccStatuses,
+    agentStatuses,
   } = props;
 
   const onResizeStart = (e: RPointerEvent<HTMLDivElement>) => {
@@ -284,6 +284,8 @@ export function Sidebar(props: Props) {
     const showLineBefore =
       dropMark?.kind === "before" && dropMark.beforeId === t.id;
     const isDragging = dragTabId === t.id;
+    const cc = agentStatuses?.get(t.id);
+    const ccClass = cc && cc.state !== "idle" ? `cc-tab-${cc.state}` : "";
     return (
       <Fragment key={t.id}>
         {showLineBefore && <div className="drop-line" />}
@@ -294,7 +296,7 @@ export function Sidebar(props: Props) {
           aria-selected={active}
           className={`term-tab ${active ? "active" : "idle"} ${
             isDragging ? "dragging" : ""
-          }`}
+          } ${ccClass}`}
           draggable={editingTabId !== t.id}
           onDragStart={(e) => {
             dragTabRef.current = t.id;
@@ -346,15 +348,15 @@ export function Sidebar(props: Props) {
             )}
           </span>
           {(() => {
-            const cc = ccStatuses?.get(t.id);
-            if (!cc?.running) return null;
+            const cc = agentStatuses?.get(t.id);
+            if (!cc || cc.state === "idle") return null;
             const glyph =
               cc.state === "thinking"
                 ? "◐"
                 : cc.state === "awaitingInput"
                   ? "!"
                   : "✓";
-            const title = `claude code: ${cc.state}`;
+            const title = `${cc.agent ?? "agent"}: ${cc.state}`;
             return (
               <span
                 className={`cc-badge cc-${cc.state}`}

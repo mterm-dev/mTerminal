@@ -39,6 +39,7 @@ export function AIPanel({
   const [busy, setBusy] = useState(false);
   const [streamBuf, setStreamBuf] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<"idle" | "thinking" | "writing">("idle");
   const cancelRef = useRef<(() => Promise<void>) | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -83,6 +84,7 @@ export function AIPanel({
     setBusy(true);
     setStreamBuf("");
     setError(null);
+    setPhase("thinking");
 
     try {
       const handle = await complete({
@@ -92,9 +94,13 @@ export function AIPanel({
         system: SYSTEM(cwd),
         messages: newHistory,
         maxTokens: 2048,
-        onDelta: (t) => setStreamBuf((b) => b + t),
+        onDelta: (t) => {
+          setPhase("writing");
+          setStreamBuf((b) => b + t);
+        },
         onDone: (usage) => {
           setBusy(false);
+          setPhase("idle");
           onUsage?.(usage);
           setStreamBuf((finalText) => {
             setHistoryByTab((m) => {
@@ -108,12 +114,14 @@ export function AIPanel({
         },
         onError: (err) => {
           setBusy(false);
+          setPhase("idle");
           setError(err);
         },
       });
       cancelRef.current = handle.cancel;
     } catch (e) {
       setBusy(false);
+      setPhase("idle");
       setError(String(e));
     }
   };
@@ -168,6 +176,16 @@ export function AIPanel({
             </div>
           </div>
         ))}
+        {phase === "thinking" && !streamBuf && (
+          <div className="ai-msg ai-msg-assistant">
+            <div className="ai-msg-role">assistant</div>
+            <div className="ai-msg-content">
+              <span className="ai-typing" aria-label="thinking">
+                <span /><span /><span />
+              </span>
+            </div>
+          </div>
+        )}
         {streamBuf && (
           <div className="ai-msg ai-msg-assistant">
             <div className="ai-msg-role">assistant</div>

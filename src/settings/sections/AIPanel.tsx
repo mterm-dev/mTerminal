@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { useAIKeys } from "../../hooks/useAIKeys";
 import { useAiProviders } from "../../lib/ai-availability";
 import { Field, Toggle, type VaultSectionProps } from "./_shared";
 import { ensureStyles } from "./ai/styles";
-import { SDK_CATALOG } from "./ai/catalog";
+import { AgentIntegrations } from "./ai/AgentIntegrations";
 import { EmptyState } from "./ai/EmptyState";
-import { InstallCard } from "./ai/InstallCard";
 import { ProviderCard } from "./ai/ProviderCard";
 import type { AiProviderConfig } from "../useSettings";
 
@@ -42,13 +41,6 @@ export function AIPanel({
 
   const providers = useAiProviders();
   const { hasKey, setKey, clearKey } = useAIKeys(vaultUnlocked);
-  const [showAddMore, setShowAddMore] = useState(false);
-
-  const providerIds = useMemo(() => providers.map((p) => p.id), [providers]);
-  const missingSdks = useMemo(
-    () => SDK_CATALOG.filter((e) => !providerIds.includes(e.providerId)),
-    [providerIds],
-  );
 
   // Auto-select default if user has none + at least one provider is active.
   useEffect(() => {
@@ -88,8 +80,8 @@ export function AIPanel({
             <h3>Providers</h3>
             <span className="aip-sub">
               {providers.length === 0
-                ? "install one to enable AI features"
-                : `${providers.length} installed${missingSdks.length > 0 ? ` · ${missingSdks.length} more available` : ""}`}
+                ? "no providers available"
+                : `${providers.length} available`}
             </span>
           </div>
 
@@ -116,26 +108,10 @@ export function AIPanel({
                   />
                 );
               })}
-
-              {missingSdks.length > 0 && !showAddMore && (
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  style={{ alignSelf: "flex-start" }}
-                  onClick={() => setShowAddMore(true)}
-                >
-                  + add another provider
-                </button>
-              )}
-              {missingSdks.length > 0 && showAddMore && (
-                <div className="aip-install-grid">
-                  {missingSdks.map((entry) => (
-                    <InstallCard key={entry.providerId} entry={entry} />
-                  ))}
-                </div>
-              )}
             </div>
           )}
+
+          <AgentIntegrations />
 
           <div className="aip-section-h">
             <h3>Behavior</h3>
@@ -163,8 +139,8 @@ export function AIPanel({
                 </Field>
 
                 <Field
-                  label="Detect Claude Code sessions"
-                  hint="Show badge on tabs running `claude` and notify on idle"
+                  label="Detect AI agent sessions"
+                  hint="Show badge on tabs running `claude` / `codex`, notify on completion or awaiting input"
                 >
                   <Toggle
                     checked={settings.claudeCodeDetectionEnabled}

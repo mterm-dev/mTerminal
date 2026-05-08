@@ -9,4 +9,4 @@
  * The host also publishes a global `__MT_API_VERSION` constant (renderer-side)
  * for runtime introspection.
  */
-export const HOST_API_VERSION = '1.5.0-alpha.0'
+export const HOST_API_VERSION = '1.5.0'

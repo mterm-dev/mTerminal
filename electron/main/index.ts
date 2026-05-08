@@ -14,7 +14,9 @@ import { registerPtyHandlers, setMainWindow as setPtyWindow } from './pty'
 import { registerSystemHandlers } from './system'
 import { registerVaultHandlers } from './vault'
 import { registerAiHandlers } from './ai'
-import { registerClaudeCodeHandlers } from './claude-code'
+import { agentBridge } from './agents/bridge-server'
+import { registerStatusTracker } from './agents/status-tracker'
+import { registerHooksInstallerHandlers } from './agents/hooks-installer'
 import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
 import { setupAppMenu } from './menu'
 import { registerWorkspaceHandlers } from './workspace'
@@ -105,8 +107,14 @@ app
 
     registerPtyHandlers()
     registerVaultHandlers()
-    registerAiHandlers()
-    registerClaudeCodeHandlers()
+    registerAiHandlers(() => mainWindow)
+    try {
+      agentBridge.start()
+    } catch (err) {
+      console.error('[main] agent bridge start failed:', err)
+    }
+    registerStatusTracker(() => mainWindow)
+    registerHooksInstallerHandlers()
     registerMcpHandlers()
     registerWorkspaceHandlers()
     registerSettingsHandlers()
@@ -114,6 +122,11 @@ app
     registerVoiceHandlers()
     app.on('before-quit', () => {
       void stopMcpServer()
+      try {
+        agentBridge.stop()
+      } catch {
+        /* ignore */
+      }
       void getExtensionHost().shutdown()
     })
     registerSystemHandlers()

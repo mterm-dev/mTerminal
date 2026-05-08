@@ -27,7 +27,7 @@ import {
   type VaultModalMode,
 } from "./vault/VaultGate";
 import { VaultModalHost } from "./vault/VaultModalHost";
-import { useClaudeCodeStatus } from "./hooks/useClaudeCodeStatus";
+import { useAgentStatus } from "./hooks/useAgentStatus";
 import { useMcpServer } from "./hooks/useMcpServer";
 import { AICommandPalette } from "./components/AICommandPalette";
 import { ExplainPopover } from "./components/ExplainPopover";
@@ -191,9 +191,10 @@ function AppInner({
     pendingCommandsRef.current.delete(tabId);
   }, []);
 
-  const ccStatuses = useClaudeCodeStatus(ptyMap, ws.activeId, {
+  const agentStatuses = useAgentStatus(ws.activeId, {
     enabled: settings.claudeCodeDetectionEnabled,
     notifyOnAwaitingInput: true,
+    notifyOnDone: true,
   });
 
   const mcp = useMcpServer(settings.aiEnabled && settings.mcpServerEnabled);
@@ -1025,7 +1026,7 @@ function AppInner({
           onSelectGroup={selectGroup}
           width={settings.sidebarWidth}
           onResize={(w) => update("sidebarWidth", w)}
-          ccStatuses={ccStatuses}
+          agentStatuses={agentStatuses}
         />
 
         <main className="term-main">
