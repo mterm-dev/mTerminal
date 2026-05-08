@@ -1,24 +1,28 @@
 import { useEffect, useState } from "react";
-import { Field } from "../../settings/sections/_shared";
 import { ModelPicker } from "./ModelPicker";
 import { useAiProviders } from "../../lib/ai-availability";
+import { ApiKeyInput } from "../../components/ApiKeyInput";
+import { findCatalogEntry } from "../../settings/sections/ai/catalog";
+import { ensureStyles } from "../../settings/sections/ai/styles";
 
 /**
- * Shared "AI provider configurator" card.
+ * Polished "AI provider configurator" card for an extension's AiBinding.
  *
  * Auto-rendered by `<ExtensionSettingsForm>` for every entry in an
- * extension's `contributes.aiBindings`. Visually plain — uses the same
- * `.settings-field` / `.seg-control` / `.ghost-btn` primitives as the rest
- * of the Settings modal so it doesn't stand out as a foreign component.
+ * extension's `contributes.aiBindings`. Visually identical to the cards in
+ * Settings → AI: same `aip-card` chrome, same `<ApiKeyInput>` for keys,
+ * same `<ModelPicker>` for models. Two source modes:
  *
- * After the SDK-as-extension refactor the provider list is dynamic. The
- * binding declares an optional whitelist of provider ids; the card filters
- * the live registry against that whitelist (or shows everything installed).
+ *   • mTerminal AI — the registered provider extension's vault key is used
+ *     (managed centrally in Settings → AI → ProviderCard). Default.
+ *   • Custom key   — a per-binding override stored in `ctx.secrets`. Sent
+ *     through `ctx.ai.stream({ ..., apiKey })` so the underlying SDK
+ *     instantiates an ad-hoc client for this workflow only.
  *
  * Storage:
- *   - config (source / provider / model / baseUrl) lives under
+ *   - config (source / provider / model) lives under
  *     `settings.extensions[<extId>].ai.binding.<bindingId>`
- *   - api keys live in `ctx.secrets` under
+ *   - per-binding api keys live in `ctx.secrets` under
  *     `ai.<bindingId>.<provider>.apiKey` (custom mode only)
  */
 
@@ -27,7 +31,7 @@ export interface AiBindingSpec {
   label: string;
   description?: string;
   supportsCore?: boolean;
-  /** Optional whitelist of provider ids. */
+  /** Optional whitelist of provider ids. Default: all installed providers. */
   providers?: string[];
   defaultProvider?: string;
   defaultModels?: Record<string, string>;
@@ -67,6 +71,8 @@ interface Props {
 }
 
 export function AiBindingCard({ extId, spec, value, onChange }: Props) {
+  ensureStyles();
+
   const allProviders = useAiProviders();
   const filtered = spec.providers
     ? allProviders.filter((p) => spec.providers!.includes(p.id))
@@ -75,126 +81,146 @@ export function AiBindingCard({ extId, spec, value, onChange }: Props) {
   const allowsCore = spec.supportsCore !== false;
   const currentProvider = filtered.find((p) => p.id === cfg.provider);
   const providerNeedsKey = currentProvider?.requiresVault === true;
+  const catalog = currentProvider ? findCatalogEntry(currentProvider.id) : undefined;
+  const initials = catalog?.initials ?? currentProvider?.label.slice(0, 2) ?? "AI";
 
   if (filtered.length === 0) {
     return (
-      <div className="ai-binding-group">
-        <div className="settings-section-h">{spec.label}</div>
-        <div className="settings-note">
-          {spec.providers && spec.providers.length > 0
-            ? `This binding wants one of: ${spec.providers.join(", ")}. Install the matching AI provider extension from Settings → AI.`
-            : "No AI providers installed. Install one from Settings → AI."}
+      <div className="aip-card">
+        <div className="aip-card-h">
+          <span className="aip-logo">AI</span>
+          <span className="aip-card-name">{spec.label}</span>
+        </div>
+        <div className="aip-card-body">
+          <div className="settings-note">
+            {spec.providers && spec.providers.length > 0
+              ? `This binding wants one of: ${spec.providers.join(", ")}. Install the matching AI provider extension from Settings → AI.`
+              : "No AI providers installed. Install one from Settings → AI."}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="ai-binding-group">
-      <div className="settings-section-h">{spec.label}</div>
+    <div className="aip-card">
+      <div className="aip-card-h">
+        <span className={`aip-logo ${currentProvider ? `aip-logo-${currentProvider.id}` : ""}`}>
+          {initials}
+        </span>
+        <span className="aip-card-name">{spec.label}</span>
+        <span className="aip-card-meta">
+          <span
+            className={`aip-pill ${cfg.source === "core" ? "aip-pill-default" : "aip-pill-muted"}`}
+          >
+            {cfg.source === "core" ? "central" : "per-binding"}
+          </span>
+        </span>
+      </div>
 
-      {allowsCore && (
-        <Field label="Source" hint="Where API keys for this workflow come from">
-          <div className="seg-control">
-            <button
-              type="button"
-              className={cfg.source === "core" ? "active" : ""}
-              onClick={() => onChange({ ...cfg, source: "core" })}
-            >
-              mTerminal AI
-            </button>
-            <button
-              type="button"
-              className={cfg.source === "custom" ? "active" : ""}
-              onClick={() => onChange({ ...cfg, source: "custom" })}
-            >
-              Custom keys
-            </button>
+      <div className="aip-card-body">
+        {spec.description && (
+          <div className="aip-binding-desc">{spec.description}</div>
+        )}
+
+        {allowsCore && (
+          <div className="aip-row">
+            <div className="aip-row-label">Source of API key</div>
+            <div className="aip-source-toggle" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={cfg.source === "core"}
+                className={`aip-source-opt ${cfg.source === "core" ? "active" : ""}`}
+                onClick={() => onChange({ ...cfg, source: "core" })}
+              >
+                <span className="aip-source-opt-title">Settings → AI</span>
+                <span className="aip-source-opt-desc">
+                  Use the provider's vault key (shared with all extensions)
+                </span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={cfg.source === "custom"}
+                className={`aip-source-opt ${cfg.source === "custom" ? "active" : ""}`}
+                onClick={() => onChange({ ...cfg, source: "custom" })}
+              >
+                <span className="aip-source-opt-title">Custom key</span>
+                <span className="aip-source-opt-desc">
+                  Override with a per-binding key stored just for this workflow
+                </span>
+              </button>
+            </div>
           </div>
-        </Field>
-      )}
+        )}
 
-      <Field
-        label="Model"
-        hint={spec.description ?? "Pick a provider and the exact model id"}
-      >
-        <ModelPicker
-          providers={filtered.map((p) => p.id)}
-          value={{ provider: cfg.provider, model: cfg.model, baseUrl: cfg.baseUrl }}
-          defaultModels={spec.defaultModels}
-          onChange={(v) =>
-            onChange({
-              source: cfg.source,
-              provider: v.provider,
-              model: v.model,
-              baseUrl: v.baseUrl,
-            })
-          }
-        />
-      </Field>
-
-      {cfg.source === "custom" && providerNeedsKey && (
-        <ApiKeyField
-          extId={extId}
-          bindingId={spec.id}
-          provider={cfg.provider}
-        />
-      )}
-
-      {cfg.source === "core" && (
-        <div className="settings-note">
-          Uses keys from <strong>Settings → AI</strong>. The host vault must be
-          unlocked.
+        <div className="aip-row">
+          <div className="aip-row-label">Provider &amp; model</div>
+          <ModelPicker
+            providers={filtered.map((p) => p.id)}
+            value={{ provider: cfg.provider, model: cfg.model, baseUrl: cfg.baseUrl }}
+            defaultModels={spec.defaultModels}
+            onChange={(v) =>
+              onChange({
+                source: cfg.source,
+                provider: v.provider,
+                model: v.model,
+                baseUrl: v.baseUrl,
+              })
+            }
+          />
         </div>
-      )}
-      {cfg.source === "custom" && !providerNeedsKey && (
-        <div className="settings-note">
-          {currentProvider?.label} doesn't need an API key (e.g. local Ollama).
-          Configure base URL via the provider's own settings card.
-        </div>
-      )}
+
+        {cfg.source === "custom" && providerNeedsKey && currentProvider && (
+          <ExtensionApiKeyRow
+            extId={extId}
+            bindingId={spec.id}
+            provider={cfg.provider}
+            providerLabel={currentProvider.label}
+            keyHelpUrl={catalog?.keyHelpUrl}
+          />
+        )}
+
+        {cfg.source === "custom" && !providerNeedsKey && (
+          <div className="settings-note">
+            {currentProvider?.label} doesn't need an API key (e.g. local Ollama).
+            Configure base URL via the provider's own settings card.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function ApiKeyField({
+function ExtensionApiKeyRow({
   extId,
   bindingId,
   provider,
+  providerLabel,
+  keyHelpUrl,
 }: {
   extId: string;
   bindingId: string;
   provider: string;
+  providerLabel: string;
+  keyHelpUrl?: string;
 }) {
   const key = secretKeyFor(bindingId, provider);
-  const [value, setValue] = useState<string>("");
-  const [stored, setStored] = useState<boolean>(false);
-  const [reveal, setReveal] = useState<boolean>(false);
-  const [busy, setBusy] = useState<boolean>(false);
-  const [dirty, setDirty] = useState<boolean>(false);
+  const [hasKey, setHasKey] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    setValue("");
-    setDirty(false);
     void (async () => {
       try {
         const has = await window.mt.ext.secrets.has(extId, key);
-        if (!alive) return;
-        setStored(has);
-        if (has) {
-          const v = (await window.mt.ext.secrets.get(extId, key)) ?? "";
-          if (alive) setValue(v);
-        }
+        if (alive) setHasKey(has);
       } catch (err) {
-        console.error(`[ext:${extId}] secrets.get(${key}) failed:`, err);
+        console.error(`[ext:${extId}] secrets.has(${key}) failed:`, err);
       }
     })();
     const off = window.mt.ext.secrets.onChange(extId, (k, present) => {
-      if (k !== key) return;
-      setStored(present);
-      if (!present) setValue("");
-      setDirty(false);
+      if (k === key) setHasKey(present);
     });
     return () => {
       alive = false;
@@ -202,85 +228,22 @@ function ApiKeyField({
     };
   }, [extId, key]);
 
-  const save = async (): Promise<void> => {
-    setBusy(true);
-    try {
-      if (value.trim() === "") {
-        await window.mt.ext.secrets.delete(extId, key);
-      } else {
-        await window.mt.ext.secrets.set(extId, key, value);
-      }
-      setDirty(false);
-    } catch (err) {
-      console.error(`[ext:${extId}] secrets.set(${key}) failed:`, err);
-    } finally {
-      setBusy(false);
-    }
+  const setKey = async (value: string): Promise<void> => {
+    await window.mt.ext.secrets.set(extId, key, value);
   };
 
-  const clear = async (): Promise<void> => {
-    setBusy(true);
-    try {
-      await window.mt.ext.secrets.delete(extId, key);
-      setValue("");
-      setDirty(false);
-    } catch (err) {
-      console.error(`[ext:${extId}] secrets.delete(${key}) failed:`, err);
-    } finally {
-      setBusy(false);
-    }
+  const clearKey = async (): Promise<void> => {
+    await window.mt.ext.secrets.delete(extId, key);
   };
 
   return (
-    <Field
-      label="API key"
-      hint={
-        stored
-          ? "Stored encrypted in this extension's secrets file"
-          : "Paste your key — never written to the main settings JSON"
-      }
-    >
-      <div className="settings-key-wrap">
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            type={reveal ? "text" : "password"}
-            value={value}
-            placeholder={stored ? "(stored)" : "paste API key"}
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setDirty(true);
-            }}
-          />
-          <button
-            type="button"
-            className="ghost-btn small"
-            onClick={() => setReveal((r) => !r)}
-          >
-            {reveal ? "hide" : "show"}
-          </button>
-          <button
-            type="button"
-            className="ghost-btn small"
-            onClick={() => void save()}
-            disabled={busy || !dirty}
-          >
-            {stored && !dirty ? "saved" : "save"}
-          </button>
-          {stored && (
-            <button
-              type="button"
-              className="ghost-btn small"
-              onClick={() => void clear()}
-              disabled={busy}
-            >
-              clear
-            </button>
-          )}
-        </div>
-      </div>
-    </Field>
+    <ApiKeyInput
+      hasKey={hasKey}
+      providerLabel={providerLabel}
+      onSetKey={setKey}
+      onClearKey={clearKey}
+      link={keyHelpUrl}
+    />
   );
 }
 

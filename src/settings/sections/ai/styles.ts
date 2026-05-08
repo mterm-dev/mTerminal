@@ -158,6 +158,8 @@ export const CSS = `
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  container-type: inline-size;
+  container-name: aip-card;
 }
 .aip-card.aip-card-default {
   border-color: var(--border-strong);
@@ -256,6 +258,30 @@ export const CSS = `
 .aip-row-control .ghost-btn {
   flex-shrink: 0;
 }
+.aip-row-status {
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--bg-muted, var(--bg-base));
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm, 6px);
+}
+.aip-row-status .aip-spacer { flex: 1; }
+.aip-row-label .aip-row-link {
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--c-blue);
+  text-transform: none;
+  letter-spacing: 0;
+  text-decoration: none;
+}
+.aip-row-label .aip-row-link:hover { text-decoration: underline; }
+.aip-key-status {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--fg-dim);
+}
+.aip-key-status.ok { color: oklch(76.5% .177 163.223); }
+.aip-key-status.empty { color: var(--fg-dim); }
 
 .aip-models {
   display: flex;
@@ -297,6 +323,62 @@ export const CSS = `
   color: var(--fg-dim);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* ─── ai binding card (Settings → Extensions → <ext>) ─────────────── */
+.aip-binding-desc {
+  font-size: var(--t-xs);
+  color: var(--fg-dim);
+  line-height: 1.5;
+  margin: -2px 0 4px;
+}
+
+.aip-source-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+@container aip-card (max-width: 480px) {
+  .aip-source-toggle { grid-template-columns: 1fr; }
+}
+.aip-source-opt {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: var(--bg-muted, var(--bg-base));
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm, 6px);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--fg-dim);
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.aip-source-opt:hover {
+  border-color: var(--border-strong);
+  color: var(--fg-muted);
+}
+.aip-source-opt.active {
+  border-color: var(--border-strong);
+  background: color-mix(in oklch, var(--bg-muted, var(--bg-base)) 50%, var(--bg-raised) 50%);
+  color: var(--fg);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--border-strong) 25%, transparent);
+}
+.aip-source-opt-title {
+  font-weight: 600;
+  font-size: var(--t-sm);
+}
+.aip-source-opt-desc {
+  font-size: 11px;
+  color: var(--fg-dim);
+  line-height: 1.4;
+}
+
+.aip-pill-muted {
+  color: var(--fg-dim);
+  border-color: var(--border);
+  background: var(--bg-active);
 }
 
 /* ─── misc ─────────────────────────────────────────────────────────── */

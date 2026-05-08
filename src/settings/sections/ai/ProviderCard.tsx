@@ -4,6 +4,7 @@ import type { ModelInfo } from "../../../hooks/useAI";
 import { listModels } from "../../../hooks/useAI";
 import { findCatalogEntry } from "./catalog";
 import type { AiProviderConfig } from "../../useSettings";
+import { ApiKeyInput } from "../../../components/ApiKeyInput";
 
 type ModelsState = ModelInfo[] | "loading" | "error" | undefined;
 
@@ -38,8 +39,6 @@ export function ProviderCard({
   const initials = catalog?.initials ?? entry.label.slice(0, 2);
   const requiresVault = entry.requiresVault !== false;
 
-  const [editingKey, setEditingKey] = useState(false);
-  const [keyDraft, setKeyDraft] = useState("");
   const [models, setModels] = useState<ModelsState>(undefined);
 
   const fetchModels = async (): Promise<void> => {
@@ -52,23 +51,6 @@ export function ProviderCard({
     }
   };
 
-  const submit = async (): Promise<void> => {
-    const v = keyDraft.trim();
-    if (!v) return;
-    await onSetKey(v);
-    setKeyDraft("");
-    setEditingKey(false);
-  };
-
-  const startEdit = (): void => {
-    if (!vaultUnlocked) {
-      onRequestVault();
-      return;
-    }
-    setEditingKey(true);
-  };
-
-  // Status pill: default > key saved > no key / no auth
   let pill: { kind: "default" | "ok" | "warn" | "muted"; label: string };
   if (isDefault) pill = { kind: "default", label: "default" };
   else if (!requiresVault) pill = { kind: "muted", label: "no auth" };
@@ -86,32 +68,16 @@ export function ProviderCard({
       </div>
 
       <div className="aip-card-body">
-        {requiresVault && editingKey && (
-          <div className="aip-row">
-            <div className="aip-row-label">API key</div>
-            <div className="aip-row-control">
-              <input
-                type="password"
-                value={keyDraft}
-                onChange={(e) => setKeyDraft(e.target.value)}
-                placeholder={`paste ${entry.label} API key`}
-                autoFocus
-                spellCheck={false}
-              />
-              <button className="ghost-btn" onClick={() => void submit()}>
-                save
-              </button>
-              <button
-                className="ghost-btn"
-                onClick={() => {
-                  setEditingKey(false);
-                  setKeyDraft("");
-                }}
-              >
-                cancel
-              </button>
-            </div>
-          </div>
+        {requiresVault && (
+          <ApiKeyInput
+            hasKey={hasKey}
+            providerLabel={entry.label}
+            locked={!vaultUnlocked}
+            onRequestUnlock={onRequestVault}
+            onSetKey={onSetKey}
+            onClearKey={onClearKey}
+            link={catalog?.keyHelpUrl}
+          />
         )}
 
         <div className="aip-row">
@@ -172,18 +138,6 @@ export function ProviderCard({
           </button>
         )}
         <span className="aip-spacer" />
-        {requiresVault && !editingKey && (
-          <>
-            <button className="ghost-btn" onClick={startEdit}>
-              {hasKey ? "replace key" : vaultUnlocked ? "set key" : "unlock to set key"}
-            </button>
-            {hasKey && vaultUnlocked && (
-              <button className="ghost-btn" onClick={() => void onClearKey()}>
-                remove key
-              </button>
-            )}
-          </>
-        )}
       </div>
     </div>
   );

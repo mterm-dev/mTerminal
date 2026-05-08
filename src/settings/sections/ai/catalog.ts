@@ -20,6 +20,8 @@ export interface SdkCatalogEntry {
   description: string;
   /** Optional doc / homepage link for "learn more". */
   link?: string;
+  /** Optional direct link to where the user can obtain an API key. */
+  keyHelpUrl?: string;
   /** Whether the provider needs an API key in the vault. */
   requiresVault: boolean;
   /** Default model id (used as input placeholder). */
@@ -35,6 +37,7 @@ export const SDK_CATALOG: SdkCatalogEntry[] = [
     description:
       "Claude (Opus, Sonnet, Haiku) via the official @anthropic-ai/sdk package. Supports streaming chat plus the full Messages API for advanced tool use.",
     link: "https://docs.anthropic.com",
+    keyHelpUrl: "https://console.anthropic.com/settings/keys",
     requiresVault: true,
     defaultModel: "claude-opus-4-7",
   },
@@ -46,6 +49,7 @@ export const SDK_CATALOG: SdkCatalogEntry[] = [
     description:
       "OpenAI Codex SDK (@openai/codex-sdk). Agentic coding flows — tool use, multi-step reasoning, and streaming via Codex threads.",
     link: "https://developers.openai.com/codex/sdk",
+    keyHelpUrl: "https://platform.openai.com/api-keys",
     requiresVault: true,
     defaultModel: "gpt-5-codex",
   },
