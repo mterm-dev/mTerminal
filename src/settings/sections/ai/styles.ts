@@ -283,6 +283,11 @@ export const CSS = `
 .aip-key-status.ok { color: oklch(76.5% .177 163.223); }
 .aip-key-status.empty { color: var(--fg-dim); }
 
+.aip-model-chooser {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .aip-models {
   display: flex;
   flex-wrap: wrap;
