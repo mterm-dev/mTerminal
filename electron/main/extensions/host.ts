@@ -4,6 +4,7 @@ import { ExtensionRegistry } from './registry'
 import { ServiceRegistry, topoSortActivation } from './services'
 import { getMainEventBus } from './event-bus-main'
 import { getTrustStore } from './trust'
+import { getDisabledStore } from './disabled-store'
 import { getSettingsShadow } from './settings-shadow'
 import { createMainCtx } from './ctx'
 import {
@@ -255,6 +256,7 @@ export class ExtensionHostMain {
     if (!rec) return
     if (rec.enabled === enabled) return
     if (!enabled) await this.deactivate(id)
+    await getDisabledStore().setDisabled(id, !enabled)
     this.registry.setEnabled(id, enabled)
     if (enabled && rec.trusted) await this.activate(id)
   }
@@ -279,6 +281,7 @@ export class ExtensionHostMain {
     }
     await this.deactivate(id)
     await fs.rm(rec.manifest.extensionPath, { recursive: true, force: true })
+    await getDisabledStore().setDisabled(id, false)
     if (isUnlocked()) {
       try {
         purgeExtSecrets(id)
@@ -297,10 +300,7 @@ export class ExtensionHostMain {
   }
 
   private async computeInitialEnabled(manifest: ExtensionManifest): Promise<boolean> {
-    // For now: built-ins are enabled by default; user extensions are enabled
-    // unless the user has disabled them via Plugin Manager (persistence TBD).
-    void manifest
-    return true
+    return !(await getDisabledStore().isDisabled(manifest.id))
   }
 
   private markIncompatible(manifest: ExtensionManifest, extPath: string): void {

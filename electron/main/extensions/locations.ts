@@ -11,6 +11,7 @@ import fs from 'node:fs/promises'
  *   │       ├── package.json                   manifestPath(id)
  *   │       └── data/                          extensionDataDir(id)
  *   ├── trust.json                             trustFilePath()
+ *   ├── disabled.json                          disabledFilePath()
  *   └── settings.backup-pre-extensions.json    settingsMigrationBackupPath()
  *
  *   <app>/extensions/                          builtInExtensionsDir()
@@ -62,6 +63,10 @@ export function manifestPath(extensionPath: string): string {
 
 export function trustFilePath(): string {
   return path.join(userRoot(), 'trust.json')
+}
+
+export function disabledFilePath(): string {
+  return path.join(userRoot(), 'disabled.json')
 }
 
 export function settingsMigrationBackupPath(): string {
