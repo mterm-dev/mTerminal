@@ -1789,6 +1789,8 @@ body.resizing-git-msg * {
 }
 .git-diff-cell {
   padding: 0 8px;
+  display: flex;
+  align-items: flex-start;
   white-space: pre-wrap;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1796,15 +1798,19 @@ body.resizing-git-msg * {
 }
 .git-diff-cell.right { border-right: none; }
 .git-diff-cell .ln {
-  display: inline-block;
-  width: 4ch;
+  flex: 0 0 4ch;
   text-align: right;
   color: var(--fg-dim);
   margin-right: 10px;
   user-select: none;
   opacity: 0.7;
+  white-space: nowrap;
 }
-.git-diff-cell .text { color: var(--fg); }
+.git-diff-cell .text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--fg);
+}
 
 .git-diff-cell.add  { background: color-mix(in oklch, var(--ok)  10%, transparent); }
 .git-diff-cell.add  .text { color: var(--ok); }
