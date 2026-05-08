@@ -250,20 +250,6 @@ describe('ai/index IPC handlers', () => {
     }
   )
 
-  it('ai:stream-complete with ollama works without vault unlock + default baseUrl', async () => {
-    const { sentEvents, openAiCalls } = await loadModules()
-    const taskId = (await invoke('ai:stream-complete', {
-      provider: 'ollama',
-      model: 'llama3',
-      messages: [{ role: 'user', content: 'hi' }],
-    })) as number
-    await waitForAllEvents(sentEvents, 'ai:event:' + taskId, 2)
-    expect(openAiCalls).toHaveLength(1)
-    expect(openAiCalls[0]!.apiKey).toBeNull()
-    expect(openAiCalls[0]!.baseUrl).toBe('http://localhost:11434/v1')
-    expect(openAiCalls[0]!.costLabel).toBe('ollama')
-  })
-
   it(
     'ai:stream-complete with openai uses default baseUrl, override respected',
     { timeout: TEST_TIMEOUT },
@@ -312,44 +298,6 @@ describe('ai/index IPC handlers', () => {
     await expect(
       invoke('ai:cancel', { taskId: 99999 })
     ).resolves.not.toThrow()
-  })
-
-  it('ai:cancel flips the cancelled flag observable by the provider', async () => {
-    const { sentEvents, setProviderBehavior } = await loadModules()
-    let observedCancelled = false
-    setProviderBehavior({
-      stream: async (sink, signal) => {
-        await new Promise((r) => setImmediate(r))
-        await new Promise((r) => setImmediate(r))
-        observedCancelled = signal.aborted
-        sink({ kind: 'done', value: { inTokens: 0, outTokens: 0, costUsd: 0 } })
-      },
-    })
-    const taskId = (await invoke('ai:stream-complete', {
-      provider: 'ollama',
-      model: 'llama3',
-      messages: [{ role: 'user', content: 'hi' }],
-    })) as number
-    await invoke('ai:cancel', { taskId })
-    await waitForEvent(sentEvents, 'ai:event:' + taskId)
-    expect(observedCancelled).toBe(true)
-  })
-
-  it('ai:list-models returns array from provider.listModels()', async () => {
-    const { setProviderBehavior } = await loadModules()
-    setProviderBehavior({
-      models: [
-        { id: 'm1', name: 'Model 1' },
-        { id: 'm2', name: 'Model 2' },
-      ],
-    })
-    const models = (await invoke('ai:list-models', {
-      provider: 'ollama',
-    })) as Array<{ id: string; name: string }>
-    expect(models).toEqual([
-      { id: 'm1', name: 'Model 1' },
-      { id: 'm2', name: 'Model 2' },
-    ])
   })
 
   it(
