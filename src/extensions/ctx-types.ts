@@ -112,6 +112,7 @@ export interface ExtensionContext {
   readonly commands: CommandsApi
   readonly keybindings: KeybindingsApi
   readonly panels: PanelsApi
+  readonly settingsRenderer: SettingsRendererApi
   readonly statusBar: StatusBarApi
   readonly contextMenu: ContextMenuApi
   readonly tabs: TabsApi
@@ -178,6 +179,29 @@ export interface PanelsApi {
   register(panel: PanelSpec): Disposable
   show(id: string): void
   hide(id: string): void
+}
+
+export interface SettingsRendererCtx {
+  host: HTMLElement
+  extId: string
+  settings: {
+    get<T = unknown>(key: string): T | undefined
+    set(key: string, value: unknown): void | Promise<void>
+    onChange(cb: (key: string, value: unknown) => void): Disposable
+  }
+}
+
+export interface SettingsRendererApi {
+  /**
+   * Replace the auto-rendered schema-properties block in this extension's
+   * Settings card with a plugin-supplied UI. The host still renders the title
+   * header, AI bindings section, and secrets section.
+   *
+   * The render function receives a host `<div>` and a settings bridge scoped
+   * to this extension. Return a cleanup callback that runs when the user
+   * navigates away or the extension deactivates.
+   */
+  register(spec: { render(host: HTMLElement, ctx: SettingsRendererCtx): void | (() => void) }): Disposable
 }
 
 export interface StatusBarApi {

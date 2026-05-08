@@ -4,6 +4,10 @@ import {
   getSettingsSchemaRegistry,
   type SettingsSchemaEntry,
 } from "../../extensions/registries/settings-schema";
+import {
+  getSettingsRendererRegistry,
+  type SettingsRendererEntry,
+} from "../../extensions/registries/settings-renderer";
 import { getRendererHost, type ManifestSnapshot } from "../../extensions";
 import { ContextMenu, type MenuItem } from "../../components/ContextMenu";
 import {
@@ -13,6 +17,7 @@ import {
   type AiBindingConfig,
   type AiBindingSpec,
 } from "../../extensions/components/AiBindingCard";
+import { PluginCustomSettingsSlot } from "../../extensions/components/PluginCustomSettingsSlot";
 
 /**
  * Two views in one file:
@@ -295,25 +300,34 @@ export function ExtensionSettingsForm({
 } & SectionProps) {
   const host = getRendererHost();
   const reg = getSettingsSchemaRegistry();
+  const srReg = getSettingsRendererRegistry();
   const [entry, setEntry] = useState<SettingsSchemaEntry | undefined>(() =>
     reg.get(extId),
   );
   const [snap, setSnap] = useState<ManifestSnapshot | undefined>(() =>
     host.list().find((s) => s.manifest.id === extId),
   );
+  const [customRenderer, setCustomRenderer] = useState<
+    SettingsRendererEntry | undefined
+  >(() => srReg.get(extId));
 
   useEffect(() => {
     setEntry(reg.get(extId));
     setSnap(host.list().find((s) => s.manifest.id === extId));
+    setCustomRenderer(srReg.get(extId));
     const offReg = reg.subscribe(() => setEntry(reg.get(extId))).dispose;
     const offHost = host.subscribe(() =>
       setSnap(host.list().find((s) => s.manifest.id === extId)),
     );
+    const offSr = srReg.subscribe(() =>
+      setCustomRenderer(srReg.get(extId)),
+    ).dispose;
     return () => {
       offReg();
       offHost();
+      offSr();
     };
-  }, [reg, host, extId]);
+  }, [reg, host, srReg, extId]);
 
   const declaredSecrets = snap?.manifest.contributes.secrets ?? [];
   const declaredBindings = (snap?.manifest.contributes.aiBindings ?? []) as AiBindingSpec[];
@@ -323,7 +337,10 @@ export function ExtensionSettingsForm({
     entry?.displayName ?? snap?.manifest.displayName ?? snap?.manifest.id ?? extId;
 
   const nothingToShow =
-    !entry && declaredSecrets.length === 0 && declaredBindings.length === 0;
+    !entry &&
+    !customRenderer &&
+    declaredSecrets.length === 0 &&
+    declaredBindings.length === 0;
   if (nothingToShow) {
     return (
       <Field label="No settings available">
@@ -365,24 +382,30 @@ export function ExtensionSettingsForm({
         <SecretsSection extId={extId} secrets={declaredSecrets} />
       )}
 
-      {entry && props.length === 0 && (
-        <Field label="(empty schema)">
-          <span className="ext-explainer">
-            This extension declares <code>contributes.settings</code> but its{" "}
-            <code>properties</code> map is empty.
-          </span>
-        </Field>
+      {customRenderer ? (
+        <PluginCustomSettingsSlot extId={extId} />
+      ) : (
+        <>
+          {entry && props.length === 0 && (
+            <Field label="(empty schema)">
+              <span className="ext-explainer">
+                This extension declares <code>contributes.settings</code> but its{" "}
+                <code>properties</code> map is empty.
+              </span>
+            </Field>
+          )}
+          {entry &&
+            props.map(([key, propSchema]) => (
+              <PropField
+                key={key}
+                propKey={key}
+                schema={propSchema}
+                value={readValue(settings, extId, key, propSchema.default)}
+                onChange={(v) => writeValue(settings, update, extId, key, v)}
+              />
+            ))}
+        </>
       )}
-      {entry &&
-        props.map(([key, propSchema]) => (
-          <PropField
-            key={key}
-            propKey={key}
-            schema={propSchema}
-            value={readValue(settings, extId, key, propSchema.default)}
-            onChange={(v) => writeValue(settings, update, extId, key, v)}
-          />
-        ))}
     </>
   );
 }

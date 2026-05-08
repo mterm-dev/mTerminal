@@ -22,6 +22,7 @@ import type {
   CommandsApi,
   KeybindingsApi,
   PanelsApi,
+  SettingsRendererApi,
   StatusBarApi,
   ContextMenuApi,
   TabsApi,
@@ -40,6 +41,7 @@ import { getVaultGateBridge } from './vault-gate-bridge'
 import { getCommandRegistry } from './registries/commands'
 import { getKeybindingRegistry } from './registries/keybindings'
 import { getPanelRegistry } from './registries/panels'
+import { getSettingsRendererRegistry } from './registries/settings-renderer'
 import { getStatusBarRegistry } from './registries/status-bar'
 import { getContextMenuRegistry } from './registries/context-menu'
 import { getTabTypeRegistry } from './registries/tab-types'
@@ -96,6 +98,7 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
   const cmdReg = getCommandRegistry()
   const kbReg = getKeybindingRegistry()
   const panelReg = getPanelRegistry()
+  const srReg = getSettingsRendererRegistry()
   const sbReg = getStatusBarRegistry()
   const cmReg = getContextMenuRegistry()
   const ttReg = getTabTypeRegistry()
@@ -136,6 +139,15 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
     },
     show: (panelId) => bus.emit('app:panel:show', { id: panelId }),
     hide: (panelId) => bus.emit('app:panel:hide', { id: panelId }),
+  }
+
+  // ─ settings renderer ───────────────────────────────────────────────────
+  const settingsRenderer: SettingsRendererApi = {
+    register(spec) {
+      const d = srReg.register({ extId: id, source: id, render: spec.render })
+      subscribe(d)
+      return d
+    },
   }
 
   // ─ status bar ──────────────────────────────────────────────────────────
@@ -392,6 +404,7 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
     commands,
     keybindings,
     panels,
+    settingsRenderer,
     statusBar,
     contextMenu,
     tabs,
@@ -437,6 +450,7 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
     cmdReg.removeBySource(id)
     kbReg.removeBySource(id)
     panelReg.removeBySource(id)
+    srReg.removeBySource(id)
     sbReg.removeBySource(id)
     cmReg.removeBySource(id)
     ttReg.removeBySource(id)

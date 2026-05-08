@@ -251,6 +251,14 @@ export interface ExtensionContext {
   readonly commands: CommandsApi
   readonly keybindings: KeybindingsApi
   readonly panels: PanelsApi
+  /**
+   * Replace the auto-rendered settings card for this extension with a
+   * plugin-supplied React UI. Useful when the JSON-Schema auto-renderer
+   * can't express your settings well (e.g. lists of complex objects).
+   *
+   * @since mterminal-api 1.2.0
+   */
+  readonly settingsRenderer: SettingsRendererApi
   readonly statusBar: StatusBarApi
   readonly contextMenu: ContextMenuApi
   readonly tabs: TabsApi
@@ -343,6 +351,42 @@ export interface PanelCtx {
   readonly visible: boolean
   onResize(cb: (rect: DOMRect) => void): Disposable
   onVisibilityChange(cb: (visible: boolean) => void): Disposable
+}
+
+/**
+ * Settings bridge handed to a custom settings renderer. Scoped to the
+ * extension's own settings namespace.
+ *
+ * @since mterminal-api 1.2.0
+ */
+export interface SettingsRendererCtx {
+  /** The host-owned `<div>` to render into. */
+  readonly host: HTMLElement
+  readonly extId: string
+  readonly settings: {
+    get<T = unknown>(key: string): T | undefined
+    set(key: string, value: unknown): void | Promise<void>
+    onChange(cb: (key: string, value: unknown) => void): Disposable
+  }
+}
+
+/**
+ * Replace the auto-rendered schema-properties block in this extension's
+ * Settings card with a plugin-supplied UI. The host still renders the
+ * card title, AI bindings section, and secrets section.
+ *
+ * @since mterminal-api 1.2.0
+ */
+export interface SettingsRendererApi {
+  register(spec: {
+    /**
+     * Mount your UI into the supplied `host` element. Return a cleanup
+     * callback (called when the user navigates away from this extension's
+     * settings page or when the extension deactivates). React renderers
+     * typically `createRoot(host).render(...)` and return `() => root.unmount()`.
+     */
+    render(host: HTMLElement, ctx: SettingsRendererCtx): void | (() => void)
+  }): Disposable
 }
 
 export interface PanelsApi {
