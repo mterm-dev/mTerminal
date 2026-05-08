@@ -136,6 +136,21 @@ export function TerminalTab({
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown") return true;
+
+      if (
+        e.key === "Enter" &&
+        e.shiftKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey
+      ) {
+        const id = ptyIdRef.current;
+        const data = "\\\r";
+        if (id == null) pendingInput.push(data);
+        else invoke("pty_write", { id, data }).catch(() => {});
+        return false;
+      }
+
       if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return true;
       if (e.key.toLowerCase() !== "c") return true;
       const sel = term.getSelection();
