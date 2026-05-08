@@ -127,7 +127,11 @@ export function TerminalTab({
 
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon());
+    term.loadAddon(
+      new WebLinksAddon((_event, uri) => {
+        void window.mt.shell.openExternal(uri).catch(() => {});
+      }),
+    );
     term.open(host);
 
     let disposed = false;
