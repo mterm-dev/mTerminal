@@ -122,9 +122,12 @@ describe("MasterPasswordModal - init mode", () => {
     await waitFor(() => {
       expect(onInit).toHaveBeenCalledWith("longenough");
     });
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalled();
-    });
+    await waitFor(
+      () => {
+        expect(onClose).toHaveBeenCalled();
+      },
+      { timeout: 2500 },
+    );
   });
 });
 
@@ -163,9 +166,12 @@ describe("MasterPasswordModal - unlock mode", () => {
     await waitFor(() => {
       expect(onUnlock).toHaveBeenCalledWith("secret123");
     });
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalled();
-    });
+    await waitFor(
+      () => {
+        expect(onClose).toHaveBeenCalled();
+      },
+      { timeout: 2500 },
+    );
   });
 
   it("propagates async failure as error string", async () => {
@@ -283,9 +289,12 @@ describe("MasterPasswordModal - change mode", () => {
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith("old-secret", "new-secret-1");
     });
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalled();
-    });
+    await waitFor(
+      () => {
+        expect(onClose).toHaveBeenCalled();
+      },
+      { timeout: 2500 },
+    );
   });
 });
 
@@ -377,14 +386,13 @@ describe("MasterPasswordModal - decrypting phase", () => {
     fireEvent.click(screen.getByRole("button", { name: "unlock" }));
 
     await waitFor(() => {
-      expect(container.querySelector(".vault-phase-overlay")).toBeTruthy();
+      expect(container.querySelector(".vault-busy-panel")).toBeTruthy();
     });
-    expect(getInputByLabel("master password").disabled).toBe(true);
     expect(screen.getByText(/decrypting vault/i)).toBeTruthy();
 
     resolveUnlock!();
     await waitFor(() => {
-      expect(screen.getByText(/^unlocked$/i)).toBeTruthy();
+      expect(screen.getAllByText(/^unlocked$/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -408,8 +416,66 @@ describe("MasterPasswordModal - decrypting phase", () => {
     await waitFor(() => {
       expect(screen.getByText(/decrypt failed/i)).toBeTruthy();
     });
-    expect(container.querySelector(".vault-phase-overlay")).toBeNull();
-    expect(getInputByLabel("master password").disabled).toBe(false);
+    expect(container.querySelector(".vault-busy-panel")).toBeNull();
+    expect(getInputByLabel("master password")).toBeTruthy();
+  });
+
+  it("shows decrypting overlay synchronously on submit (before onUnlock resolves)", async () => {
+    let resolveUnlock: (() => void) | null = null;
+    const onUnlock = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnlock = () => resolve();
+        }),
+    );
+    const { container } = render(
+      <MasterPasswordModal
+        mode="unlock"
+        onClose={vi.fn()}
+        onInit={vi.fn(async () => {})}
+        onUnlock={onUnlock}
+      />,
+    );
+    fireEvent.change(getInputByLabel("master password"), {
+      target: { value: "secret123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "unlock" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".vault-busy-panel")).toBeTruthy();
+    });
+    expect(screen.getByText(/decrypting vault/i)).toBeTruthy();
+
+    resolveUnlock!();
+  });
+
+  it("holds the decrypting overlay for at least 350ms even when unlock is instant", async () => {
+    const onUnlock = vi.fn(async () => {});
+    const { container } = render(
+      <MasterPasswordModal
+        mode="unlock"
+        onClose={vi.fn()}
+        onInit={vi.fn(async () => {})}
+        onUnlock={onUnlock}
+      />,
+    );
+    fireEvent.change(getInputByLabel("master password"), {
+      target: { value: "secret123" },
+    });
+    const t0 = Date.now();
+    fireEvent.click(screen.getByRole("button", { name: "unlock" }));
+    await waitFor(() => {
+      expect(container.querySelector(".vault-busy-panel")).toBeTruthy();
+    });
+
+    await waitFor(
+      () => {
+        expect(screen.getAllByText(/^unlocked$/i).length).toBeGreaterThan(0);
+      },
+      { timeout: 2000 },
+    );
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeGreaterThanOrEqual(540);
   });
 
   it("respects an external phase prop (controlled mode)", () => {
@@ -422,7 +488,7 @@ describe("MasterPasswordModal - decrypting phase", () => {
         onUnlock={vi.fn(async () => {})}
       />,
     );
-    expect(container.querySelector(".vault-phase-overlay")).toBeNull();
+    expect(container.querySelector(".vault-busy-panel")).toBeNull();
     rerender(
       <MasterPasswordModal
         mode="unlock"
@@ -432,7 +498,6 @@ describe("MasterPasswordModal - decrypting phase", () => {
         onUnlock={vi.fn(async () => {})}
       />,
     );
-    expect(container.querySelector(".vault-phase-overlay")).toBeTruthy();
-    expect(getInputByLabel("master password").disabled).toBe(true);
+    expect(container.querySelector(".vault-busy-panel")).toBeTruthy();
   });
 });

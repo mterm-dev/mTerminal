@@ -150,11 +150,11 @@ export function VaultGateProvider({ enabled, idleLockMs, children }: ProviderPro
   }, [refresh]);
 
   useEffect(() => {
-    if (modal && status.unlocked) {
+    if (modal && status.unlocked && modal.phase !== "decrypting") {
       const t = setTimeout(() => {
         resolvePending(true);
         setModal(null);
-      }, 220);
+      }, 500);
       return () => clearTimeout(t);
     }
   }, [modal, status.unlocked, resolvePending]);

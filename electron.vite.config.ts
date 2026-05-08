@@ -11,7 +11,10 @@ export default defineConfig({
     build: {
       outDir: 'out/main',
       rollupOptions: {
-        input: resolve(__dirname, 'electron/main/index.ts'),
+        input: {
+          index: resolve(__dirname, 'electron/main/index.ts'),
+          'kdf-worker': resolve(__dirname, 'electron/main/kdf-worker.ts'),
+        },
         external: mainExternals,
         output: {
           format: 'cjs',

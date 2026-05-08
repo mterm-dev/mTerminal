@@ -1,4 +1,4 @@
-import { getAiKey, isUnlocked } from '../vault'
+import { getAiKey } from '../vault'
 
 export {
   getAiKey as get,
@@ -8,7 +8,6 @@ export {
 
 export function has(provider: string): boolean {
   if (provider === 'ollama') return true
-  if (!isUnlocked()) return false
   try {
     return getAiKey(provider) !== null
   } catch {

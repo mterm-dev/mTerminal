@@ -193,19 +193,47 @@ describe('ai/index IPC handlers', () => {
     }
   })
 
-  it('ai:stream-complete with anthropic + locked vault → emits error', async () => {
+  it('ai:stream-complete with anthropic + locked vault → throws synchronously', async () => {
+    await loadModules()
+    await expect(
+      invoke('ai:stream-complete', {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4',
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+    ).rejects.toThrow(/vault locked/)
+  })
+
+  it('ai:stream-complete with ollama + locked vault → does not throw (no key needed)', async () => {
     const { sentEvents } = await loadModules()
     const taskId = (await invoke('ai:stream-complete', {
-      provider: 'anthropic',
-      model: 'claude-sonnet-4',
+      provider: 'ollama',
+      model: 'llama3',
       messages: [{ role: 'user', content: 'hi' }],
     })) as number
     expect(typeof taskId).toBe('number')
-    const ev = await waitForEvent(sentEvents, 'ai:event:' + taskId)
-    expect(ev.payload).toEqual({
-      kind: 'error',
-      value: 'vault locked — unlock to use anthropic',
-    })
+    void sentEvents
+  })
+
+  it('ai:list-models with anthropic + locked vault → throws', async () => {
+    await loadModules()
+    await expect(
+      invoke('ai:list-models', { provider: 'anthropic' })
+    ).rejects.toThrow(/vault locked/)
+  })
+
+  it('ai:set-key with anthropic + locked vault → throws', async () => {
+    await loadModules()
+    await expect(
+      invoke('ai:set-key', { provider: 'anthropic', key: 'sk-x' })
+    ).rejects.toThrow(/vault locked/)
+  })
+
+  it('ai:has-key with anthropic + locked vault → throws', async () => {
+    await loadModules()
+    await expect(
+      invoke('ai:has-key', { provider: 'anthropic' })
+    ).rejects.toThrow(/vault locked/)
   })
 
   it(
@@ -279,19 +307,24 @@ describe('ai/index IPC handlers', () => {
     }
   )
 
-  it('ai:stream-complete with unknown provider → emits error', async () => {
-    const { sentEvents } = await loadModules()
-    const taskId = (await invoke('ai:stream-complete', {
-      provider: 'bogus',
-      model: 'm',
-      messages: [],
-    })) as number
-    const ev = await waitForEvent(sentEvents, 'ai:event:' + taskId)
-    expect(ev.payload).toEqual({
-      kind: 'error',
-      value: 'unknown provider: bogus',
-    })
-  })
+  it(
+    'ai:stream-complete with unknown provider → emits error',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      const { sentEvents } = await loadModules()
+      await invoke('vault:init', { masterPassword: 'pw' })
+      const taskId = (await invoke('ai:stream-complete', {
+        provider: 'bogus',
+        model: 'm',
+        messages: [],
+      })) as number
+      const ev = await waitForEvent(sentEvents, 'ai:event:' + taskId)
+      expect(ev.payload).toEqual({
+        kind: 'error',
+        value: 'unknown provider: bogus',
+      })
+    }
+  )
 
   it('ai:cancel for unknown taskId is a no-op', async () => {
     await loadModules()
@@ -315,13 +348,15 @@ describe('ai/index IPC handlers', () => {
   )
 
   it(
-    'ai:has-key always true for ollama, false for anthropic when locked, true after set+unlocked',
+    'ai:has-key always true for ollama; anthropic throws when locked, returns true after set+unlocked',
     { timeout: TEST_TIMEOUT },
     async () => {
       await loadModules()
-      
+
       expect(await invoke('ai:has-key', { provider: 'ollama' })).toBe(true)
-      expect(await invoke('ai:has-key', { provider: 'anthropic' })).toBe(false)
+      await expect(
+        invoke('ai:has-key', { provider: 'anthropic' })
+      ).rejects.toThrow(/vault locked/)
 
       await invoke('vault:init', { masterPassword: 'pw' })
       expect(await invoke('ai:has-key', { provider: 'anthropic' })).toBe(false)
@@ -329,9 +364,11 @@ describe('ai/index IPC handlers', () => {
       expect(await invoke('ai:has-key', { provider: 'anthropic' })).toBe(true)
 
       await invoke('vault:lock')
-      
+
       expect(await invoke('ai:has-key', { provider: 'ollama' })).toBe(true)
-      expect(await invoke('ai:has-key', { provider: 'anthropic' })).toBe(false)
+      await expect(
+        invoke('ai:has-key', { provider: 'anthropic' })
+      ).rejects.toThrow(/vault locked/)
     }
   )
 })

@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import crypto from 'node:crypto'
+import { Worker } from 'node:worker_threads'
 import { argon2id } from '@noble/hashes/argon2'
 import { xchacha20poly1305 } from '@noble/ciphers/chacha'
 
@@ -111,6 +112,46 @@ function deriveKey(password: string, salt: Uint8Array): Uint8Array {
     p: KDF_P,
     dkLen: KEY_LEN,
     version: 0x13,
+  })
+}
+
+function kdfWorkerPath(): string {
+  return path.join(__dirname, 'kdf-worker.js')
+}
+
+function deriveKeyAsync(password: string, salt: Uint8Array): Promise<Uint8Array> {
+  if (process.env.VITEST) {
+    return Promise.resolve(deriveKey(password, salt))
+  }
+  return new Promise((resolve, reject) => {
+    const pwBytes = Buffer.from(password, 'utf8')
+    const worker = new Worker(kdfWorkerPath(), {
+      workerData: {
+        password: pwBytes,
+        salt,
+        m: KDF_M_KIB,
+        t: KDF_T,
+        p: KDF_P,
+        dkLen: KEY_LEN,
+        version: 0x13,
+      },
+    })
+    let settled = false
+    worker.once('message', (key: Uint8Array) => {
+      settled = true
+      void worker.terminate()
+      resolve(new Uint8Array(key))
+    })
+    worker.once('error', (err) => {
+      if (settled) return
+      settled = true
+      reject(err)
+    })
+    worker.once('exit', (code) => {
+      if (!settled && code !== 0) {
+        reject(new Error(`kdf worker exited with code ${code}`))
+      }
+    })
   })
 }
 
@@ -322,20 +363,20 @@ export function registerVaultHandlers(): void {
     }
   })
 
-  ipcMain.handle('vault:init', (_e, args: { masterPassword: string }) => {
+  ipcMain.handle('vault:init', async (_e, args: { masterPassword: string }) => {
     const pw = args?.masterPassword ?? ''
     if (pw.length === 0) throw new Error('master password cannot be empty')
     if (fs.existsSync(vaultPath())) {
       throw new Error('vault already exists — use unlock or change_password')
     }
     const salt = crypto.randomBytes(SALT_LEN)
-    const key = deriveKey(pw, salt)
+    const key = await deriveKeyAsync(pw, salt)
     const payload = emptyPayload()
     writeVaultFile(fileFromKey(key, salt, payload))
     state = { key, salt, payload }
   })
 
-  ipcMain.handle('vault:unlock', (_e, args: { masterPassword: string }) => {
+  ipcMain.handle('vault:unlock', async (_e, args: { masterPassword: string }) => {
     const pw = args?.masterPassword ?? ''
     const file = readVaultFile()
     if (!file) throw new Error('vault not initialized')
@@ -343,7 +384,7 @@ export function registerVaultHandlers(): void {
     if (salt.length !== SALT_LEN) throw new Error('invalid salt length')
     const nonce = Buffer.from(file.nonce, 'base64')
     const ct = Buffer.from(file.ciphertext, 'base64')
-    const key = deriveKey(pw, salt)
+    const key = await deriveKeyAsync(pw, salt)
     let payload: VaultPayload
     try {
       payload = decryptPayload(key, nonce, ct)
@@ -363,7 +404,7 @@ export function registerVaultHandlers(): void {
 
   ipcMain.handle(
     'vault:change-password',
-    (_e, args: { oldPassword: string; newPassword: string }) => {
+    async (_e, args: { oldPassword: string; newPassword: string }) => {
       const oldPw = args?.oldPassword ?? ''
       const newPw = args?.newPassword ?? ''
       if (newPw.length === 0) {
@@ -373,7 +414,7 @@ export function registerVaultHandlers(): void {
       if (!file) throw new Error('vault not initialized')
       const oldSalt = Buffer.from(file.kdf_salt, 'base64')
       if (oldSalt.length !== SALT_LEN) throw new Error('invalid salt length')
-      const oldKey = deriveKey(oldPw, oldSalt)
+      const oldKey = await deriveKeyAsync(oldPw, oldSalt)
       const nonce = Buffer.from(file.nonce, 'base64')
       const ct = Buffer.from(file.ciphertext, 'base64')
       let payload: VaultPayload
@@ -385,7 +426,7 @@ export function registerVaultHandlers(): void {
       }
       zero(oldKey)
       const newSalt = crypto.randomBytes(SALT_LEN)
-      const newKey = deriveKey(newPw, newSalt)
+      const newKey = await deriveKeyAsync(newPw, newSalt)
       writeVaultFile(fileFromKey(newKey, newSalt, payload))
       const oldState = state
       state = { key: newKey, salt: newSalt, payload }

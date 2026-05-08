@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import { VaultDecryptingAnimation } from "./VaultDecryptingAnimation";
+
+const MIN_DECRYPT_VISIBLE_MS = 600;
+const SUCCESS_HOLD_MS = 600;
 
 export type MasterPasswordMode = "init" | "unlock" | "change";
 export type MasterPasswordPhase = "input" | "decrypting" | "success";
@@ -30,13 +32,14 @@ export function MasterPasswordModal({
   const [error, setError] = useState<string | null>(null);
   const [localPhase, setLocalPhase] = useState<MasterPasswordPhase>("input");
 
-  const phase = phaseProp ?? localPhase;
+  const phase: MasterPasswordPhase =
+    localPhase !== "input" ? localPhase : (phaseProp ?? "input");
   const busy = phase !== "input";
 
   useEscapeKey(onClose, { enabled: !busy, preventDefault: true });
 
   const setPhase = (next: MasterPasswordPhase) => {
-    if (phaseProp === undefined) setLocalPhase(next);
+    setLocalPhase(next);
     onPhaseChange?.(next);
   };
 
@@ -73,19 +76,22 @@ export function MasterPasswordModal({
       }
     }
     setPhase("decrypting");
+    await new Promise<void>((r) => setTimeout(r, 0));
+    const minDelay = new Promise<void>((r) =>
+      setTimeout(r, MIN_DECRYPT_VISIBLE_MS),
+    );
     try {
-      if (mode === "init") {
-        await onInit(pw);
-      } else if (mode === "unlock") {
-        await onUnlock(pw);
-      } else if (mode === "change") {
-        if (!onChange) throw new Error("change handler missing");
-        await onChange(oldPw, pw);
-      }
+      const work =
+        mode === "init"
+          ? onInit(pw)
+          : mode === "unlock"
+            ? onUnlock(pw)
+            : onChange
+              ? onChange(oldPw, pw)
+              : Promise.reject(new Error("change handler missing"));
+      await Promise.all([work, minDelay]);
       setPhase("success");
-      if (phaseProp === undefined) {
-        setTimeout(onClose, 220);
-      }
+      setTimeout(onClose, SUCCESS_HOLD_MS);
     } catch (err) {
       setPhase("input");
       setError(String(err));
@@ -121,93 +127,105 @@ export function MasterPasswordModal({
             ×
           </button>
         </div>
-        <form className="settings-scroll vault-body" onSubmit={submit}>
-          <p className="settings-note">{hint}</p>
-
-          {mode === "change" && (
-            <div className="settings-field">
-              <label className="settings-field-label">current password</label>
-              <div className="settings-field-control">
-                <input
-                  type="password"
-                  className="settings-input"
-                  value={oldPw}
-                  onChange={(e) => setOldPw(e.target.value)}
-                  disabled={busy}
-                  autoFocus
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="settings-field">
-            <label className="settings-field-label">
-              {mode === "change" ? "new password" : "master password"}
-            </label>
-            <div className="settings-field-control">
-              <input
-                type="password"
-                className="settings-input"
-                value={pw}
-                onChange={(e) => setPw(e.target.value)}
-                disabled={busy}
-                autoFocus={mode !== "change"}
-              />
-            </div>
-          </div>
-
-          {(mode === "init" || mode === "change") && (
-            <div className="settings-field">
-              <label className="settings-field-label">confirm password</label>
-              <div className="settings-field-control">
-                <input
-                  type="password"
-                  className="settings-input"
-                  value={pw2}
-                  onChange={(e) => setPw2(e.target.value)}
-                  disabled={busy}
-                />
-              </div>
-            </div>
-          )}
-
-          {error && <div className="vault-error">{error}</div>}
-
-          <div className="vault-actions">
-            <button
-              type="button"
-              className="confirm-btn"
-              onClick={onClose}
-              disabled={busy}
-            >
-              cancel
-            </button>
-            <button
-              type="submit"
-              className="confirm-btn confirm-btn-primary"
-              disabled={busy}
-            >
-              {phase === "decrypting"
-                ? "..."
-                : mode === "unlock"
-                  ? "unlock"
-                  : "save"}
-            </button>
-          </div>
-
-          {phase === "decrypting" && (
-            <VaultDecryptingAnimation
-              label={
-                mode === "init"
+        <div className="settings-scroll vault-body">
+          {phase === "decrypting" ? (
+            <div className="vault-busy-panel" role="status" aria-live="polite">
+              <div className="vault-busy-spinner" aria-hidden="true" />
+              <div className="vault-busy-label">
+                {mode === "init"
                   ? "encrypting vault…"
                   : mode === "change"
                     ? "re-encrypting vault…"
-                    : "decrypting vault…"
-              }
-            />
+                    : "decrypting vault…"}
+              </div>
+            </div>
+          ) : phase === "success" ? (
+            <div className="vault-busy-panel" role="status" aria-live="polite">
+              <div className="vault-success-check" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none">
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="11"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    opacity="0.6"
+                  />
+                  <path
+                    d="M7 12.5l3.2 3.2L17 9"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <div className="vault-busy-label">unlocked</div>
+            </div>
+          ) : (
+            <form onSubmit={submit}>
+              <p className="settings-note">{hint}</p>
+
+              {mode === "change" && (
+                <div className="settings-field">
+                  <label className="settings-field-label">current password</label>
+                  <div className="settings-field-control">
+                    <input
+                      type="password"
+                      className="settings-input"
+                      value={oldPw}
+                      onChange={(e) => setOldPw(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="settings-field">
+                <label className="settings-field-label">
+                  {mode === "change" ? "new password" : "master password"}
+                </label>
+                <div className="settings-field-control">
+                  <input
+                    type="password"
+                    className="settings-input"
+                    value={pw}
+                    onChange={(e) => setPw(e.target.value)}
+                    autoFocus={mode !== "change"}
+                  />
+                </div>
+              </div>
+
+              {(mode === "init" || mode === "change") && (
+                <div className="settings-field">
+                  <label className="settings-field-label">confirm password</label>
+                  <div className="settings-field-control">
+                    <input
+                      type="password"
+                      className="settings-input"
+                      value={pw2}
+                      onChange={(e) => setPw2(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {error && <div className="vault-error">{error}</div>}
+
+              <div className="vault-actions">
+                <button type="button" className="confirm-btn" onClick={onClose}>
+                  cancel
+                </button>
+                <button
+                  type="submit"
+                  className="confirm-btn confirm-btn-primary"
+                >
+                  {mode === "unlock" ? "unlock" : "save"}
+                </button>
+              </div>
+            </form>
           )}
-          {phase === "success" && <VaultDecryptingAnimation variant="success" />}
-        </form>
+        </div>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   writeText,
   open,
 } from "../../src/lib/ipc";
+import { setVaultGateBridge } from "../../src/extensions/vault-gate-bridge";
 
 type MtMock = ReturnType<typeof makeMt>;
 
@@ -216,6 +217,54 @@ describe("invoke routing", () => {
     await expect(invoke("system_info")).rejects.toThrow(
       /window\.mt|preload/i,
     );
+  });
+});
+
+describe("invoke vault-locked auto-retry", () => {
+  afterEach(() => {
+    setVaultGateBridge(null);
+  });
+
+  it("on 'vault locked' error: opens gate, retries once on success", async () => {
+    let attempts = 0;
+    mt.ai.hasKey = vi.fn(async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("vault locked");
+      return true;
+    });
+    const ensure = vi.fn(async () => true);
+    setVaultGateBridge({ ensure, isUnlocked: () => false });
+
+    const result = await invoke<boolean>("ai_has_key", { provider: "anthropic" });
+    expect(ensure).toHaveBeenCalledTimes(1);
+    expect(attempts).toBe(2);
+    expect(result).toBe(true);
+  });
+
+  it("user cancels gate → original error propagates", async () => {
+    mt.ai.hasKey = vi.fn(async () => {
+      throw new Error("vault locked");
+    });
+    const ensure = vi.fn(async () => false);
+    setVaultGateBridge({ ensure, isUnlocked: () => false });
+
+    await expect(
+      invoke("ai_has_key", { provider: "anthropic" }),
+    ).rejects.toThrow(/vault locked/);
+    expect(ensure).toHaveBeenCalledTimes(1);
+  });
+
+  it("vault_* commands never trigger auto-retry (would loop)", async () => {
+    mt.vault.unlock = vi.fn(async () => {
+      throw new Error("vault locked");
+    });
+    const ensure = vi.fn(async () => true);
+    setVaultGateBridge({ ensure, isUnlocked: () => false });
+
+    await expect(
+      invoke("vault_unlock", { masterPassword: "x" }),
+    ).rejects.toThrow(/vault locked/);
+    expect(ensure).not.toHaveBeenCalled();
   });
 });
 

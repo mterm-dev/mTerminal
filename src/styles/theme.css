@@ -3243,9 +3243,14 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
 .vault-dialog,
 .host-dialog {
   flex-direction: column;
-  width: min(520px, 92vw);
+  width: min(420px, 92vw);
+  height: auto;
   max-height: 84vh;
   display: flex;
+}
+
+.vault-dialog {
+  width: min(380px, 92vw);
 }
 
 .host-dialog {
@@ -3254,7 +3259,7 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
 
 .vault-body,
 .host-body {
-  padding: 16px 18px 18px 18px;
+  padding: 14px 16px 16px 16px;
   overflow-y: auto;
 }
 
@@ -3382,13 +3387,65 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
   align-items: center;
   justify-content: center;
   gap: 14px;
-  background: color-mix(in srgb, var(--mt-bg, #14161a) 88%, transparent);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: var(--bg-base, #14161a);
   z-index: 5;
   border-radius: inherit;
-  animation: vault-overlay-fade 140ms ease-out;
   color: var(--mt-accent, #7aa2f7);
+}
+
+.vault-busy-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 140px;
+  padding: 24px 16px;
+  color: var(--mt-accent, #7aa2f7);
+}
+
+.vault-busy-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: vault-decrypt-orbit 0.9s linear infinite;
+}
+
+.vault-success-check {
+  color: var(--c-green, #6dd28a);
+  animation: vault-success-pop 320ms ease-out;
+}
+
+.vault-busy-label {
+  font-size: 0.95em;
+  letter-spacing: 0.02em;
+  color: var(--mt-fg, #d8dee9);
+  font-variant-numeric: tabular-nums;
+}
+
+.vault-btn-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vault-btn-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: vault-decrypt-orbit 0.8s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-btn-spinner {
+    animation: vault-decrypt-orbit 1.4s linear infinite;
+  }
 }
 
 .vault-decrypt-spinner {
@@ -3421,9 +3478,15 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vault-decrypt-spinner,
-  .vault-decrypt-label,
-  .vault-success-icon,
+  .vault-decrypt-spinner {
+    animation: vault-decrypt-orbit 1.6s linear infinite;
+  }
+  .vault-decrypt-label {
+    animation: vault-decrypt-pulse 1.8s ease-in-out infinite;
+  }
+  .vault-success-icon {
+    animation: vault-success-pop 280ms ease-out;
+  }
   .vault-phase-overlay {
     animation: none;
   }

@@ -26,8 +26,18 @@ export function cancelAllAiTasks(): void {
   }
 }
 
+function providerNeedsVault(provider: string): boolean {
+  return provider !== 'ollama'
+}
+
+function ensureVaultForProvider(provider: string): void {
+  if (providerNeedsVault(provider) && !isUnlocked()) {
+    throw new Error('vault locked')
+  }
+}
+
 function requireVaultKey(provider: string): string {
-  if (!isUnlocked()) throw new Error(`vault locked — unlock to use ${provider}`)
+  ensureVaultForProvider(provider)
   const key = keys.get(provider)
   if (!key) throw new Error(`${provider} api key not set — open settings → ai`)
   return key
@@ -67,6 +77,7 @@ interface StreamArgs {
 
 export function registerAiHandlers(): void {
   ipcMain.handle('ai:stream-complete', (_e, args: StreamArgs) => {
+    ensureVaultForProvider(args.provider)
     const taskId = nextTaskId++
     const controller = new AbortController()
 
@@ -122,6 +133,7 @@ export function registerAiHandlers(): void {
       _e,
       args: { provider: string; baseUrl?: string }
     ): Promise<ModelInfo[]> => {
+      ensureVaultForProvider(args.provider)
       const prov = buildProvider(args.provider, args.baseUrl)
       return prov.listModels()
     }
@@ -130,17 +142,20 @@ export function registerAiHandlers(): void {
   ipcMain.handle(
     'ai:set-key',
     (_e, args: { provider: string; key: string }) => {
+      ensureVaultForProvider(args.provider)
       keys.set(args.provider, args.key)
     }
   )
 
   ipcMain.handle('ai:clear-key', (_e, args: { provider: string }) => {
+    ensureVaultForProvider(args.provider)
     keys.clear(args.provider)
   })
 
   ipcMain.handle(
     'ai:has-key',
     (_e, args: { provider: string }): boolean => {
+      ensureVaultForProvider(args.provider)
       return keys.has(args.provider)
     }
   )
