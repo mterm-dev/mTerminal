@@ -177,10 +177,24 @@ export function AgentIntegrations() {
           />
 
           {status.codex !== "missing" && (
-            <div className="settings-note" style={{ fontSize: 11 }}>
-              First run: inside <code>codex</code> type{" "}
-              <code>/hooks</code> and approve the 6 mterminal hooks. They
-              only need approval once per machine.
+            <div
+              className="settings-note"
+              style={{
+                fontSize: 12,
+                lineHeight: 1.5,
+                padding: "10px 12px",
+                background:
+                  "color-mix(in oklch, var(--c-orange) 12%, transparent)",
+                border:
+                  "1px solid color-mix(in oklch, var(--c-orange) 35%, transparent)",
+                borderRadius: 6,
+              }}
+            >
+              <strong>One-time setup:</strong> open a fresh{" "}
+              <code>codex</code> session, type <code>/hooks</code>, and
+              approve the 6 <code>mterminal_*</code> entries. Until then
+              Codex blocks the lifecycle hooks and the dot stays yellow
+              after every turn.
             </div>
           )}
 

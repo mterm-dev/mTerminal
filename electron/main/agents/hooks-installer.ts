@@ -8,13 +8,12 @@
  *     while leaving any user-defined hooks alone.
  *
  *   - Codex: edits `~/.codex/config.toml` to add native lifecycle hooks
- *     (https://developers.openai.com/codex/hooks) — Codex now ships the
- *     same hook surface as Claude Code (verified in
- *     `codex-rs/hooks/src/events/`). We register Stop / UserPromptSubmit /
- *     SessionStart / PermissionRequest pointing at `mterminal-bridge.cjs`,
- *     and additionally drop a small MCP server block with
- *     `default_tools_approval_mode = "approve"` so any agent-callable tools
- *     skip the per-tool permission prompt.
+ *     (https://developers.openai.com/codex/hooks) — Codex ships the same
+ *     hook surface as Claude Code (verified in `codex-rs/hooks/src/events/`).
+ *     We register SessionStart / UserPromptSubmit / PreToolUse / PostToolUse
+ *     / PermissionRequest / Stop pointing at `mterminal-bridge.cjs`. No MCP
+ *     server is registered — hooks alone deliver every signal we need, and
+ *     adding an MCP tool just gives the model a reason to spam notifications.
  *
  * The bridge scripts ship inside the app — `getResourcePath()` resolves to
  * `<app>/out/main/resources/agent-bridge/<name>` in dev and inside
@@ -247,9 +246,6 @@ function buildCodexHookCommand(): string {
 export function installCodex(): void {
   const path = codexConfigPath()
   const cfg = readTomlSafe(path)
-  const { command, envExtra } = nodeBinary()
-  const mcpScript = getResourcePath('mterminal-mcp.cjs')
-  const sock = agentBridge.socketPath() || ''
 
   // Codex gates the hooks system behind a feature flag. Older builds called
   // it `codex_hooks`; current builds use `hooks` (the old name now warns
@@ -282,16 +278,13 @@ export function installCodex(): void {
     hooks[ev.key] = filtered
   }
 
-  // MCP server: passive — exists so future agent-callable tools (notify,
-  // open_url, etc.) work. `default_tools_approval_mode = "approve"` skips
-  // the per-tool permission prompt that user complained about.
-  if (!cfg.mcp_servers || typeof cfg.mcp_servers !== 'object') cfg.mcp_servers = {}
-  const servers = cfg.mcp_servers as Record<string, unknown>
-  servers.mterminal = {
-    command,
-    args: [mcpScript],
-    env: { ...envExtra, MTERMINAL_BRIDGE: sock, _MTERMINAL_VERSION: BRIDGE_VERSION },
-    default_tools_approval_mode: 'approve',
+  // Remove any legacy MCP server entry from previous installs. We used to
+  // ship one for status detection; hooks deliver everything now and the
+  // MCP tool only encouraged the model to spam notifications.
+  if (cfg.mcp_servers && typeof cfg.mcp_servers === 'object') {
+    const servers = cfg.mcp_servers as Record<string, unknown>
+    if (servers.mterminal) delete servers.mterminal
+    if (Object.keys(servers).length === 0) delete cfg.mcp_servers
   }
 
   writeToml(path, cfg)
@@ -327,28 +320,30 @@ export function uninstallCodex(): void {
 export function getCodexStatus(): 'missing' | 'installed' | 'mismatch' {
   const cfg = readTomlSafe(codexConfigPath())
   const hooks = cfg.hooks as CodexHookConfig | undefined
-  const servers = cfg.mcp_servers as Record<string, unknown> | undefined
-  const mcp = servers?.mterminal as { env?: Record<string, string> } | undefined
+  if (!hooks) return 'missing'
 
   let foundHook = false
   let hookOutdated = false
-  if (hooks) {
-    for (const ev of CODEX_LIFECYCLE_EVENTS) {
-      const list = hooks[ev.key]
-      if (!Array.isArray(list)) continue
-      for (const entry of list) {
-        if (entry._mterminal) {
-          foundHook = true
-          if (entry._mterminal !== BRIDGE_VERSION) hookOutdated = true
-        }
+  for (const ev of CODEX_LIFECYCLE_EVENTS) {
+    const list = hooks[ev.key]
+    if (!Array.isArray(list)) continue
+    for (const entry of list) {
+      if (entry._mterminal) {
+        foundHook = true
+        if (entry._mterminal !== BRIDGE_VERSION) hookOutdated = true
       }
     }
   }
 
-  if (!foundHook && !mcp) return 'missing'
+  if (!foundHook) return 'missing'
   if (hookOutdated) return 'mismatch'
-  if (mcp && mcp.env?._MTERMINAL_VERSION !== BRIDGE_VERSION) return 'mismatch'
-  return foundHook ? 'installed' : 'mismatch'
+
+  // Treat a stale MCP server entry from older builds as a soft mismatch so
+  // the user gets nudged to reinstall and clear it.
+  const servers = cfg.mcp_servers as Record<string, unknown> | undefined
+  if (servers?.mterminal) return 'mismatch'
+
+  return 'installed'
 }
 
 // ── IPC ────────────────────────────────────────────────────────────────────
