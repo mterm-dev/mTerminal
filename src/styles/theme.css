@@ -4682,6 +4682,51 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
   padding: 14px 18px 18px;
   container-type: inline-size;
   container-name: st-body;
+  min-width: 0;
+}
+.st-body > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.ext-custom-settings-container {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 360px;
+}
+.ext-custom-settings,
+.ext-custom-settings > * {
+  min-width: 0;
+  width: 100%;
+}
+
+/* keep aip-card content from being clipped inside .st-body's flex layout */
+.st-body .aip-card,
+.st-body .aip-card-body,
+.st-body .aip-card-h,
+.st-body .aip-row,
+.st-body .aip-row-control,
+.st-body .aip-source-toggle,
+.st-body .aip-source-opt,
+.st-body .aip-model-chooser,
+.st-body .aip-models,
+.st-body .settings-model-picker {
+  min-width: 0;
+}
+.st-body .aip-card {
+  width: 100%;
+  box-sizing: border-box;
+}
+.st-body .aip-source-opt {
+  overflow: hidden;
+}
+.st-body .aip-source-opt-title,
+.st-body .aip-source-opt-desc {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.st-body .aip-row-control {
+  flex-wrap: wrap;
 }
 .st-section-label {
   font-size: 10px;
