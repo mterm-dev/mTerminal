@@ -144,6 +144,7 @@ export function TerminalTab({
         !e.altKey &&
         !e.metaKey
       ) {
+        e.preventDefault();
         const id = ptyIdRef.current;
         const data = "\\\r";
         if (id == null) pendingInput.push(data);
