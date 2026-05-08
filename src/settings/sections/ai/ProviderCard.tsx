@@ -1,12 +1,8 @@
-import { useState } from "react";
 import type { AiProviderEntry } from "../../../extensions/registries/providers-ai";
-import type { ModelInfo } from "../../../hooks/useAI";
-import { listModels } from "../../../hooks/useAI";
 import { findCatalogEntry } from "./catalog";
 import type { AiProviderConfig } from "../../useSettings";
 import { ApiKeyInput } from "../../../components/ApiKeyInput";
-
-type ModelsState = ModelInfo[] | "loading" | "error" | undefined;
+import { ModelChooser } from "../../../extensions/components/ModelChooser";
 
 interface Props {
   entry: AiProviderEntry;
@@ -39,18 +35,6 @@ export function ProviderCard({
   const initials = catalog?.initials ?? entry.label.slice(0, 2);
   const requiresVault = entry.requiresVault !== false;
 
-  const [models, setModels] = useState<ModelsState>(undefined);
-
-  const fetchModels = async (): Promise<void> => {
-    setModels("loading");
-    try {
-      const list = await listModels(entry.id);
-      setModels(list.length === 0 ? "error" : list);
-    } catch {
-      setModels("error");
-    }
-  };
-
   let pill: { kind: "default" | "ok" | "warn" | "muted"; label: string };
   if (isDefault) pill = { kind: "default", label: "default" };
   else if (!requiresVault) pill = { kind: "muted", label: "no auth" };
@@ -82,37 +66,13 @@ export function ProviderCard({
 
         <div className="aip-row">
           <div className="aip-row-label">Model</div>
-          <div className="aip-row-control">
-            <input
-              type="text"
-              value={config.model ?? ""}
-              onChange={(e) => onModelChange(e.target.value)}
-              placeholder={catalog?.defaultModel ?? entry.models?.[0]?.id ?? "model id"}
-              spellCheck={false}
-            />
-            <button className="ghost-btn" onClick={() => void fetchModels()}>
-              {models === "loading" ? "…" : "list"}
-            </button>
-          </div>
-
-          {models === "error" && (
-            <div className="settings-note">failed to fetch models</div>
-          )}
-          {Array.isArray(models) && (
-            <div className="aip-models">
-              {models.slice(0, 16).map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={`aip-model-pill ${m.id === config.model ? "aip-model-active" : ""}`}
-                  title={m.name}
-                  onClick={() => onModelChange(m.id)}
-                >
-                  {m.id}
-                </button>
-              ))}
-            </div>
-          )}
+          <ModelChooser
+            providerId={entry.id}
+            fallbackModels={entry.models}
+            defaultModel={catalog?.defaultModel}
+            value={config.model ?? ""}
+            onChange={onModelChange}
+          />
         </div>
 
         {!requiresVault && (
