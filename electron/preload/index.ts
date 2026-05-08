@@ -157,6 +157,10 @@ const api = {
     requestPermission: (): Promise<'granted' | 'denied' | 'default'> =>
       ipcRenderer.invoke('notification:permission'),
   },
+  shell: {
+    openExternal: (url: string): Promise<boolean> =>
+      ipcRenderer.invoke('shell:open-external', url),
+  },
   workspace: {
     loadSync: (): string | null => {
       const v = ipcRenderer.sendSync('workspace:load:sync')

@@ -6,6 +6,7 @@ import {
   dialog,
   nativeImage,
   Notification,
+  shell,
   type OpenDialogOptions,
 } from 'electron'
 import path from 'node:path'
@@ -27,6 +28,7 @@ import {
 } from './extensions'
 import { registerMarketplaceHandlers } from './marketplace'
 import { runOneShotMarketplaceMigrations } from './extensions/migrations-marketplace'
+import { attachExternalLinkHandlers, isExternalUrl } from './external-links'
 
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('disable-features', 'WaylandWpColorManagerV1')
@@ -69,6 +71,8 @@ const createWindow = (): BrowserWindow => {
 
   mainWindow = win
 
+  attachExternalLinkHandlers(win)
+
   win.once('ready-to-show', () => win.show())
   win.on('maximize', () => win.webContents.send('window:maximized-changed', true))
   win.on('unmaximize', () => win.webContents.send('window:maximized-changed', false))
@@ -97,6 +101,7 @@ app
     registerClipboardIpc()
     registerDialogIpc()
     registerNotificationIpc()
+    registerShellIpc()
 
     registerPtyHandlers()
     registerVaultHandlers()
@@ -211,4 +216,12 @@ function registerNotificationIpc(): void {
     }
   )
   ipcMain.handle('notification:permission', () => 'granted' as const)
+}
+
+function registerShellIpc(): void {
+  ipcMain.handle('shell:open-external', async (_e, url: unknown) => {
+    if (!isExternalUrl(url)) return false
+    await shell.openExternal(url as string)
+    return true
+  })
 }
