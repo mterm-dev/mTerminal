@@ -46,9 +46,6 @@ function makeMt() {
         clear: vi.fn(async () => undefined),
       },
     },
-    claudeCode: {
-      status: vi.fn(async () => "idle"),
-    },
     mcp: {
       status: vi.fn(async () => ({ running: false })),
       start: vi.fn(async () => undefined),
@@ -158,11 +155,6 @@ describe("invoke routing", () => {
 
     await invoke("ai_vault_key_clear", { provider: "openai" });
     expect(mt.ai.vaultKey.clear).toHaveBeenCalledWith("openai");
-  });
-
-  it("claude_code_status", async () => {
-    await invoke("claude_code_status", { tabId: 5 });
-    expect(mt.claudeCode.status).toHaveBeenCalledWith(5);
   });
 
   it("mcp_server_*", async () => {

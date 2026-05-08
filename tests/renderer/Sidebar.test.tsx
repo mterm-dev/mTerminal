@@ -4,7 +4,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, createEvent } from "@testing-library/react";
 import { Sidebar } from "../../src/components/Sidebar";
 import type { Tab, Group } from "../../src/hooks/useWorkspace";
-import type { CcStatus } from "../../src/hooks/useClaudeCodeStatus";
+import type { AgentStatus } from "../../src/hooks/useAgentStatus";
 
 afterEach(() => {
   cleanup();
@@ -78,7 +78,7 @@ function renderSidebar(opts: {
   editingTabId?: number | null;
   editingGroupId?: string | null;
   activeGroupId?: string | null;
-  ccStatuses?: Map<number, CcStatus>;
+  agentStatuses?: Map<number, AgentStatus>;
   handlers?: Partial<Handlers>;
 } = {}) {
   const handlers = { ...makeHandlers(), ...(opts.handlers || {}) };
@@ -107,7 +107,7 @@ function renderSidebar(opts: {
       onSelectGroup={handlers.onSelectGroup}
       width={300}
       onResize={handlers.onResize}
-      ccStatuses={opts.ccStatuses}
+      agentStatuses={opts.agentStatuses}
     />,
   );
   return { ...utils, handlers };
@@ -458,54 +458,53 @@ describe("Sidebar - drag and drop", () => {
 describe("Sidebar - claude code status", () => {
   it("18. tab with awaitingInput cc status renders cc-badge with awaitingInput class and '!' glyph", () => {
     const tabs = [makeTab({ id: 1, label: "x" })];
-    const cc = new Map<number, CcStatus>([
+    const cc = new Map<number, AgentStatus>([
       [
         1,
         {
           state: "awaitingInput",
-          running: true,
-          binary: "claude",
-          lastActivityMs: 0,
+          agent: "claude",
+          lastChangeMs: Date.now(),
         },
       ],
     ]);
-    const { container } = renderSidebar({ tabs, ccStatuses: cc });
+    const { container } = renderSidebar({ tabs, agentStatuses: cc });
     const badge = container.querySelector(".cc-badge") as HTMLElement;
     expect(badge).toBeTruthy();
     expect(badge.className).toContain("cc-awaitingInput");
     expect(badge.textContent).toBe("!");
-    expect(badge.getAttribute("title")).toBe("claude code: awaitingInput");
+    expect(badge.getAttribute("title")).toBe("claude: awaitingInput");
   });
 
   it("19. tab with thinking cc status uses ◐ glyph", () => {
     const tabs = [makeTab({ id: 1, label: "x" })];
-    const cc = new Map<number, CcStatus>([
+    const cc = new Map<number, AgentStatus>([
       [
         1,
-        { state: "thinking", running: true, binary: "claude", lastActivityMs: 0 },
+        { state: "thinking", agent: "claude", lastChangeMs: Date.now() },
       ],
     ]);
-    const { container } = renderSidebar({ tabs, ccStatuses: cc });
+    const { container } = renderSidebar({ tabs, agentStatuses: cc });
     const badge = container.querySelector(".cc-badge")!;
     expect(badge.textContent).toBe("◐");
     expect(badge.className).toContain("cc-thinking");
   });
 
-  it("20. tab without a ccStatus entry renders no cc-badge", () => {
+  it("20. tab without an agent status entry renders no cc-badge", () => {
     const tabs = [makeTab({ id: 1, label: "x" })];
     const { container } = renderSidebar({ tabs });
     expect(container.querySelector(".cc-badge")).toBeNull();
   });
 
-  it("21. cc status with running=false renders no cc-badge", () => {
+  it("21. agent status with state=idle renders no cc-badge", () => {
     const tabs = [makeTab({ id: 1, label: "x" })];
-    const cc = new Map<number, CcStatus>([
+    const cc = new Map<number, AgentStatus>([
       [
         1,
-        { state: "idle", running: false, binary: null, lastActivityMs: null },
+        { state: "idle", agent: null, lastChangeMs: 0 },
       ],
     ]);
-    const { container } = renderSidebar({ tabs, ccStatuses: cc });
+    const { container } = renderSidebar({ tabs, agentStatuses: cc });
     expect(container.querySelector(".cc-badge")).toBeNull();
   });
 });
