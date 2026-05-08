@@ -47,6 +47,7 @@ import { insertDictation } from "./lib/insertDictation";
 import { publishTerminalOptions } from "./lib/terminal-options-broadcast";
 import {
   bootExtensionsHostRenderer,
+  getRendererEventBus,
   getTabTypeRegistry,
   getTerminalRegistry,
   setSettingsBackend,
@@ -482,46 +483,40 @@ function AppInner({
   useEffect(() => {
     const next = ws.activeId;
     const prev = prevActiveIdRef.current;
+    const bus = getRendererEventBus();
     if (next !== prev) {
       prevActiveIdRef.current = next;
       if (next != null) {
-        void window.mt.ext
-          .emit("app:tab:focused", { tabId: next, prevTabId: prev })
-          .catch(() => {});
+        bus.emit("app:tab:focused", { tabId: next, prevTabId: prev });
       }
     }
     const cwd = activeTab?.cwd ?? null;
     if (cwd !== prevCwdRef.current && next != null) {
       prevCwdRef.current = cwd;
       if (cwd) {
-        void window.mt.ext
-          .emit("app:cwd:changed", { tabId: next, cwd })
-          .catch(() => {});
+        bus.emit("app:cwd:changed", { tabId: next, cwd });
       }
     }
-    // Diff the previous and current tab id sets to emit created/closed.
     const cur = new Set(ws.tabs.map((t) => t.id));
     for (const id of cur) {
       if (!prevTabIdsRef.current.has(id)) {
         const tab = ws.tabs.find((t) => t.id === id);
         if (tab) {
-          void window.mt.ext
-            .emit("app:tab:created", {
-              tab: {
-                id: tab.id,
-                type: "terminal",
-                title: tab.label,
-                groupId: tab.groupId,
-                active: tab.id === ws.activeId,
-              },
-            })
-            .catch(() => {});
+          bus.emit("app:tab:created", {
+            tab: {
+              id: tab.id,
+              type: "terminal",
+              title: tab.label,
+              groupId: tab.groupId,
+              active: tab.id === ws.activeId,
+            },
+          });
         }
       }
     }
     for (const id of prevTabIdsRef.current) {
       if (!cur.has(id)) {
-        void window.mt.ext.emit("app:tab:closed", { tabId: id }).catch(() => {});
+        bus.emit("app:tab:closed", { tabId: id });
       }
     }
     prevTabIdsRef.current = cur;
@@ -531,9 +526,7 @@ function AppInner({
   const prevThemeRef = useRef<string | null>(null);
   useEffect(() => {
     if (prevThemeRef.current !== null && prevThemeRef.current !== settings.themeId) {
-      void window.mt.ext
-        .emit("app:theme:changed", { themeId: settings.themeId })
-        .catch(() => {});
+      getRendererEventBus().emit("app:theme:changed", { themeId: settings.themeId });
     }
     prevThemeRef.current = settings.themeId;
   }, [settings.themeId]);
@@ -547,11 +540,10 @@ function AppInner({
     const prev = prevSettingsRef.current as unknown as Record<string, unknown>;
     const cur = settings as unknown as Record<string, unknown>;
     if (prev !== cur) {
+      const bus = getRendererEventBus();
       for (const key of Object.keys(cur)) {
         if (prev[key] !== cur[key]) {
-          void window.mt.ext
-            .emit("app:settings:changed", { key, value: cur[key] })
-            .catch(() => {});
+          bus.emit("app:settings:changed", { key, value: cur[key] });
         }
       }
       prevSettingsRef.current = settings;
