@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAI, type AiUsage } from "../hooks/useAI";
+import { useHasAiProviders } from "../lib/ai-availability";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { CodeBlock } from "./CodeBlock";
 import { MarkdownLite } from "../lib/markdown-lite";
@@ -32,12 +33,18 @@ export function ExplainPopover({
   onUsage,
 }: Props) {
   const { complete } = useAI();
+  const hasProviders = useHasAiProviders();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const cancelRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
+    if (!hasProviders) {
+      setError("No AI provider installed. Install one from Settings → AI.");
+      setBusy(false);
+      return;
+    }
     let active = true;
     const start = async () => {
       try {
@@ -78,7 +85,7 @@ export function ExplainPopover({
       active = false;
       cancelRef.current?.().catch(() => {});
     };
-  }, [selection]);
+  }, [selection, hasProviders]);
 
   useEscapeKey(onClose);
 

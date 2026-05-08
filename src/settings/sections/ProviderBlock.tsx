@@ -1,9 +1,9 @@
-import type { AiProviderId } from "../useSettings";
 import type { ModelInfo } from "../../hooks/useAI";
 
 interface Props {
   label: string;
-  provider: AiProviderId;
+  /** Dynamic provider id — comes from the registered AI provider extension. */
+  provider: string;
   hasKey: boolean;
   vaultUnlocked: boolean;
   modelValue: string;
@@ -19,6 +19,7 @@ interface Props {
   onClearKey?: () => void;
   modelsState?: ModelInfo[] | "loading" | "error";
   onFetchModels: () => void;
+  /** When true, hide the API key controls entirely (e.g. local Ollama). */
   noKeyNeeded?: boolean;
   onRequestVault?: () => void;
 }

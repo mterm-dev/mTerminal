@@ -6,11 +6,17 @@
  *   - AiBindingCard (extension AI bindings flow)
  *   - AIPanel (core "Default provider" + active model)
  *
+ * Provider list is dynamic — it comes from whichever AI provider extensions
+ * the user has installed. Empty registry = empty seg-control + an empty-state
+ * note.
+ *
  * Pure presentation — no settings reads. Caller passes in current values and
  * gets back a single `onChange` patch with whatever changed.
  */
 
-export type AiProviderId = "anthropic" | "openai" | "ollama";
+import { useAiProviders } from "../../lib/ai-availability";
+
+export type AiProviderId = string;
 
 export interface ModelPickerValue {
   provider: AiProviderId;
@@ -18,62 +24,63 @@ export interface ModelPickerValue {
   baseUrl?: string;
 }
 
-const DEFAULT_PROVIDERS: AiProviderId[] = ["anthropic", "openai", "ollama"];
-const PROVIDER_LABELS: Record<AiProviderId, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  ollama: "Ollama",
-};
-const DEFAULT_MODELS: Record<AiProviderId, string> = {
-  anthropic: "claude-sonnet-4-5",
-  openai: "gpt-4o-mini",
-  ollama: "llama3.1",
-};
-const DEFAULT_BASE_URLS: Record<AiProviderId, string> = {
-  anthropic: "",
-  openai: "https://api.openai.com/v1",
-  ollama: "http://localhost:11434",
-};
-
 interface Props {
+  /** Optional whitelist of provider ids to show. Default: every registered provider. */
   providers?: AiProviderId[];
   value: ModelPickerValue;
   onChange: (next: ModelPickerValue) => void;
   /** Optional defaults per provider — used when user switches providers. */
-  defaultModels?: Partial<Record<AiProviderId, string>>;
-  /** Show the base URL row for openai/ollama. Default true. */
+  defaultModels?: Record<string, string>;
+  /** Show the base URL row. Default: only when the provider has a baseUrl currently set. */
   showBaseUrl?: boolean;
 }
 
 export function ModelPicker({
-  providers = DEFAULT_PROVIDERS,
+  providers,
   value,
   onChange,
   defaultModels,
-  showBaseUrl = true,
+  showBaseUrl,
 }: Props) {
-  const showBase =
-    showBaseUrl && (value.provider === "openai" || value.provider === "ollama");
+  const all = useAiProviders();
+  const filtered = providers ? all.filter((p) => providers.includes(p.id)) : all;
 
-  const switchProvider = (p: AiProviderId): void => {
+  const current = filtered.find((p) => p.id === value.provider);
+  const showBase =
+    showBaseUrl !== undefined ? showBaseUrl : value.baseUrl !== undefined && value.baseUrl !== "";
+
+  const switchProvider = (id: string): void => {
+    const target = filtered.find((p) => p.id === id);
+    const fallbackModel =
+      defaultModels?.[id] ?? target?.models?.[0]?.id ?? "";
     onChange({
-      provider: p,
-      model: defaultModels?.[p] ?? DEFAULT_MODELS[p],
-      baseUrl: DEFAULT_BASE_URLS[p] || undefined,
+      provider: id,
+      model: fallbackModel,
+      baseUrl: undefined,
     });
   };
+
+  if (filtered.length === 0) {
+    return (
+      <div className="settings-model-picker">
+        <div className="settings-note">
+          No AI providers installed. Install one from Settings → AI.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="settings-model-picker">
       <div className="seg-control">
-        {providers.map((p) => (
+        {filtered.map((p) => (
           <button
-            key={p}
+            key={p.id}
             type="button"
-            className={value.provider === p ? "active" : ""}
-            onClick={() => switchProvider(p)}
+            className={value.provider === p.id ? "active" : ""}
+            onClick={() => switchProvider(p.id)}
           >
-            {PROVIDER_LABELS[p]}
+            {p.label}
           </button>
         ))}
       </div>
@@ -82,7 +89,9 @@ export function ModelPicker({
           type="text"
           value={value.model}
           spellCheck={false}
-          placeholder={DEFAULT_MODELS[value.provider]}
+          placeholder={
+            current?.models?.[0]?.id ?? "model id"
+          }
           onChange={(e) => onChange({ ...value, model: e.target.value })}
         />
       </div>
@@ -92,7 +101,7 @@ export function ModelPicker({
             type="text"
             value={value.baseUrl ?? ""}
             spellCheck={false}
-            placeholder={DEFAULT_BASE_URLS[value.provider]}
+            placeholder="base url"
             onChange={(e) => onChange({ ...value, baseUrl: e.target.value })}
           />
         </div>

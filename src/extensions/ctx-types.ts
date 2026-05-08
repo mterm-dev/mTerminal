@@ -264,11 +264,22 @@ export interface ExtIpc {
   on(channel: string, cb: (payload: unknown) => void): Disposable
 }
 
+export interface AiProviderInfoLite {
+  id: string
+  label: string
+  source: 'core' | string
+  models?: Array<{ id: string; label?: string }>
+  requiresVault?: boolean
+  vaultKeyPath?: string
+}
+
 export interface AiApi {
   complete(req: unknown): Promise<{ text: string; usage: unknown }>
   stream(req: unknown): AsyncIterable<unknown>
   registerProvider(p: unknown): Disposable
-  listProviders(): Array<{ id: string; label: string; source: 'core' | string }>
+  listProviders(): AiProviderInfoLite[]
+  /** @since mterminal-api 1.4.0 */
+  getSdk<T = unknown>(providerId: string): T | null
 }
 
 export interface GitApi {

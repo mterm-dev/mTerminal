@@ -126,8 +126,6 @@ export interface ProviderContribution {
   label: string
 }
 
-export type AiProviderId = 'anthropic' | 'openai' | 'ollama'
-
 /**
  * Declares an AI workflow an extension needs configured (e.g. one binding
  * per "feature that calls an LLM"). The host renders a polished card per
@@ -135,6 +133,9 @@ export type AiProviderId = 'anthropic' | 'openai' | 'ollama'
  *   - segmented control: "Use mTerminal AI" (vault-backed) vs "Custom keys"
  *   - provider dropdown / model input / base URL
  *   - password input for the API key (custom mode), wired to `ctx.secrets`
+ *
+ * Provider ids are dynamic strings — they correspond to whatever AI provider
+ * extensions the user has installed (`registerProvider({ id })`).
  *
  * At runtime the extension reads the chosen config via `ctx.settings.get`
  * (key `ai.binding.<id>`) and the secret via `ctx.secrets.get`.
@@ -145,9 +146,12 @@ export interface AiBindingContribution {
   description?: string
   /** Default true. When false the binding is "custom keys only". */
   supportsCore?: boolean
-  providers?: AiProviderId[]
-  defaultProvider?: AiProviderId
-  defaultModels?: Partial<Record<AiProviderId, string>>
+  /** Restrict to a subset of provider ids. Default: all installed providers. */
+  providers?: string[]
+  /** Default provider id when nothing has been chosen yet. */
+  defaultProvider?: string
+  /** Default model per provider id. */
+  defaultModels?: Record<string, string>
 }
 
 /**
@@ -636,15 +640,40 @@ export interface AiProviderImpl {
   id: string
   label: string
   models?: Array<{ id: string; label?: string }>
+  /** Default true. When false, no vault-stored API key is required (e.g. local Ollama). */
+  requiresVault?: boolean
+  /** Vault path where the API key lives, e.g. 'ai_keys.anthropic'. */
+  vaultKeyPath?: string
+  /** Optional dynamic model fetch — powers the "refresh models" button in Settings. */
+  listModels?(): Promise<Array<{ id: string; label?: string }>>
   complete(req: AiStreamReq): Promise<{ text: string; usage: AiUsage }>
   stream?(req: AiStreamReq): AsyncIterable<AiDelta>
+}
+
+export interface AiProviderInfo {
+  id: string
+  label: string
+  source: 'core' | string
+  models?: Array<{ id: string; label?: string }>
+  requiresVault?: boolean
+  vaultKeyPath?: string
 }
 
 export interface AiApi {
   complete(req: AiStreamReq): Promise<{ text: string; usage: AiUsage }>
   stream(req: AiStreamReq): AsyncIterable<AiDelta>
   registerProvider(p: AiProviderImpl): Disposable
-  listProviders(): Array<{ id: string; label: string; source: 'core' | string }>
+  listProviders(): AiProviderInfo[]
+  /**
+   * Returns the live SDK client published by an AI provider extension as the
+   * service `ai.sdk.<providerId>`, or null if the provider is not active.
+   * Bypasses the manifest `consumedServices` declaration — escape hatch for
+   * casual consumers. For typed access with proper service lifecycle, declare
+   * `consumedServices: { 'ai.sdk.<id>': { versionRange: '^1.0.0' } }` and use
+   * `ctx.services['ai.sdk.<id>']`.
+   * @since mterminal-api 1.4.0
+   */
+  getSdk<T = unknown>(providerId: string): T | null
 }
 
 export interface GitStatusEntry {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "../lib/ipc";
 import { useAI, type AiMessage, type AiUsage } from "../hooks/useAI";
+import { useHasAiProviders } from "../lib/ai-availability";
 import { MarkdownLite } from "../lib/markdown-lite";
 
 interface Props {
@@ -32,6 +33,7 @@ export function AIPanel({
   onUsage,
 }: Props) {
   const { complete } = useAI();
+  const hasProviders = useHasAiProviders();
   const [historyByTab, setHistoryByTab] = useState<Map<number | null, AiMessage[]>>(new Map());
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -147,7 +149,13 @@ export function AIPanel({
         </div>
       </div>
       <div className="ai-panel-msgs" ref={scrollRef}>
-        {history.length === 0 && !streamBuf && (
+        {!hasProviders && (
+          <div className="ai-panel-empty">
+            no AI provider installed — open Settings → AI and install one of the
+            SDK extensions (Anthropic, OpenAI Codex, Ollama) to enable chat.
+          </div>
+        )}
+        {hasProviders && history.length === 0 && !streamBuf && (
           <div className="ai-panel-empty">
             ask anything about the active terminal. {attachContext ? "context attached." : ""}
           </div>
@@ -174,7 +182,7 @@ export function AIPanel({
       <div className="ai-panel-input">
         <textarea
           value={draft}
-          placeholder="message..."
+          placeholder={hasProviders ? "message..." : "install a provider to chat"}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -183,8 +191,13 @@ export function AIPanel({
             }
           }}
           rows={2}
+          disabled={!hasProviders}
         />
-        <button className="ghost-btn" onClick={send} disabled={busy || !draft.trim()}>
+        <button
+          className="ghost-btn"
+          onClick={send}
+          disabled={!hasProviders || busy || !draft.trim()}
+        >
           {busy ? "…" : "send"}
         </button>
       </div>

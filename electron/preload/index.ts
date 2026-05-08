@@ -47,60 +47,19 @@ const api = {
     devReset: (): Promise<void> => ipcRenderer.invoke('vault:dev-reset'),
   },
   ai: {
-    streamComplete: (args: {
-      provider: string
-      model: string
-      messages: Array<{ role: string; content: string }>
-      system?: string
-      maxTokens?: number
-      temperature?: number
-      topP?: number
-      baseUrl?: string
-    }): Promise<number> => ipcRenderer.invoke('ai:stream-complete', args),
-    cancel: (taskId: number): Promise<void> =>
-      ipcRenderer.invoke('ai:cancel', { taskId }),
-    listModels: (
-      provider: string,
-      baseUrl?: string
-    ): Promise<Array<{ id: string; name: string }>> =>
-      ipcRenderer.invoke('ai:list-models', { provider, baseUrl }),
-    setKey: (provider: string, key: string): Promise<void> =>
-      ipcRenderer.invoke('ai:set-key', { provider, key }),
-    clearKey: (provider: string): Promise<void> =>
-      ipcRenderer.invoke('ai:clear-key', { provider }),
-    hasKey: (provider: string): Promise<boolean> =>
-      ipcRenderer.invoke('ai:has-key', { provider }),
-    onEvent: (
-      taskId: number,
-      cb: (
-        ev:
-          | { kind: 'delta'; value: string }
-          | {
-              kind: 'done'
-              value: { inTokens: number; outTokens: number; costUsd: number }
-            }
-          | { kind: 'error'; value: string }
-      ) => void
-    ): (() => void) => {
-      const channel = 'ai:event:' + taskId
-      const listener = (_: unknown, ev: unknown): void =>
-        cb(
-          ev as
-            | { kind: 'delta'; value: string }
-            | {
-                kind: 'done'
-                value: {
-                  inTokens: number
-                  outTokens: number
-                  costUsd: number
-                }
-              }
-            | { kind: 'error'; value: string }
-        )
-      ipcRenderer.on(channel, listener)
-      return () => {
-        ipcRenderer.off(channel, listener)
-      }
+    /**
+     * Encrypted per-provider API key storage. Reads/writes go through the
+     * vault (Argon2id + XChaCha20-Poly1305) and require it to be unlocked.
+     * Provider id is whatever the AI provider extension registered with —
+     * commonly "anthropic", "openai-codex", or any custom marketplace plugin.
+     */
+    vaultKey: {
+      has: (provider: string): Promise<boolean> =>
+        ipcRenderer.invoke('ai:vault-key:has', { provider }),
+      set: (provider: string, key: string): Promise<void> =>
+        ipcRenderer.invoke('ai:vault-key:set', { provider, key }),
+      clear: (provider: string): Promise<void> =>
+        ipcRenderer.invoke('ai:vault-key:clear', { provider }),
     },
   },
   claudeCode: {

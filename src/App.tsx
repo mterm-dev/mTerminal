@@ -36,6 +36,7 @@ import { AIPanel } from "./components/AIPanel";
 // extensions/git-panel/. Sidebar.tsx mounts plugin panels via PluginPanelSlot.
 import { invoke, open as openDialog } from "./lib/ipc";
 import type { AiUsage } from "./hooks/useAI";
+import { getAiProviderRegistry } from "./extensions/registries/providers-ai";
 import { computeGridLayout, computeOccupancy, defaultSizes } from "./lib/grid-layout";
 import { useSettings } from "./settings/useSettings";
 import { findTheme } from "./settings/themes";
@@ -230,7 +231,8 @@ function AppInner({
       }
       setShowPalette(true);
     };
-    const needsVault = settings.aiDefaultProvider !== "ollama";
+    const needsVault =
+      getAiProviderRegistry().get(settings.aiDefaultProvider)?.requiresVault === true;
     if (needsVault && !ensureVaultUnlocked(() => { void doOpen(); })) return;
     await doOpen();
   }, [
@@ -258,7 +260,8 @@ function AppInner({
         const tab = ws.tabs.find((t) => t.id === tabId);
         setExplainState({ selection, context, cwd: tab?.cwd });
       };
-      const needsVault = settings.aiDefaultProvider !== "ollama";
+      const needsVault =
+      getAiProviderRegistry().get(settings.aiDefaultProvider)?.requiresVault === true;
       if (needsVault && !ensureVaultUnlocked(() => { void doOpen(); })) return;
       await doOpen();
     },
@@ -273,18 +276,9 @@ function AppInner({
   );
 
   const aiProvider = settings.aiDefaultProvider;
-  const aiModel =
-    aiProvider === "anthropic"
-      ? settings.aiAnthropicModel
-      : aiProvider === "openai"
-        ? settings.aiOpenaiModel
-        : settings.aiOllamaModel;
-  const aiBaseUrl =
-    aiProvider === "openai"
-      ? settings.aiOpenaiBaseUrl
-      : aiProvider === "ollama"
-        ? settings.aiOllamaBaseUrl
-        : undefined;
+  const aiProviderCfg = settings.aiProviderConfig?.[aiProvider];
+  const aiModel = aiProviderCfg?.model ?? "";
+  const aiBaseUrl = aiProviderCfg?.baseUrl || undefined;
   const tabsRef = useRef(ws.tabs);
   tabsRef.current = ws.tabs;
   const settingsRef = useRef(settings);
@@ -849,7 +843,8 @@ function AppInner({
       return;
     }
     const doOpen = () => update("aiPanelOpen", true);
-    const needsVault = settings.aiDefaultProvider !== "ollama";
+    const needsVault =
+      getAiProviderRegistry().get(settings.aiDefaultProvider)?.requiresVault === true;
     if (needsVault && !ensureVaultUnlocked(doOpen)) return;
     doOpen();
   }, [

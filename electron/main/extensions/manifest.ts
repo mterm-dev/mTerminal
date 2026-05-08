@@ -87,8 +87,6 @@ export interface ProviderContribution {
   label: string
 }
 
-export type AiProviderId = 'anthropic' | 'openai' | 'ollama'
-
 export interface AiBindingContribution {
   /** Stable id for this AI workflow inside the extension (e.g. "commit"). */
   id: string
@@ -97,16 +95,16 @@ export interface AiBindingContribution {
   /** Optional explainer rendered under the title. */
   description?: string
   /**
-   * If true, the user can pick "Use mTerminal AI" (host-managed providers,
-   * vault-backed keys). Default: true.
+   * If true, the user can pick "Use mTerminal AI" (provider extensions
+   * routed through the registry). Default: true.
    */
   supportsCore?: boolean
-  /** Restrict to a subset of providers. Default: all three. */
-  providers?: AiProviderId[]
-  /** Default provider when nothing has been chosen yet. */
-  defaultProvider?: AiProviderId
-  /** Default model per provider. */
-  defaultModels?: Partial<Record<AiProviderId, string>>
+  /** Restrict to a subset of provider ids. Default: all installed providers. */
+  providers?: string[]
+  /** Default provider id when nothing has been chosen yet. */
+  defaultProvider?: string
+  /** Default model per provider id. */
+  defaultModels?: Record<string, string>
 }
 
 export interface SecretContribution {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Field } from "../../settings/sections/_shared";
-import { ModelPicker, type AiProviderId } from "./ModelPicker";
+import { ModelPicker } from "./ModelPicker";
+import { useAiProviders } from "../../lib/ai-availability";
 
 /**
  * Shared "AI provider configurator" card.
@@ -9,6 +10,10 @@ import { ModelPicker, type AiProviderId } from "./ModelPicker";
  * extension's `contributes.aiBindings`. Visually plain — uses the same
  * `.settings-field` / `.seg-control` / `.ghost-btn` primitives as the rest
  * of the Settings modal so it doesn't stand out as a foreign component.
+ *
+ * After the SDK-as-extension refactor the provider list is dynamic. The
+ * binding declares an optional whitelist of provider ids; the card filters
+ * the live registry against that whitelist (or shows everything installed).
  *
  * Storage:
  *   - config (source / provider / model / baseUrl) lives under
@@ -22,47 +27,35 @@ export interface AiBindingSpec {
   label: string;
   description?: string;
   supportsCore?: boolean;
-  providers?: AiProviderId[];
-  defaultProvider?: AiProviderId;
-  defaultModels?: Partial<Record<AiProviderId, string>>;
+  /** Optional whitelist of provider ids. */
+  providers?: string[];
+  defaultProvider?: string;
+  defaultModels?: Record<string, string>;
 }
 
 export interface AiBindingConfig {
   source: "core" | "custom";
-  provider: AiProviderId;
+  provider: string;
   model: string;
   baseUrl?: string;
 }
-
-const DEFAULT_PROVIDERS: AiProviderId[] = ["anthropic", "openai", "ollama"];
-const DEFAULT_MODELS: Record<AiProviderId, string> = {
-  anthropic: "claude-sonnet-4-5",
-  openai: "gpt-4o-mini",
-  ollama: "llama3.1",
-};
-const DEFAULT_BASE_URLS: Record<AiProviderId, string> = {
-  anthropic: "",
-  openai: "https://api.openai.com/v1",
-  ollama: "http://localhost:11434",
-};
 
 export function settingsKeyFor(bindingId: string): string {
   return `ai.binding.${bindingId}`;
 }
 
-export function secretKeyFor(bindingId: string, provider: AiProviderId): string {
+export function secretKeyFor(bindingId: string, provider: string): string {
   return `ai.${bindingId}.${provider}.apiKey`;
 }
 
-export function defaultConfigFor(spec: AiBindingSpec): AiBindingConfig {
-  const providers = spec.providers ?? DEFAULT_PROVIDERS;
-  const provider = spec.defaultProvider ?? providers[0] ?? "anthropic";
-  const model = spec.defaultModels?.[provider] ?? DEFAULT_MODELS[provider];
+export function defaultConfigFor(spec: AiBindingSpec, fallbackProviderId?: string): AiBindingConfig {
+  const provider = spec.defaultProvider ?? spec.providers?.[0] ?? fallbackProviderId ?? "";
+  const model = (provider && spec.defaultModels?.[provider]) ?? "";
   return {
     source: spec.supportsCore === false ? "custom" : "core",
     provider,
     model,
-    baseUrl: DEFAULT_BASE_URLS[provider] || undefined,
+    baseUrl: undefined,
   };
 }
 
@@ -74,10 +67,27 @@ interface Props {
 }
 
 export function AiBindingCard({ extId, spec, value, onChange }: Props) {
-  const cfg = normalize(value, spec);
+  const allProviders = useAiProviders();
+  const filtered = spec.providers
+    ? allProviders.filter((p) => spec.providers!.includes(p.id))
+    : allProviders;
+  const cfg = normalize(value, spec, filtered.map((p) => p.id));
   const allowsCore = spec.supportsCore !== false;
-  const providers = spec.providers ?? DEFAULT_PROVIDERS;
-  const providerNeedsKey = cfg.provider === "anthropic" || cfg.provider === "openai";
+  const currentProvider = filtered.find((p) => p.id === cfg.provider);
+  const providerNeedsKey = currentProvider?.requiresVault === true;
+
+  if (filtered.length === 0) {
+    return (
+      <div className="ai-binding-group">
+        <div className="settings-section-h">{spec.label}</div>
+        <div className="settings-note">
+          {spec.providers && spec.providers.length > 0
+            ? `This binding wants one of: ${spec.providers.join(", ")}. Install the matching AI provider extension from Settings → AI.`
+            : "No AI providers installed. Install one from Settings → AI."}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ai-binding-group">
@@ -109,7 +119,7 @@ export function AiBindingCard({ extId, spec, value, onChange }: Props) {
         hint={spec.description ?? "Pick a provider and the exact model id"}
       >
         <ModelPicker
-          providers={providers}
+          providers={filtered.map((p) => p.id)}
           value={{ provider: cfg.provider, model: cfg.model, baseUrl: cfg.baseUrl }}
           defaultModels={spec.defaultModels}
           onChange={(v) =>
@@ -137,10 +147,10 @@ export function AiBindingCard({ extId, spec, value, onChange }: Props) {
           unlocked.
         </div>
       )}
-      {cfg.source === "custom" && cfg.provider === "ollama" && (
+      {cfg.source === "custom" && !providerNeedsKey && (
         <div className="settings-note">
-          Ollama runs locally — no API key required. Make sure{" "}
-          <code>{cfg.baseUrl || DEFAULT_BASE_URLS.ollama}</code> is reachable.
+          {currentProvider?.label} doesn't need an API key (e.g. local Ollama).
+          Configure base URL via the provider's own settings card.
         </div>
       )}
     </div>
@@ -154,7 +164,7 @@ function ApiKeyField({
 }: {
   extId: string;
   bindingId: string;
-  provider: AiProviderId;
+  provider: string;
 }) {
   const key = secretKeyFor(bindingId, provider);
   const [value, setValue] = useState<string>("");
@@ -221,8 +231,6 @@ function ApiKeyField({
     }
   };
 
-  const placeholder = provider === "anthropic" ? "sk-ant-…" : "sk-…";
-
   return (
     <Field
       label="API key"
@@ -237,7 +245,7 @@ function ApiKeyField({
           <input
             type={reveal ? "text" : "password"}
             value={value}
-            placeholder={stored ? "(stored)" : placeholder}
+            placeholder={stored ? "(stored)" : "paste API key"}
             autoComplete="off"
             spellCheck={false}
             onChange={(e) => {
@@ -279,11 +287,11 @@ function ApiKeyField({
 function normalize(
   v: AiBindingConfig | undefined,
   spec: AiBindingSpec,
+  availableIds: string[],
 ): AiBindingConfig {
-  const base = defaultConfigFor(spec);
+  const base = defaultConfigFor(spec, availableIds[0]);
   if (!v || typeof v !== "object") return base;
-  const providers = spec.providers ?? DEFAULT_PROVIDERS;
-  const provider = providers.includes(v.provider) ? v.provider : base.provider;
+  const provider = availableIds.includes(v.provider) ? v.provider : base.provider;
   return {
     source: spec.supportsCore === false ? "custom" : v.source === "custom" ? "custom" : "core",
     provider,

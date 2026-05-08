@@ -23,7 +23,7 @@ export function VoicePanel({
       return;
     }
     try {
-      const ok = await invoke<boolean>("ai_has_key", { provider: VOICE_KEY_PROVIDER });
+      const ok = await invoke<boolean>("ai_vault_key_has", { provider: VOICE_KEY_PROVIDER });
       setHasVoiceKey(!!ok);
     } catch {
       setHasVoiceKey(false);
@@ -37,14 +37,14 @@ export function VoicePanel({
   const submitKey = async () => {
     const v = keyDraft.trim();
     if (!v) return;
-    await invoke("ai_set_key", { provider: VOICE_KEY_PROVIDER, key: v });
+    await invoke("ai_vault_key_set", { provider: VOICE_KEY_PROVIDER, key: v });
     setKeyDraft("");
     setKeyDraftActive(false);
     await refreshKey();
   };
 
   const clearKey = async () => {
-    await invoke("ai_clear_key", { provider: VOICE_KEY_PROVIDER });
+    await invoke("ai_vault_key_clear", { provider: VOICE_KEY_PROVIDER });
     await refreshKey();
   };
 

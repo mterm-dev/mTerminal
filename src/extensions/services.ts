@@ -80,6 +80,10 @@ class ProxyImpl<T> implements ServiceProxy<T> {
 export class RendererServiceRegistry {
   private services = new Map<string, ServiceRecord[]>()
   private pending = new Map<string, PendingConsumer[]>()
+  /** Tracks which proxies are bound to which record so dispose+republish can rebind. */
+  private boundProxies = new Map<ServiceRecord, Set<ProxyImpl<unknown>>>()
+  /** Versioned consumer specs so we can re-resolve a proxy after its record disappears. */
+  private proxySpec = new WeakMap<ProxyImpl<unknown>, { id: string; versionRange: string }>()
 
   consume(
     extId: string,
@@ -91,9 +95,10 @@ export class RendererServiceRegistry {
     for (const [id, spec] of Object.entries(consumed)) {
       const proxy = new ProxyImpl(id)
       proxies[id] = proxy
+      this.proxySpec.set(proxy, { id, versionRange: spec.versionRange })
       const match = this.findBest(id, spec.versionRange)
       if (match) {
-        proxy.bind(match)
+        this.bindProxy(proxy, match)
       } else {
         const entry: PendingConsumer = {
           extId,
@@ -117,7 +122,10 @@ export class RendererServiceRegistry {
           const i = list.indexOf(entry)
           if (i >= 0) list.splice(i, 1)
         }
-        for (const proxy of Object.values(proxies)) proxy.unbind()
+        for (const proxy of Object.values(proxies)) {
+          this.releaseProxy(proxy)
+          proxy.unbind()
+        }
       },
     }
   }
@@ -130,7 +138,7 @@ export class RendererServiceRegistry {
     const remaining: PendingConsumer[] = []
     for (const consumer of pending) {
       if (satisfies(record.version, consumer.versionRange)) {
-        consumer.proxy.bind(record)
+        this.bindProxy(consumer.proxy, record)
       } else {
         remaining.push(consumer)
       }
@@ -142,7 +150,53 @@ export class RendererServiceRegistry {
       const i = arr.indexOf(record)
       if (i < 0) return
       arr.splice(i, 1)
+      // Rebind any consumers that were bound to this record onto another
+      // matching record (or back to pending). Critical for "republish on key
+      // rotation" — without this, consumers keep a reference to the now-stale
+      // SDK client that the provider extension just disposed.
+      const bound = this.boundProxies.get(record)
+      this.boundProxies.delete(record)
+      if (!bound) return
+      for (const proxy of bound) {
+        const spec = this.proxySpec.get(proxy)
+        if (!spec) {
+          proxy.unbind()
+          continue
+        }
+        const next = this.findBest(spec.id, spec.versionRange)
+        if (next) {
+          this.bindProxy(proxy, next)
+        } else {
+          proxy.unbind()
+          const list = this.pending.get(spec.id) ?? []
+          list.push({
+            extId: '',
+            versionRange: spec.versionRange,
+            optional: false,
+            proxy,
+          })
+          this.pending.set(spec.id, list)
+        }
+      }
     }
+  }
+
+  private bindProxy(proxy: ProxyImpl<unknown>, record: ServiceRecord): void {
+    // If proxy was already bound to another record, drop it from that set first.
+    for (const [rec, set] of this.boundProxies) {
+      if (set.has(proxy) && rec !== record) set.delete(proxy)
+    }
+    let set = this.boundProxies.get(record)
+    if (!set) {
+      set = new Set()
+      this.boundProxies.set(record, set)
+    }
+    set.add(proxy)
+    proxy.bind(record)
+  }
+
+  private releaseProxy(proxy: ProxyImpl<unknown>): void {
+    for (const set of this.boundProxies.values()) set.delete(proxy)
   }
 
   private findBest(id: string, range: string): ServiceRecord | undefined {
@@ -154,6 +208,21 @@ export class RendererServiceRegistry {
       if (!best || rec.version > best.version) best = rec
     }
     return best
+  }
+
+  /**
+   * Highest-version registered impl for a service id, or null. Used by
+   * `ctx.ai.getSdk(<id>)` as an escape hatch — bypasses the manifest
+   * `consumedServices` declaration.
+   */
+  peekImpl<T = unknown>(id: string): T | null {
+    const arr = this.services.get(id)
+    if (!arr || arr.length === 0) return null
+    let best: ServiceRecord | undefined
+    for (const rec of arr) {
+      if (!best || rec.version > best.version) best = rec
+    }
+    return (best?.impl as T) ?? null
   }
 }
 

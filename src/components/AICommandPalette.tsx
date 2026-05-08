@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAI } from "../hooks/useAI";
+import { useHasAiProviders } from "../lib/ai-availability";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { CodeBlock } from "./CodeBlock";
 
@@ -47,6 +48,7 @@ export function AICommandPalette({
   onUsage,
 }: Props) {
   const { complete } = useAI();
+  const hasProviders = useHasAiProviders();
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,18 +111,30 @@ export function AICommandPalette({
         <div className="ai-palette-h">
           <span>ai command</span>
           <span className="ai-palette-meta">
-            {defaultProvider} · {defaultModel}
+            {hasProviders ? `${defaultProvider} · ${defaultModel}` : "no provider installed"}
           </span>
         </div>
+        {!hasProviders && (
+          <div className="ai-palette-error">
+            Install an AI provider extension in Settings → AI to use the
+            command palette.
+          </div>
+        )}
         <input
           autoFocus
           type="text"
           value={prompt}
-          placeholder="describe what you want — eg. find all files larger than 100MB"
+          placeholder={
+            hasProviders
+              ? "describe what you want — eg. find all files larger than 100MB"
+              : "install an AI provider first"
+          }
+          disabled={!hasProviders}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
+              if (!hasProviders) return;
               if (ready) {
                 onPaste(parsed.cmd, e.ctrlKey);
                 onClose();

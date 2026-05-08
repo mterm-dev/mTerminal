@@ -40,15 +40,11 @@ function makeMt() {
       changePassword: vi.fn(async () => undefined),
     },
     ai: {
-      streamComplete: vi.fn(async () => 33),
-      cancel: vi.fn(async () => undefined),
-      listModels: vi.fn(async () => ["m1", "m2"]),
-      setKey: vi.fn(async () => undefined),
-      clearKey: vi.fn(async () => undefined),
-      hasKey: vi.fn(async () => true),
-      onEvent: vi.fn(
-        (_id: number, _cb: (ev: unknown) => void) => () => {},
-      ),
+      vaultKey: {
+        has: vi.fn(async () => true),
+        set: vi.fn(async () => undefined),
+        clear: vi.fn(async () => undefined),
+      },
     },
     claudeCode: {
       status: vi.fn(async () => "idle"),
@@ -152,46 +148,16 @@ describe("invoke routing", () => {
     expect(mt.vault.changePassword).toHaveBeenCalledWith("a", "b");
   });
 
-  it("ai_*: stream_complete wires events; cancel/list/set/clear/has", async () => {
-    const ch = new Channel<{ delta?: string }>();
-    let received: unknown = null;
-    ch.onmessage = (m) => (received = m);
-    const taskId = await invoke<number>("ai_stream_complete", {
-      events: ch,
-      provider: "anthropic",
-      model: "claude-3",
-      messages: [{ role: "user", content: "hi" }],
-      system: "sys",
-      maxTokens: 100,
-      temperature: 0.5,
-      baseUrl: "https://api",
-    });
-    expect(taskId).toBe(33);
-    expect(mt.ai.streamComplete).toHaveBeenCalledWith({
-      provider: "anthropic",
-      model: "claude-3",
-      messages: [{ role: "user", content: "hi" }],
-      system: "sys",
-      maxTokens: 100,
-      temperature: 0.5,
-      baseUrl: "https://api",
-    });
-    expect(mt.ai.onEvent).toHaveBeenCalledWith(33, expect.any(Function));
-    const cb = mt.ai.onEvent.mock.calls[0][1] as (ev: unknown) => void;
-    cb({ delta: "x" });
-    expect(received).toEqual({ delta: "x" });
-
-    await invoke("ai_cancel", { taskId: 33 });
-    expect(mt.ai.cancel).toHaveBeenCalledWith(33);
-    await invoke("ai_list_models", { provider: "openai", baseUrl: "u" });
-    expect(mt.ai.listModels).toHaveBeenCalledWith("openai", "u");
-    await invoke("ai_set_key", { provider: "anthropic", key: "k" });
-    expect(mt.ai.setKey).toHaveBeenCalledWith("anthropic", "k");
-    await invoke("ai_clear_key", { provider: "openai" });
-    expect(mt.ai.clearKey).toHaveBeenCalledWith("openai");
-    const has = await invoke("ai_has_key", { provider: "anthropic" });
-    expect(mt.ai.hasKey).toHaveBeenCalledWith("anthropic");
+  it("ai_vault_key_* delegates to mt.ai.vaultKey.{has,set,clear}", async () => {
+    const has = await invoke("ai_vault_key_has", { provider: "anthropic" });
+    expect(mt.ai.vaultKey.has).toHaveBeenCalledWith("anthropic");
     expect(has).toBe(true);
+
+    await invoke("ai_vault_key_set", { provider: "anthropic", key: "k" });
+    expect(mt.ai.vaultKey.set).toHaveBeenCalledWith("anthropic", "k");
+
+    await invoke("ai_vault_key_clear", { provider: "openai" });
+    expect(mt.ai.vaultKey.clear).toHaveBeenCalledWith("openai");
   });
 
   it("claude_code_status", async () => {
@@ -227,7 +193,7 @@ describe("invoke vault-locked auto-retry", () => {
 
   it("on 'vault locked' error: opens gate, retries once on success", async () => {
     let attempts = 0;
-    mt.ai.hasKey = vi.fn(async () => {
+    mt.ai.vaultKey.has = vi.fn(async () => {
       attempts += 1;
       if (attempts === 1) throw new Error("vault locked");
       return true;
@@ -235,21 +201,21 @@ describe("invoke vault-locked auto-retry", () => {
     const ensure = vi.fn(async () => true);
     setVaultGateBridge({ ensure, isUnlocked: () => false });
 
-    const result = await invoke<boolean>("ai_has_key", { provider: "anthropic" });
+    const result = await invoke<boolean>("ai_vault_key_has", { provider: "anthropic" });
     expect(ensure).toHaveBeenCalledTimes(1);
     expect(attempts).toBe(2);
     expect(result).toBe(true);
   });
 
   it("user cancels gate → original error propagates", async () => {
-    mt.ai.hasKey = vi.fn(async () => {
+    mt.ai.vaultKey.has = vi.fn(async () => {
       throw new Error("vault locked");
     });
     const ensure = vi.fn(async () => false);
     setVaultGateBridge({ ensure, isUnlocked: () => false });
 
     await expect(
-      invoke("ai_has_key", { provider: "anthropic" }),
+      invoke("ai_vault_key_has", { provider: "anthropic" }),
     ).rejects.toThrow(/vault locked/);
     expect(ensure).toHaveBeenCalledTimes(1);
   });

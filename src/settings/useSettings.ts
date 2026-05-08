@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type CursorStyle = "block" | "bar" | "underline";
-export type AiProviderId = "anthropic" | "openai" | "ollama";
+/**
+ * Provider id is dynamic — corresponds to whichever AI provider extension the
+ * user has installed (e.g. "anthropic", "openai-codex", "ollama", or any
+ * marketplace plugin that registers a provider). Empty string means "no
+ * provider selected".
+ */
+export type AiProviderId = string;
 export type VoiceEngineId = "whisper-cpp" | "openai";
+
+export interface AiProviderConfig {
+  model?: string;
+  baseUrl?: string;
+}
 
 export interface Settings {
   themeId: string;
@@ -22,12 +33,10 @@ export interface Settings {
   sidebarWidth: number;
   showGreeting: boolean;
   aiEnabled: boolean;
+  /** Empty string when no provider extension is installed/selected. */
   aiDefaultProvider: AiProviderId;
-  aiAnthropicModel: string;
-  aiOpenaiModel: string;
-  aiOpenaiBaseUrl: string;
-  aiOllamaModel: string;
-  aiOllamaBaseUrl: string;
+  /** Per-provider model + baseUrl, keyed by provider id. */
+  aiProviderConfig: Record<string, AiProviderConfig>;
   aiAttachContext: boolean;
   aiPanelOpen: boolean;
   aiExplainEnabled: boolean;
@@ -38,12 +47,10 @@ export interface Settings {
   gitPanelTreeView: boolean;
   gitPanelHeight: number;
   gitCommitMsgHeight: number;
+  /** Empty string when no provider chosen for commit messages. */
   gitCommitProvider: AiProviderId;
-  gitCommitAnthropicModel: string;
-  gitCommitOpenaiModel: string;
-  gitCommitOpenaiBaseUrl: string;
-  gitCommitOllamaModel: string;
-  gitCommitOllamaBaseUrl: string;
+  /** Per-provider override for commit message generation. */
+  gitCommitProviderConfig: Record<string, AiProviderConfig>;
   gitCommitSystemPrompt: string;
   gitPullStrategy: "ff-only" | "merge" | "rebase";
   voiceEnabled: boolean;
@@ -86,12 +93,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarWidth: 300,
   showGreeting: true,
   aiEnabled: false,
-  aiDefaultProvider: "anthropic",
-  aiAnthropicModel: "claude-opus-4-7",
-  aiOpenaiModel: "gpt-5",
-  aiOpenaiBaseUrl: "https://api.openai.com/v1",
-  aiOllamaModel: "llama3.2",
-  aiOllamaBaseUrl: "http://localhost:11434",
+  aiDefaultProvider: "",
+  aiProviderConfig: {},
   aiAttachContext: true,
   aiPanelOpen: false,
   aiExplainEnabled: true,
@@ -102,12 +105,8 @@ export const DEFAULT_SETTINGS: Settings = {
   gitPanelTreeView: true,
   gitPanelHeight: 340,
   gitCommitMsgHeight: 72,
-  gitCommitProvider: "anthropic",
-  gitCommitAnthropicModel: "",
-  gitCommitOpenaiModel: "",
-  gitCommitOpenaiBaseUrl: "https://api.openai.com/v1",
-  gitCommitOllamaModel: "",
-  gitCommitOllamaBaseUrl: "http://localhost:11434",
+  gitCommitProvider: "",
+  gitCommitProviderConfig: {},
   gitCommitSystemPrompt: DEFAULT_COMMIT_PROMPT,
   gitPullStrategy: "ff-only",
   voiceEnabled: false,
@@ -171,12 +170,80 @@ function persistRawSettings(json: string): void {
   }
 }
 
+/**
+ * One-shot migration from the legacy per-provider fields (aiAnthropicModel
+ * etc.) to the dynamic `aiProviderConfig` map. Removes the legacy keys from
+ * the parsed object so they don't keep getting persisted forward.
+ */
+function migrateLegacyAiFields(raw: Record<string, unknown>): void {
+  const aiCfg: Record<string, AiProviderConfig> = {
+    ...(typeof raw.aiProviderConfig === "object" && raw.aiProviderConfig
+      ? (raw.aiProviderConfig as Record<string, AiProviderConfig>)
+      : {}),
+  };
+  const ensure = (id: string): AiProviderConfig => (aiCfg[id] ??= {});
+
+  if (typeof raw.aiAnthropicModel === "string" && raw.aiAnthropicModel) {
+    ensure("anthropic").model ??= raw.aiAnthropicModel;
+  }
+  if (typeof raw.aiOpenaiModel === "string" && raw.aiOpenaiModel) {
+    ensure("openai").model ??= raw.aiOpenaiModel;
+  }
+  if (typeof raw.aiOpenaiBaseUrl === "string" && raw.aiOpenaiBaseUrl) {
+    ensure("openai").baseUrl ??= raw.aiOpenaiBaseUrl;
+  }
+  if (typeof raw.aiOllamaModel === "string" && raw.aiOllamaModel) {
+    ensure("ollama").model ??= raw.aiOllamaModel;
+  }
+  if (typeof raw.aiOllamaBaseUrl === "string" && raw.aiOllamaBaseUrl) {
+    ensure("ollama").baseUrl ??= raw.aiOllamaBaseUrl;
+  }
+
+  delete raw.aiAnthropicModel;
+  delete raw.aiOpenaiModel;
+  delete raw.aiOpenaiBaseUrl;
+  delete raw.aiOllamaModel;
+  delete raw.aiOllamaBaseUrl;
+  raw.aiProviderConfig = aiCfg;
+
+  const gitCfg: Record<string, AiProviderConfig> = {
+    ...(typeof raw.gitCommitProviderConfig === "object" && raw.gitCommitProviderConfig
+      ? (raw.gitCommitProviderConfig as Record<string, AiProviderConfig>)
+      : {}),
+  };
+  const ensureGit = (id: string): AiProviderConfig => (gitCfg[id] ??= {});
+
+  if (typeof raw.gitCommitAnthropicModel === "string" && raw.gitCommitAnthropicModel) {
+    ensureGit("anthropic").model ??= raw.gitCommitAnthropicModel;
+  }
+  if (typeof raw.gitCommitOpenaiModel === "string" && raw.gitCommitOpenaiModel) {
+    ensureGit("openai").model ??= raw.gitCommitOpenaiModel;
+  }
+  if (typeof raw.gitCommitOpenaiBaseUrl === "string" && raw.gitCommitOpenaiBaseUrl) {
+    ensureGit("openai").baseUrl ??= raw.gitCommitOpenaiBaseUrl;
+  }
+  if (typeof raw.gitCommitOllamaModel === "string" && raw.gitCommitOllamaModel) {
+    ensureGit("ollama").model ??= raw.gitCommitOllamaModel;
+  }
+  if (typeof raw.gitCommitOllamaBaseUrl === "string" && raw.gitCommitOllamaBaseUrl) {
+    ensureGit("ollama").baseUrl ??= raw.gitCommitOllamaBaseUrl;
+  }
+
+  delete raw.gitCommitAnthropicModel;
+  delete raw.gitCommitOpenaiModel;
+  delete raw.gitCommitOpenaiBaseUrl;
+  delete raw.gitCommitOllamaModel;
+  delete raw.gitCommitOllamaBaseUrl;
+  raw.gitCommitProviderConfig = gitCfg;
+}
+
 function loadInitial(): Settings {
   const raw = readRawSettings();
   if (!raw) return DEFAULT_SETTINGS;
   try {
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    migrateLegacyAiFields(parsed);
+    return { ...DEFAULT_SETTINGS, ...(parsed as Partial<Settings>) };
   } catch {
     return DEFAULT_SETTINGS;
   }

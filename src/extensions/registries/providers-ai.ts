@@ -1,14 +1,17 @@
 /**
- * AI provider plugin extensions.
+ * AI provider plugin registry.
  *
- * Plugins register additional AI providers (e.g. Groq, local LLaMA.cpp). The
- * core AI surface (`ctx.ai.complete`) consults this registry alongside the
- * built-in providers (anthropic, openai, ollama). Provider selection in the
- * Settings UI is the union.
+ * Every AI provider in mTerminal is contributed by an extension that calls
+ * `ctx.ai.registerProvider({...})` during activate(). The renderer-side
+ * registry tracks them and surfaces them to:
+ *   - the Settings → AI panel (provider list, model picker, vault key entry)
+ *   - the chat panel / command palette / explain popover (which provider to
+ *     dispatch a completion to)
+ *   - any consumer extension that wants the full SDK client via
+ *     `ctx.services['ai.sdk.<id>']` or `ctx.ai.getSdk(<id>)`
  *
- * The actual `complete` / `stream` calls happen through whichever transport
- * the provider implementation exposes — typically `fetch()` against an API
- * endpoint, gated by user-supplied keys read from the vault.
+ * There are no built-in providers — installing the marketplace SDK extension
+ * (Anthropic, OpenAI Codex, Ollama, …) is what makes a provider available.
  */
 
 import type { Disposable } from '../ctx-types'
@@ -18,6 +21,12 @@ export interface AiProviderEntry {
   label: string
   source: string
   models?: Array<{ id: string; label?: string }>
+  /** Default true. When false, no vault-stored API key is required (e.g. local Ollama). */
+  requiresVault?: boolean
+  /** Vault path where the API key lives, e.g. 'ai_keys.anthropic'. */
+  vaultKeyPath?: string
+  /** Optional dynamic model fetch — powers the "refresh models" button in Settings. */
+  listModels?(): Promise<Array<{ id: string; label?: string }>>
   complete(req: unknown): Promise<{ text: string; usage: unknown }>
   stream?(req: unknown): AsyncIterable<unknown>
 }

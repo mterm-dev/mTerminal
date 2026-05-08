@@ -1,15 +1,20 @@
 /**
  * `ctx.ai` — exposes the host's AI surface to plugins.
  *
- * For the built-in providers (anthropic, openai, ollama) we delegate to
- * `window.mt.ai` via the renderer `invoke()` helper, so that the vault-gate
- * auto-retry catches "vault locked" and prompts the user. For provider plugins
- * (registered via `ctx.ai.registerProvider`) the call is dispatched to the
- * plugin's own `complete()` / `stream()`.
+ * After the SDK-as-extension refactor there are no built-in providers. Every
+ * AI provider in the system is contributed by an extension that called
+ * `ctx.ai.registerProvider({...})` during activate(); the registry maps
+ * provider id → impl. `complete()` and `stream()` resolve via that registry
+ * and throw if no provider matches.
+ *
+ * The escape hatch for raw SDK access is `ctx.ai.getSdk(providerId)` which
+ * peeks at the renderer-side service registry for the well-known service id
+ * `ai.sdk.<providerId>` (typically published by the same extension that
+ * registers the provider).
  */
 
-import { Channel, invoke } from '../../lib/ipc'
 import { getAiProviderRegistry, type AiProviderEntry } from '../registries/providers-ai'
+import { getServiceRegistry } from '../services'
 import type { AiApi, Disposable } from '../ctx-types'
 
 export interface AiBridgeDeps {
@@ -23,67 +28,28 @@ interface AiUsage {
   costUsd: number
 }
 
-type AiEvent =
-  | { kind: 'delta'; value: string }
-  | { kind: 'done'; value: AiUsage }
-  | { kind: 'error'; value: string }
-
-interface CoreCompleteReq {
-  provider: string
-  model: string
+interface CompleteReq {
+  provider?: string
+  model?: string
   messages: Array<{ role: string; content: string }>
   system?: string | null
-  maxTokens?: number | null
-  temperature?: number | null
-  topP?: number | null
-  baseUrl?: string | null
+  signal?: AbortSignal
 }
 
-function toCoreReq(req: unknown): CoreCompleteReq {
-  const r = req as CoreCompleteReq
-  return {
-    provider: r.provider,
-    model: r.model,
-    messages: r.messages,
-    system: r.system ?? null,
-    maxTokens: r.maxTokens ?? null,
-    temperature: r.temperature ?? null,
-    topP: r.topP ?? null,
-    baseUrl: r.baseUrl ?? null,
+function resolveProvider(req: unknown): AiProviderEntry {
+  const r = req as CompleteReq
+  if (!r.provider) {
+    throw new Error(
+      'ai.complete: no provider specified. Install an AI provider extension and pass { provider: "<id>" }.',
+    )
   }
-}
-
-async function streamCore(
-  req: CoreCompleteReq,
-  onDelta: (text: string) => void,
-): Promise<{ text: string; usage: AiUsage }> {
-  const channel = new Channel<AiEvent>()
-  let text = ''
-  let usage: AiUsage = { inTokens: 0, outTokens: 0, costUsd: 0 }
-  let resolveDone: () => void = () => {}
-  let rejectDone: (err: Error) => void = () => {}
-  const done = new Promise<void>((resolve, reject) => {
-    resolveDone = resolve
-    rejectDone = reject
-  })
-  channel.onmessage = (msg) => {
-    if (msg.kind === 'delta') {
-      text += msg.value
-      onDelta(msg.value)
-    } else if (msg.kind === 'done') {
-      usage = msg.value
-      resolveDone()
-    } else if (msg.kind === 'error') {
-      rejectDone(new Error(msg.value))
-    }
+  const entry = getAiProviderRegistry().get(r.provider)
+  if (!entry) {
+    throw new Error(
+      `ai.complete: no AI provider registered with id "${r.provider}". Install the matching SDK extension from Settings → AI.`,
+    )
   }
-  await invoke<number>('ai_stream_complete', { events: channel, ...req })
-  try {
-    await done
-  } finally {
-    channel.unsubscribe?.()
-  }
-  return { text, usage }
+  return entry
 }
 
 export function createAiBridge({ extId }: AiBridgeDeps): AiApi {
@@ -91,52 +57,22 @@ export function createAiBridge({ extId }: AiBridgeDeps): AiApi {
 
   return {
     async complete(req: unknown) {
-      const r = req as { provider?: string }
-      if (r.provider) {
-        const plugin = registry.get(r.provider)
-        if (plugin) return plugin.complete(req)
-      }
-      return streamCore(toCoreReq(req), () => {})
+      const entry = resolveProvider(req)
+      const result = await entry.complete(req)
+      return result as { text: string; usage: AiUsage }
     },
 
     async *stream(req: unknown): AsyncIterable<unknown> {
-      const r = req as { provider?: string }
-      if (r.provider) {
-        const plugin = registry.get(r.provider)
-        if (plugin?.stream) {
-          for await (const delta of plugin.stream(req)) yield delta
-          return
-        }
+      const entry = resolveProvider(req)
+      if (entry.stream) {
+        for await (const delta of entry.stream(req)) yield delta
+        return
       }
-      const queue: Array<{ text: string; finished: false } | { text: string; finished: true; usage: AiUsage }> = []
-      let resolve: (() => void) | null = null
-      let error: Error | null = null
-      const wait = () => new Promise<void>((r2) => { resolve = r2 })
-      const onDelta = (text: string) => {
-        queue.push({ text, finished: false })
-        resolve?.()
-      }
-      const finalPromise = streamCore(toCoreReq(req), onDelta)
-        .then((res) => {
-          queue.push({ text: '', finished: true, usage: res.usage })
-          resolve?.()
-        })
-        .catch((e: Error) => {
-          error = e
-          resolve?.()
-        })
-      while (true) {
-        if (queue.length === 0) {
-          if (error) throw error
-          await wait()
-          continue
-        }
-        const next = queue.shift()!
-        yield next
-        if (next.finished) break
-      }
-      await finalPromise
-      if (error) throw error
+      // Provider didn't implement stream — fall back to one-shot complete and
+      // emit a single delta + done.
+      const result = await entry.complete(req)
+      yield { text: result.text, finished: false }
+      yield { text: '', finished: true, usage: result.usage }
     },
 
     registerProvider(p: unknown): Disposable {
@@ -145,11 +81,18 @@ export function createAiBridge({ extId }: AiBridgeDeps): AiApi {
     },
 
     listProviders() {
-      const out: Array<{ id: string; label: string; source: 'core' | string }> = []
-      for (const p of registry.list()) {
-        out.push({ id: p.id, label: p.label, source: p.source })
-      }
-      return out
+      return registry.list().map((p) => ({
+        id: p.id,
+        label: p.label,
+        source: p.source,
+        models: p.models,
+        requiresVault: p.requiresVault,
+        vaultKeyPath: p.vaultKeyPath,
+      }))
+    },
+
+    getSdk<T = unknown>(providerId: string): T | null {
+      return getServiceRegistry().peekImpl<T>(`ai.sdk.${providerId}`)
     },
   }
 }

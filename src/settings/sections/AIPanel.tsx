@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { AiProviderId } from "../useSettings";
 import { useAIKeys } from "../../hooks/useAIKeys";
 import { listModels, type ModelInfo } from "../../hooks/useAI";
+import { useAiProviders } from "../../lib/ai-availability";
 import { Field, Toggle, type VaultSectionProps } from "./_shared";
 import { ProviderBlock } from "./ProviderBlock";
 import { ModelPicker } from "../../extensions/components/ModelPicker";
@@ -9,6 +9,43 @@ import { ModelPicker } from "../../extensions/components/ModelPicker";
 interface Props extends VaultSectionProps {
   mcpStatus?: { running: boolean; socketPath: string | null };
 }
+
+/**
+ * Known first-party SDK provider extensions. Settings shows an "Install"
+ * button per entry when the matching provider hasn't been registered yet.
+ * Third-party AI provider extensions installed from the marketplace appear
+ * automatically below this list once they activate.
+ *
+ * `marketplaceId` matches the extension manifest id (what
+ * `marketplace.install(id)` accepts), not the npm package name. The npm
+ * publish names live in the mTerminal-extensions monorepo as
+ * `@mterminal/ext-provider-<id>`.
+ */
+const KNOWN_SDK_EXTENSIONS: Array<{
+  marketplaceId: string;
+  providerId: string;
+  label: string;
+  description: string;
+}> = [
+  {
+    marketplaceId: "provider-anthropic",
+    providerId: "anthropic",
+    label: "Anthropic",
+    description: "Claude via the official @anthropic-ai/sdk package",
+  },
+  {
+    marketplaceId: "provider-openai-codex",
+    providerId: "openai-codex",
+    label: "OpenAI Codex",
+    description: "Codex agent SDK (@openai/codex-sdk) — text + agentic flows",
+  },
+  {
+    marketplaceId: "provider-ollama",
+    providerId: "ollama",
+    label: "Ollama",
+    description: "Local LLMs via the official ollama-js package",
+  },
+];
 
 export function AIPanel({
   settings,
@@ -18,35 +55,47 @@ export function AIPanel({
   onRequestVault,
   mcpStatus,
 }: Props) {
+  const providers = useAiProviders();
   const { hasKey, setKey, clearKey } = useAIKeys(vaultUnlocked);
-  type KeyedProvider = "anthropic" | "openai";
-  const [keyDraft, setKeyDraft] = useState<{ provider: KeyedProvider | null }>({
-    provider: null,
-  });
+  const [keyDraftFor, setKeyDraftFor] = useState<string | null>(null);
   const [draftValue, setDraftValue] = useState("");
   const [models, setModels] = useState<Record<string, ModelInfo[] | "loading" | "error">>({});
 
-  const fetchModels = async (provider: AiProviderId) => {
-    setModels((m) => ({ ...m, [provider]: "loading" }));
+  const fetchModels = async (providerId: string) => {
+    setModels((m) => ({ ...m, [providerId]: "loading" }));
     try {
-      const baseUrl =
-        provider === "openai"
-          ? settings.aiOpenaiBaseUrl
-          : provider === "ollama"
-            ? settings.aiOllamaBaseUrl
-            : undefined;
-      const list = await listModels(provider, baseUrl);
-      setModels((m) => ({ ...m, [provider]: list }));
+      const list = await listModels(providerId);
+      setModels((m) => ({ ...m, [providerId]: list }));
     } catch {
-      setModels((m) => ({ ...m, [provider]: "error" }));
+      setModels((m) => ({ ...m, [providerId]: "error" }));
     }
   };
 
-  const submitKey = async () => {
-    if (!keyDraft.provider || !draftValue.trim()) return;
-    await setKey(keyDraft.provider, draftValue.trim());
+  const submitKey = async (providerId: string) => {
+    if (!draftValue.trim()) return;
+    await setKey(providerId, draftValue.trim());
     setDraftValue("");
-    setKeyDraft({ provider: null });
+    setKeyDraftFor(null);
+  };
+
+  const installSdk = async (marketplaceId: string) => {
+    const mt = (window as unknown as { mt?: { marketplace?: { install: (id: string, version?: string) => Promise<unknown> } } }).mt;
+    if (!mt?.marketplace) {
+      alert("Marketplace API not available — install the provider extension manually.");
+      return;
+    }
+    try {
+      await mt.marketplace.install(marketplaceId);
+    } catch (err) {
+      console.error(`[settings] install ${marketplaceId} failed:`, err);
+      alert(`Install failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const ensureProviderConfig = (providerId: string, patch: { model?: string; baseUrl?: string }) => {
+    const next = { ...(settings.aiProviderConfig ?? {}) };
+    next[providerId] = { ...next[providerId], ...patch };
+    update("aiProviderConfig", next);
   };
 
   const vaultBadge = !vaultExists
@@ -54,6 +103,8 @@ export function AIPanel({
     : !vaultUnlocked
       ? "vault locked — click to unlock"
       : null;
+
+  const currentCfg = settings.aiProviderConfig?.[settings.aiDefaultProvider] ?? {};
 
   return (
     <>
@@ -70,98 +121,121 @@ export function AIPanel({
             </div>
           )}
 
-          <Field
-            label="Default provider"
-            hint="Picks the provider + model used by command palette and the chat panel"
-          >
-            <ModelPicker
-              value={{
-                provider: settings.aiDefaultProvider,
-                model:
-                  settings.aiDefaultProvider === "anthropic"
-                    ? settings.aiAnthropicModel
-                    : settings.aiDefaultProvider === "openai"
-                      ? settings.aiOpenaiModel
-                      : settings.aiOllamaModel,
-                baseUrl:
-                  settings.aiDefaultProvider === "openai"
-                    ? settings.aiOpenaiBaseUrl
-                    : settings.aiDefaultProvider === "ollama"
-                      ? settings.aiOllamaBaseUrl
-                      : undefined,
-              }}
-              onChange={(v) => {
-                if (v.provider !== settings.aiDefaultProvider) {
-                  update("aiDefaultProvider", v.provider);
-                }
-                if (v.provider === "anthropic") {
-                  update("aiAnthropicModel", v.model);
-                } else if (v.provider === "openai") {
-                  update("aiOpenaiModel", v.model);
-                  if (v.baseUrl !== undefined)
-                    update("aiOpenaiBaseUrl", v.baseUrl);
-                } else {
-                  update("aiOllamaModel", v.model);
-                  if (v.baseUrl !== undefined)
-                    update("aiOllamaBaseUrl", v.baseUrl);
-                }
-              }}
-            />
-          </Field>
+          {providers.length === 0 ? (
+            <div className="settings-note">
+              No AI providers installed. Install one of the official SDK extensions
+              below to enable chat, command palette, and explain features.
+            </div>
+          ) : (
+            <Field
+              label="Default provider"
+              hint="Picks the provider + model used by command palette and the chat panel"
+            >
+              <ModelPicker
+                value={{
+                  provider: settings.aiDefaultProvider,
+                  model: currentCfg.model ?? "",
+                  baseUrl: currentCfg.baseUrl,
+                }}
+                onChange={(v) => {
+                  if (v.provider !== settings.aiDefaultProvider) {
+                    update("aiDefaultProvider", v.provider);
+                  }
+                  ensureProviderConfig(v.provider, { model: v.model, baseUrl: v.baseUrl });
+                }}
+              />
+            </Field>
+          )}
 
-          <ProviderBlock
-            label="Anthropic"
-            provider="anthropic"
-            hasKey={!!hasKey.anthropic}
-            vaultUnlocked={vaultUnlocked}
-            modelValue={settings.aiAnthropicModel}
-            onModelChange={(v) => update("aiAnthropicModel", v)}
-            keyDraftActive={keyDraft.provider === "anthropic"}
-            onStartEdit={() => setKeyDraft({ provider: "anthropic" })}
-            onCancelEdit={() => setKeyDraft({ provider: null })}
-            draftValue={draftValue}
-            setDraftValue={setDraftValue}
-            onSubmitKey={submitKey}
-            onClearKey={() => clearKey("anthropic")}
-            modelsState={models.anthropic}
-            onFetchModels={() => fetchModels("anthropic")}
-            onRequestVault={onRequestVault}
-          />
+          <div className="settings-section-h">SDK providers</div>
 
-          <ProviderBlock
-            label="OpenAI"
-            provider="openai"
-            hasKey={!!hasKey.openai}
-            vaultUnlocked={vaultUnlocked}
-            modelValue={settings.aiOpenaiModel}
-            onModelChange={(v) => update("aiOpenaiModel", v)}
-            baseUrlValue={settings.aiOpenaiBaseUrl}
-            onBaseUrlChange={(v) => update("aiOpenaiBaseUrl", v)}
-            keyDraftActive={keyDraft.provider === "openai"}
-            onStartEdit={() => setKeyDraft({ provider: "openai" })}
-            onCancelEdit={() => setKeyDraft({ provider: null })}
-            draftValue={draftValue}
-            setDraftValue={setDraftValue}
-            onSubmitKey={submitKey}
-            onClearKey={() => clearKey("openai")}
-            modelsState={models.openai}
-            onFetchModels={() => fetchModels("openai")}
-            onRequestVault={onRequestVault}
-          />
+          {KNOWN_SDK_EXTENSIONS.map((sdk) => {
+            const installed = providers.find((p) => p.id === sdk.providerId);
+            if (!installed) {
+              return (
+                <div
+                  key={sdk.marketplaceId}
+                  className="settings-field"
+                  style={{ flexDirection: "column", alignItems: "stretch" }}
+                >
+                  <div className="settings-field-label">
+                    <span style={{ fontWeight: 600 }}>{sdk.label}</span>
+                    <span className="settings-field-hint">not installed</span>
+                  </div>
+                  <div className="settings-field-control" style={{ flexDirection: "column", gap: 4 }}>
+                    <div className="settings-note" style={{ marginBottom: 4 }}>
+                      {sdk.description}
+                    </div>
+                    <button
+                      className="ghost-btn"
+                      style={{ alignSelf: "flex-start" }}
+                      onClick={() => void installSdk(sdk.marketplaceId)}
+                    >
+                      install {sdk.label} SDK
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            const cfg = settings.aiProviderConfig?.[sdk.providerId] ?? {};
+            const noKeyNeeded = installed.requiresVault === false;
+            return (
+              <ProviderBlock
+                key={sdk.providerId}
+                label={sdk.label}
+                provider={sdk.providerId}
+                hasKey={!!hasKey[sdk.providerId]}
+                vaultUnlocked={vaultUnlocked}
+                modelValue={cfg.model ?? ""}
+                onModelChange={(v) => ensureProviderConfig(sdk.providerId, { model: v })}
+                baseUrlValue={installed.requiresVault === false ? cfg.baseUrl ?? "" : undefined}
+                onBaseUrlChange={(v) => ensureProviderConfig(sdk.providerId, { baseUrl: v })}
+                keyDraftActive={keyDraftFor === sdk.providerId}
+                onStartEdit={() => setKeyDraftFor(sdk.providerId)}
+                onCancelEdit={() => setKeyDraftFor(null)}
+                draftValue={draftValue}
+                setDraftValue={setDraftValue}
+                onSubmitKey={() => submitKey(sdk.providerId)}
+                onClearKey={() => clearKey(sdk.providerId)}
+                modelsState={models[sdk.providerId]}
+                onFetchModels={() => fetchModels(sdk.providerId)}
+                noKeyNeeded={noKeyNeeded}
+                onRequestVault={onRequestVault}
+              />
+            );
+          })}
 
-          <ProviderBlock
-            label="Ollama (local)"
-            provider="ollama"
-            hasKey={true}
-            vaultUnlocked={true}
-            modelValue={settings.aiOllamaModel}
-            onModelChange={(v) => update("aiOllamaModel", v)}
-            baseUrlValue={settings.aiOllamaBaseUrl}
-            onBaseUrlChange={(v) => update("aiOllamaBaseUrl", v)}
-            modelsState={models.ollama}
-            onFetchModels={() => fetchModels("ollama")}
-            noKeyNeeded
-          />
+          {/* Third-party providers (anything registered that we don't have a known card for). */}
+          {providers
+            .filter((p) => !KNOWN_SDK_EXTENSIONS.some((k) => k.providerId === p.id))
+            .map((p) => {
+              const cfg = settings.aiProviderConfig?.[p.id] ?? {};
+              const noKeyNeeded = p.requiresVault === false;
+              return (
+                <ProviderBlock
+                  key={p.id}
+                  label={`${p.label} (${p.source})`}
+                  provider={p.id}
+                  hasKey={!!hasKey[p.id]}
+                  vaultUnlocked={vaultUnlocked}
+                  modelValue={cfg.model ?? ""}
+                  onModelChange={(v) => ensureProviderConfig(p.id, { model: v })}
+                  baseUrlValue={p.requiresVault === false ? cfg.baseUrl ?? "" : undefined}
+                  onBaseUrlChange={(v) => ensureProviderConfig(p.id, { baseUrl: v })}
+                  keyDraftActive={keyDraftFor === p.id}
+                  onStartEdit={() => setKeyDraftFor(p.id)}
+                  onCancelEdit={() => setKeyDraftFor(null)}
+                  draftValue={draftValue}
+                  setDraftValue={setDraftValue}
+                  onSubmitKey={() => submitKey(p.id)}
+                  onClearKey={() => clearKey(p.id)}
+                  modelsState={models[p.id]}
+                  onFetchModels={() => fetchModels(p.id)}
+                  noKeyNeeded={noKeyNeeded}
+                  onRequestVault={onRequestVault}
+                />
+              );
+            })}
 
           <Field
             label="Attach context to chat"

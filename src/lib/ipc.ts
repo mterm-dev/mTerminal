@@ -99,37 +99,12 @@ async function dispatchInvoke<T = unknown>(
         a.newPassword as string,
       )) as T
 
-    case 'ai_stream_complete': {
-      const events = a.events as Channel<unknown> | undefined
-      const taskId = await api.ai.streamComplete({
-        provider: a.provider as string,
-        model: a.model as string,
-        messages: a.messages as Array<{ role: string; content: string }>,
-        system: (a.system as string | null | undefined) ?? undefined,
-        maxTokens: (a.maxTokens as number | null | undefined) ?? undefined,
-        temperature: (a.temperature as number | null | undefined) ?? undefined,
-        topP: (a.topP as number | null | undefined) ?? undefined,
-        baseUrl: (a.baseUrl as string | null | undefined) ?? undefined,
-      })
-      if (events) {
-        const off = api.ai.onEvent(taskId, (ev) => events.onmessage?.(ev as unknown))
-        events.unsubscribe = off
-      }
-      return taskId as T
-    }
-    case 'ai_cancel':
-      return (await api.ai.cancel(a.taskId as number)) as T
-    case 'ai_list_models':
-      return (await api.ai.listModels(
-        a.provider as string,
-        (a.baseUrl as string | null | undefined) ?? undefined,
-      )) as T
-    case 'ai_set_key':
-      return (await api.ai.setKey(a.provider as string, a.key as string)) as T
-    case 'ai_clear_key':
-      return (await api.ai.clearKey(a.provider as string)) as T
-    case 'ai_has_key':
-      return (await api.ai.hasKey(a.provider as string)) as T
+    case 'ai_vault_key_set':
+      return (await api.ai.vaultKey.set(a.provider as string, a.key as string)) as T
+    case 'ai_vault_key_clear':
+      return (await api.ai.vaultKey.clear(a.provider as string)) as T
+    case 'ai_vault_key_has':
+      return (await api.ai.vaultKey.has(a.provider as string)) as T
 
     case 'claude_code_status':
       return (await api.claudeCode.status(a.tabId as number)) as T
