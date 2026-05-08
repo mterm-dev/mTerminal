@@ -212,22 +212,49 @@ export const CSS = `
 .aip-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .aip-row-label {
-  font-size: var(--t-xs);
+  font-size: 10.5px;
   color: var(--fg-dim);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  font-weight: 500;
 }
 .aip-row-control {
   display: flex;
   gap: 6px;
-  align-items: center;
+  align-items: stretch;
 }
 .aip-row-control input[type="text"],
 .aip-row-control input[type="password"] {
   flex: 1;
+  min-width: 0;
+  background: var(--bg-muted, var(--bg-base));
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  padding: 7px 10px;
+  border-radius: var(--r-sm, 6px);
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+.aip-row-control input[type="text"]::placeholder,
+.aip-row-control input[type="password"]::placeholder {
+  color: color-mix(in oklch, var(--fg-muted) 60%, transparent);
+}
+.aip-row-control input[type="text"]:focus,
+.aip-row-control input[type="password"]:focus {
+  border-color: var(--border-strong);
+  background: color-mix(in oklch, var(--bg-muted, var(--bg-base)) 60%, var(--bg-raised) 40%);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--border-strong) 35%, transparent);
+}
+.aip-row-control input[type="password"] {
+  letter-spacing: 0.08em;
+}
+.aip-row-control .ghost-btn {
+  flex-shrink: 0;
 }
 
 .aip-models {
