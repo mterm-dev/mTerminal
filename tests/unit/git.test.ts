@@ -928,6 +928,77 @@ describe('git stash + discard IPC', () => {
     TEST_TIMEOUT,
   )
 
+  it(
+    'git:discard-paths restores tracked file from HEAD without touching siblings',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'A1\n')
+      fs.writeFileSync(path.join(repo, 'b.txt'), 'B1\n')
+      git(repo, 'add', 'a.txt', 'b.txt')
+      git(repo, 'commit', '-m', 'first', '--quiet')
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'A1\nlocal-a\n')
+      fs.writeFileSync(path.join(repo, 'b.txt'), 'B1\nlocal-b\n')
+
+      await loadModule()
+      await invoke('git:discard-paths', { cwd: repo, paths: ['a.txt'] })
+
+      expect(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8')).toBe('A1\n')
+      expect(fs.readFileSync(path.join(repo, 'b.txt'), 'utf8')).toBe('B1\nlocal-b\n')
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:discard-paths removes only the targeted untracked file',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'seed.txt'), 'seed\n')
+      git(repo, 'add', 'seed.txt')
+      git(repo, 'commit', '-m', 'seed', '--quiet')
+      fs.writeFileSync(path.join(repo, 'u1.txt'), 'one\n')
+      fs.writeFileSync(path.join(repo, 'u2.txt'), 'two\n')
+
+      await loadModule()
+      await invoke('git:discard-paths', { cwd: repo, paths: ['u1.txt'] })
+
+      expect(fs.existsSync(path.join(repo, 'u1.txt'))).toBe(false)
+      expect(fs.existsSync(path.join(repo, 'u2.txt'))).toBe(true)
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:discard-paths drops a newly-added (A) file with no HEAD entry',
+    async () => {
+      initRepo(repo)
+      fs.writeFileSync(path.join(repo, 'seed.txt'), 'seed\n')
+      git(repo, 'add', 'seed.txt')
+      git(repo, 'commit', '-m', 'seed', '--quiet')
+      fs.writeFileSync(path.join(repo, 'new.txt'), 'new\n')
+      git(repo, 'add', 'new.txt')
+
+      await loadModule()
+      await invoke('git:discard-paths', { cwd: repo, paths: ['new.txt'] })
+
+      expect(fs.existsSync(path.join(repo, 'new.txt'))).toBe(false)
+      const ls = git(repo, 'ls-files', 'new.txt').trim()
+      expect(ls).toBe('')
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'git:discard-paths rejects shell-injection-shaped paths',
+    async () => {
+      initRepo(repo)
+      await loadModule()
+      await expect(
+        invoke('git:discard-paths', { cwd: repo, paths: ['--exec=rm -rf /'] }),
+      ).rejects.toThrow(/invalid path/)
+    },
+    TEST_TIMEOUT,
+  )
+
   it.skip('placeholder for next test', () => {})
 })
 

@@ -283,6 +283,8 @@ const api = {
       ipcRenderer.invoke('git:stash-pop', { cwd }),
     discardAll: (cwd: string): Promise<void> =>
       ipcRenderer.invoke('git:discard-all', { cwd }),
+    discardPaths: (cwd: string, paths: string[]): Promise<void> =>
+      ipcRenderer.invoke('git:discard-paths', { cwd, paths }),
     listConflicts: (
       cwd: string
     ): Promise<Array<{ path: string; indexStatus: string; worktreeStatus: string }>> =>

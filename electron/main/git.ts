@@ -947,6 +947,48 @@ export async function gitDiscardAll(cwd: string): Promise<void> {
   if (r2.code !== 0) throw new Error(r2.stderr.trim() || 'git clean failed')
 }
 
+export async function gitDiscardPaths(cwd: string, paths: string[]): Promise<void> {
+  if (paths.length === 0) return
+
+  const ls = await runGit(['ls-files', '-z', '--', ...paths], { cwd })
+  if (ls.code !== 0) throw new Error(ls.stderr.trim() || 'git ls-files failed')
+  const tracked = new Set(ls.stdout.split('\0').filter((s) => s.length > 0))
+
+  const headProbe = await runGit(['rev-parse', '--verify', 'HEAD'], { cwd, timeout: 5_000 })
+  const hasHead = headProbe.code === 0
+
+  const restorePaths: string[] = []
+  const rmPaths: string[] = []
+  const cleanPaths: string[] = []
+
+  for (const p of paths) {
+    if (!tracked.has(p)) {
+      cleanPaths.push(p)
+      continue
+    }
+    if (!hasHead) {
+      rmPaths.push(p)
+      continue
+    }
+    const probe = await runGit(['cat-file', '-e', `HEAD:${p}`], { cwd, timeout: 5_000 })
+    if (probe.code === 0) restorePaths.push(p)
+    else rmPaths.push(p)
+  }
+
+  if (restorePaths.length > 0) {
+    const r = await runGit(['checkout', 'HEAD', '--', ...restorePaths], { cwd })
+    if (r.code !== 0) throw new Error(r.stderr.trim() || 'git checkout HEAD failed')
+  }
+  if (rmPaths.length > 0) {
+    const r = await runGit(['rm', '-f', '--', ...rmPaths], { cwd })
+    if (r.code !== 0) throw new Error(r.stderr.trim() || 'git rm failed')
+  }
+  if (cleanPaths.length > 0) {
+    const r = await runGit(['clean', '-fd', '--', ...cleanPaths], { cwd })
+    if (r.code !== 0) throw new Error(r.stderr.trim() || 'git clean failed')
+  }
+}
+
 function ensurePathArray(paths: unknown): string[] {
   if (!Array.isArray(paths)) throw new Error('paths must be an array')
   const out: string[] = []
@@ -1257,6 +1299,15 @@ export function registerGitHandlers(): void {
     const cwd = ensureCwd(args?.cwd)
     await gitDiscardAll(cwd)
   })
+
+  ipcMain.handle(
+    'git:discard-paths',
+    async (_e, args: { cwd: string; paths: unknown }) => {
+      const cwd = ensureCwd(args?.cwd)
+      const paths = ensurePathArray(args?.paths)
+      await gitDiscardPaths(cwd, paths)
+    },
+  )
 
   ipcMain.handle('git:list-conflicts', async (_e, args: { cwd: string }) => {
     const cwd = ensureCwd(args?.cwd)
