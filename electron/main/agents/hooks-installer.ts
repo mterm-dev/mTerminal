@@ -251,11 +251,14 @@ export function installCodex(): void {
   const mcpScript = getResourcePath('mterminal-mcp.cjs')
   const sock = agentBridge.socketPath() || ''
 
-  // Recent Codex builds gate the hooks system behind a feature flag
-  // (regression #19199). Enable it explicitly — harmless on builds where
-  // the flag is already a no-op.
+  // Codex gates the hooks system behind a feature flag. Older builds called
+  // it `codex_hooks`; current builds use `hooks` (the old name now warns
+  // "deprecated"). Set the new key and clear the old one for cleanliness.
+  // See https://developers.openai.com/codex/config-basic#feature-flags
   if (!cfg.features || typeof cfg.features !== 'object') cfg.features = {}
-  ;(cfg.features as Record<string, unknown>).codex_hooks = true
+  const features = cfg.features as Record<string, unknown>
+  features.hooks = true
+  delete features.codex_hooks
 
   // Hooks: stamp our entries (tagged with `_mterminal` for clean uninstall),
   // preserve any user-defined hooks. Same idempotent merge pattern we use

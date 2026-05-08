@@ -167,14 +167,22 @@ export function AgentIntegrations() {
           />
           <IntegrationRow
             target="codex"
-            name="OpenAI Codex MCP server"
+            name="OpenAI Codex hooks + MCP"
             initials="cx"
-            configPath="~/.codex/config.toml — [mcp_servers.mterminal]"
+            configPath="~/.codex/config.toml"
             state={status.codex}
             version={status.version}
             busy={busy}
             onAction={onAction}
           />
+
+          {status.codex !== "missing" && (
+            <div className="settings-note" style={{ fontSize: 11 }}>
+              First run: inside <code>codex</code> type{" "}
+              <code>/hooks</code> and approve the 6 mterminal hooks. They
+              only need approval once per machine.
+            </div>
+          )}
 
           {status.bridgeSocket && (
             <div className="aip-int-bridge">
