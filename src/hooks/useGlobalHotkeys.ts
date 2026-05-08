@@ -62,27 +62,37 @@ export function useGlobalHotkeys({
         : e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey;
 
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const inXterm = !!target?.closest?.(".xterm");
+      if (
+        !inXterm &&
+        (tag === "input" || tag === "textarea" || tag === "select")
+      )
+        return;
 
       const w = wsRef.current;
       if (!w) return;
+      const consume = () => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
       if (modOnly(e)) {
         if (e.key === "t" || e.key === "T") {
-          e.preventDefault();
+          consume();
           setGridGroupId(null);
           w.addTab();
           return;
         }
         if (e.key === "w" || e.key === "W") {
           if (w.activeId != null) {
-            e.preventDefault();
+            consume();
             w.closeTab(w.activeId);
           }
           return;
         }
         if (e.key === "b" || e.key === "B") {
-          e.preventDefault();
+          consume();
           updateRef.current?.(
             "sidebarCollapsed",
             !settingsRef.current!.sidebarCollapsed,
@@ -91,40 +101,45 @@ export function useGlobalHotkeys({
         }
         if (e.key >= "1" && e.key <= "9") {
           const idx = Number(e.key) - 1;
-          e.preventDefault();
+          consume();
           setGridGroupId(null);
           w.selectIndex(idx);
           return;
         }
       }
       if (modShift(e) && (e.key === "G" || e.key === "g")) {
-        e.preventDefault();
+        consume();
         w.addGroup();
+        return;
       }
       if (modShift(e) && (e.key === "L" || e.key === "l")) {
-        e.preventDefault();
+        consume();
         spawnClaudeTabRef.current?.();
+        return;
       }
       if (modShift(e) && (e.key === "P" || e.key === "p")) {
-        e.preventDefault();
+        consume();
         openPaletteRef.current?.();
+        return;
       }
       if (modShift(e) && (e.key === "A" || e.key === "a")) {
-        e.preventDefault();
+        consume();
         toggleAIPanelRef.current?.();
+        return;
       }
       if (modShift(e) && (e.key === "X" || e.key === "x")) {
-        e.preventDefault();
+        consume();
         setShowMarketplace?.(true);
+        return;
       }
       if (modOnly(e) && e.key === ",") {
-        e.preventDefault();
+        consume();
         setShowSettings(true);
       }
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, { capture: true });
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, { capture: true });
       window.removeEventListener("keydown", onVoiceKey, { capture: true });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
