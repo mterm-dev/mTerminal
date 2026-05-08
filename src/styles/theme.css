@@ -544,6 +544,22 @@ body.resizing-sidebar * {
   color: #7ec97e;
   background: color-mix(in oklch, #7ec97e 18%, transparent);
 }
+.cc-badge.cc-done {
+  color: #7ec97e;
+  background: color-mix(in oklch, #7ec97e 18%, transparent);
+}
+.cc-badge.cc-group-badge {
+  width: auto;
+  min-width: 16px;
+  padding: 0 4px;
+  gap: 2px;
+  margin-right: 2px;
+}
+.cc-badge-count {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
 @keyframes cc-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.55; }

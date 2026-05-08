@@ -447,6 +447,18 @@ export function Sidebar(props: Props) {
 
         {groups.map((g) => {
           const groupTabs = tabs.filter((t) => t.groupId === g.id);
+          const groupAgentCounts = g.collapsed
+            ? groupTabs.reduce(
+                (acc, t) => {
+                  const st = agentStatuses?.get(t.id)?.state;
+                  if (st === "thinking") acc.thinking += 1;
+                  else if (st === "awaitingInput") acc.awaitingInput += 1;
+                  else if (st === "done") acc.done += 1;
+                  return acc;
+                },
+                { thinking: 0, awaitingInput: 0, done: 0 },
+              )
+            : null;
           const isDropTarget =
             dropMark?.kind === "endOf" && dropMark.groupId === g.id;
           const isActiveGroup = activeGroupId === g.id;
@@ -562,6 +574,32 @@ export function Sidebar(props: Props) {
                       onCommit={(v) => onRenameGroup(g.id, v)}
                     />
                   </span>
+                  {groupAgentCounts &&
+                    (
+                      [
+                        ["awaitingInput", "!"],
+                        ["thinking", "◐"],
+                        ["done", "✓"],
+                      ] as const
+                    )
+                      .filter(([k]) => groupAgentCounts[k] > 0)
+                      .map(([state, glyph]) => {
+                        const n = groupAgentCounts[state];
+                        const title = `${n} ${state}`;
+                        return (
+                          <span
+                            key={state}
+                            className={`cc-badge cc-${state} cc-group-badge`}
+                            title={title}
+                            aria-label={title}
+                          >
+                            {glyph}
+                            {n > 1 && (
+                              <span className="cc-badge-count">{n}</span>
+                            )}
+                          </span>
+                        );
+                      })}
                   <span
                     className="term-group-count"
                     aria-label={`${groupTabs.length} tabs`}
