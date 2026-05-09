@@ -4687,6 +4687,7 @@ body.grid-tab-dragging { user-select: none; cursor: grabbing !important; }
 .st-body > * {
   min-width: 0;
   max-width: 100%;
+  flex-shrink: 0;
 }
 .ext-custom-settings-container {
   display: flex;
