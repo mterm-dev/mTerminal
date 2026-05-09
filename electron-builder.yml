@@ -17,6 +17,12 @@ asarUnpack:
   - "**/node_modules/node-pty/**"
   - "**/node_modules/ssh2/**"
 
+extraResources:
+  - from: out/main/resources/agent-bridge
+    to: agent-bridge
+    filter:
+      - "**/*"
+
 linux:
   target:
     - AppImage
