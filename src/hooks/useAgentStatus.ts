@@ -7,11 +7,13 @@ import {
 import { playAgentSound, type AgentSoundType } from "../lib/agentSound";
 
 export type AgentState = "idle" | "thinking" | "awaitingInput" | "done";
+export type AgentEventSource = "hook" | "watcher" | "shutdown";
 
 export interface AgentStatus {
   state: AgentState;
   agent: "claude" | "codex" | null;
   lastChangeMs: number;
+  source?: AgentEventSource;
   detail?: { tool?: string; message?: string };
 }
 
@@ -21,6 +23,7 @@ interface AgentEv {
   state: AgentState;
   agent: "claude" | "codex" | null;
   lastChangeMs: number;
+  source?: AgentEventSource;
   detail?: { tool?: string; message?: string };
 }
 
@@ -118,12 +121,19 @@ export function useAgentStatus(
           state: ev.state,
           agent: ev.agent,
           lastChangeMs: ev.lastChangeMs,
+          source: ev.source,
           detail: ev.detail,
         });
         return next;
       });
 
-      if (ev.state === "done" && opts.soundEnabled) {
+      // Only the hook stream represents real task completions. Process-watcher
+      // ('watcher') fires `done` whenever the agent CLI exits — terminal close,
+      // /exit, Ctrl-C, crash. Codex MCP / Claude session_end ('shutdown') fires
+      // when the user is actively quitting. Neither warrants a sound.
+      const isRealDone = (ev.source ?? "hook") === "hook";
+
+      if (ev.state === "done" && isRealDone && opts.soundEnabled) {
         playAgentSound(opts.soundType ?? "chime", opts.soundVolume ?? 0.7);
       }
 
@@ -139,7 +149,7 @@ export function useAgentStatus(
             body: ev.detail?.message ?? `tab ${tabId} needs your input`,
           });
         }
-      } else if (ev.state === "done" && opts.notifyOnDone) {
+      } else if (ev.state === "done" && isRealDone && opts.notifyOnDone) {
         const last = lastNotifiedRef.current.get(tabId);
         if (!last || last.state !== "done") {
           lastNotifiedRef.current.set(tabId, { state: ev.state, ts: Date.now() });
