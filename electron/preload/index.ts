@@ -326,6 +326,8 @@ const api = {
       ipcRenderer.invoke('git:discard-all', { cwd }),
     discardPaths: (cwd: string, paths: string[]): Promise<void> =>
       ipcRenderer.invoke('git:discard-paths', { cwd, paths }),
+    deleteFile: (cwd: string, filePath: string): Promise<void> =>
+      ipcRenderer.invoke('git:delete-file', { cwd, path: filePath }),
     listConflicts: (
       cwd: string
     ): Promise<Array<{ path: string; indexStatus: string; worktreeStatus: string }>> =>

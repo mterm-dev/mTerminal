@@ -996,6 +996,14 @@ export async function gitDiscardPaths(cwd: string, paths: string[]): Promise<voi
   }
 }
 
+export async function gitDeleteFile(cwd: string, filePath: string): Promise<void> {
+  const abs = path.resolve(cwd, filePath)
+  if (!abs.startsWith(path.resolve(cwd) + path.sep) && abs !== path.resolve(cwd)) {
+    throw new Error(`path escapes cwd: ${filePath}`)
+  }
+  await fsp.rm(abs, { recursive: false, force: false })
+}
+
 function ensurePathArray(paths: unknown): string[] {
   if (!Array.isArray(paths)) throw new Error('paths must be an array')
   const out: string[] = []
@@ -1313,6 +1321,16 @@ export function registerGitHandlers(): void {
       const cwd = ensureCwd(args?.cwd)
       const paths = ensurePathArray(args?.paths)
       await gitDiscardPaths(cwd, paths)
+    },
+  )
+
+  ipcMain.handle(
+    'git:delete-file',
+    async (_e, args: { cwd: string; path: string }) => {
+      const cwd = ensureCwd(args?.cwd)
+      if (typeof args?.path !== 'string' || args.path.length === 0)
+        throw new Error('path is required')
+      await gitDeleteFile(cwd, args.path)
     },
   )
 
