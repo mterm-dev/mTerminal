@@ -59,7 +59,6 @@ import {
 import { PluginUiHost } from "./extensions/components/PluginUiHost";
 import { PluginManager } from "./extensions/components/PluginManager";
 import { PluginTabHost } from "./extensions/components/PluginTabHost";
-import { MarketplaceModal } from "./marketplace/components/MarketplaceModal";
 import { OnboardingModal } from "./marketplace/components/OnboardingModal";
 import { marketplaceApi } from "./marketplace/api";
 
@@ -128,7 +127,9 @@ function AppInner({
   const [closeConfirm, setCloseConfirm] = useState<{ count: number } | null>(null);
   const [gridGroupId, setGridGroupId] = useState<string | null>(null);
   const [soloTabId, setSoloTabId] = useState<number | null>(null);
-  const [showMarketplace, setShowMarketplace] = useState(false);
+  const [pendingExtensionsView, setPendingExtensionsView] = useState<
+    "installed" | "browse" | "updates" | null
+  >(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
@@ -879,7 +880,12 @@ function AppInner({
     toggleAIPanelRef,
     setGridGroupId,
     setShowSettings,
-    setShowMarketplace,
+    setShowMarketplace: (open) => {
+      if (open) {
+        setPendingExtensionsView("browse");
+        setShowSettings(true);
+      }
+    },
   });
 
   const openTabMenu = (id: number, x: number, y: number) => {
@@ -1289,17 +1295,18 @@ function AppInner({
           settings={settings}
           update={update}
           reset={reset}
-          onClose={() => setShowSettings(false)}
+          onClose={() => {
+            setShowSettings(false);
+            setPendingExtensionsView(null);
+          }}
           vaultUnlocked={vault.status.unlocked}
           vaultExists={vault.status.exists}
           onRequestVault={() =>
             requestVault(vault.status.exists ? "unlock" : "init")
           }
           mcpStatus={mcp.status}
-          onOpenMarketplace={() => {
-            setShowSettings(false);
-            setShowMarketplace(true);
-          }}
+          initialSection={pendingExtensionsView ? "extensions" : undefined}
+          initialExtensionsView={pendingExtensionsView ?? undefined}
         />
       )}
 
@@ -1315,7 +1322,6 @@ function AppInner({
 
       <VaultModalHost />
 
-      <MarketplaceModal open={showMarketplace} onClose={() => setShowMarketplace(false)} />
       <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
 
       {/* Extension system: pending modals/toasts/trust prompts. */}

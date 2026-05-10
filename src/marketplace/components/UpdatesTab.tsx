@@ -11,49 +11,37 @@ export function UpdatesTab() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, overflow: 'auto', height: '100%' }}>
-      {loading && <div style={{ color: 'var(--fg-dim, #888)', fontSize: 12 }}>checking...</div>}
-      {error && <div style={{ color: 'var(--c-red, #d66)', fontSize: 12 }}>{error}</div>}
-      {lastError && <div style={{ color: 'var(--c-red, #d66)', fontSize: 12 }}>{lastError}</div>}
+    <div className="ext-mkt-updates">
+      {loading && (
+        <div className="ext-mkt-state">
+          <div className="ext-mkt-state-sub">Checking for updates…</div>
+        </div>
+      )}
+      {error && <div className="ext-mkt-error">{error}</div>}
+      {lastError && <div className="ext-mkt-error">{lastError}</div>}
       {!loading && !error && updates.length === 0 && (
-        <div style={{ color: 'var(--fg-dim, #888)', fontSize: 12, textAlign: 'center', padding: 16 }}>
-          all extensions up to date
+        <div className="ext-mkt-state">
+          <div className="ext-mkt-state-title">All extensions up to date</div>
+          <div className="ext-mkt-state-sub">
+            We check periodically for new versions of installed extensions.
+          </div>
         </div>
       )}
       {updates.map((u) => (
-        <div
-          key={u.id}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: 10,
-            border: '1px solid var(--border-subtle, #2a2a2a)',
-            borderRadius: 6,
-            background: 'var(--surface-1, #18181a)',
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{u.displayName}</div>
-            <div style={{ fontSize: 11, color: 'var(--fg-dim, #888)' }}>
+        <div key={u.id} className="ext-mkt-update-row">
+          <div className="ext-mkt-update-info">
+            <span className="ext-mkt-update-name">{u.displayName}</span>
+            <span className="ext-mkt-update-bump">
               v{u.installedVersion} → v{u.latestVersion}
-            </div>
+            </span>
           </div>
           <button
             type="button"
+            className="st-btn primary"
             disabled={busy}
             onClick={() => void handleUpdate(u.id)}
-            style={{
-              padding: '4px 10px',
-              fontSize: 11,
-              background: 'var(--accent, #4a9)',
-              color: 'var(--surface-1, #111)',
-              border: 'none',
-              borderRadius: 4,
-              cursor: busy ? 'wait' : 'pointer',
-            }}
           >
-            update
+            Update
           </button>
         </div>
       ))}

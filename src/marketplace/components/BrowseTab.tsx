@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Category, ExtSummary } from '../types'
 import { useMarketplaceSearch } from '../hooks/useMarketplace'
-import { ExtensionCard } from './ExtensionCard'
 import { OfflineEmpty } from './OfflineEmpty'
+import { RatingStars } from './RatingStars'
 
 const CATEGORIES: Array<Category | 'all'> = [
   'all',
@@ -38,79 +38,75 @@ export function BrowseTab({ installedIds, onSelect }: Props) {
   }, [q, category, search])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%' }}>
-      <div style={{ display: 'flex', gap: 8, padding: '0 12px' }}>
+    <div className="ext-mkt-toolbar">
+      <div className="ext-mkt-search">
+        <span className="ext-mkt-search-icon" aria-hidden="true">
+          <svg width="13" height="13" viewBox="0 0 16 16">
+            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+        </span>
         <input
+          className="ext-mkt-search-input"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="search extensions"
-          style={{
-            flex: 1,
-            padding: '6px 10px',
-            background: 'var(--surface-2, #222)',
-            color: 'var(--fg, #e9e9e9)',
-            border: '1px solid var(--border-subtle, #2a2a2a)',
-            borderRadius: 4,
-            fontSize: 13,
-            outline: 'none',
-          }}
+          placeholder="Search extensions"
         />
       </div>
-      <div
-        style={{
-          display: 'flex',
-          gap: 6,
-          padding: '0 12px',
-          flexWrap: 'wrap',
-        }}
-      >
+      <div className="ext-mkt-cats">
         {CATEGORIES.map((c) => (
           <button
             key={c}
             type="button"
             onClick={() => setCategory(c)}
-            style={{
-              padding: '3px 9px',
-              fontSize: 11,
-              borderRadius: 999,
-              border: '1px solid var(--border-subtle, #2a2a2a)',
-              background:
-                category === c ? 'var(--accent, #4a9)' : 'var(--surface-2, #222)',
-              color:
-                category === c ? 'var(--surface-1, #111)' : 'var(--fg-dim, #888)',
-              cursor: 'pointer',
-            }}
+            className={`ext-mkt-cat${category === c ? ' active' : ''}`}
           >
             {c}
           </button>
         ))}
       </div>
-      <div
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-          padding: '0 12px 12px',
-        }}
-      >
+      <div className="ext-mkt-list">
         {offline && <OfflineEmpty message={error ?? undefined} onRetry={() => void search({})} />}
-        {!offline && error && (
-          <div style={{ color: 'var(--c-red, #d66)', fontSize: 12 }}>{error}</div>
-        )}
+        {!offline && error && <div className="ext-mkt-error">{error}</div>}
         {!offline && !error && items.length === 0 && !loading && (
-          <div style={{ color: 'var(--fg-dim, #888)', fontSize: 12, textAlign: 'center', padding: 16 }}>
-            no extensions match
+          <div className="ext-mkt-state">
+            <div className="ext-mkt-state-title">No extensions match</div>
+            <div className="ext-mkt-state-sub">
+              Try a different search term or pick another category.
+            </div>
+          </div>
+        )}
+        {!offline && !error && loading && items.length === 0 && (
+          <div className="ext-mkt-state">
+            <div className="ext-mkt-state-sub">Loading…</div>
           </div>
         )}
         {items.map((ext) => (
-          <ExtensionCard
+          <button
             key={ext.id}
-            ext={ext}
-            installed={installedIds.has(ext.id)}
+            type="button"
             onClick={() => onSelect(ext)}
-          />
+            className="ext-mkt-row"
+          >
+            <div className="ext-mkt-row-main">
+              <div className="ext-mkt-row-title">
+                <span className="ext-mkt-row-name">{ext.displayName}</span>
+                {installedIds.has(ext.id) && (
+                  <span className="ext-chip ext-chip--builtin">Installed</span>
+                )}
+              </div>
+              {ext.description && <div className="ext-mkt-row-desc">{ext.description}</div>}
+              <div className="ext-mkt-row-meta">
+                <RatingStars value={Math.round(ext.avgStars ?? 0)} size={12} />
+                <span>{ext.ratingCount}</span>
+                <span className="ext-mkt-row-meta-sep">·</span>
+                <span>{ext.downloadTotal} downloads</span>
+                <span className="ext-mkt-row-meta-sep">·</span>
+                <span>v{ext.latestVersion}</span>
+              </div>
+            </div>
+            <span className="ext-mkt-row-cta">Details →</span>
+          </button>
         ))}
       </div>
     </div>

@@ -11,6 +11,7 @@ import { DangerZone } from "./sections/DangerZone";
 import {
   ExtensionsOverview,
   ExtensionSettingsForm,
+  type ExtensionsView,
 } from "./sections/ExtensionsPanel";
 import { About } from "./sections/About";
 import { SECTION_ICONS } from "./sectionIcons";
@@ -29,7 +30,8 @@ interface Props {
   vaultExists: boolean;
   onRequestVault: () => void;
   mcpStatus?: { running: boolean; socketPath: string | null };
-  onOpenMarketplace?: () => void;
+  initialSection?: Section;
+  initialExtensionsView?: ExtensionsView;
 }
 
 type CoreSection =
@@ -68,10 +70,13 @@ export function SettingsModal({
   vaultExists,
   onRequestVault,
   mcpStatus,
-  onOpenMarketplace,
+  initialSection,
+  initialExtensionsView,
 }: Props) {
-  const [section, setSection] = useState<Section>("appearance");
-  const [extensionsOpen, setExtensionsOpen] = useState(false);
+  const [section, setSection] = useState<Section>(initialSection ?? "appearance");
+  const [extensionsOpen, setExtensionsOpen] = useState(
+    initialSection === "extensions" || initialSection?.startsWith("extension:") || false,
+  );
   const downOnOverlay = useRef(false);
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
@@ -281,7 +286,7 @@ export function SettingsModal({
                   setExtensionsOpen(true);
                   setSection(`extension:${extId}`);
                 }}
-                onOpenMarketplace={onOpenMarketplace}
+                initialView={initialExtensionsView}
               />
             )}
             {isExtensionSub && currentExtId && (
