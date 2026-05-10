@@ -31,7 +31,13 @@ const net = require('node:net')
 //
 // Note: `post_tool_use` stays in `thinking` state on purpose — the turn is
 // not over yet (the agent may invoke another tool or write the final
-// response). Only `stop` / `subagent_stop` / `session_end` flip to `done`.
+// response). Only `stop` flips to `done` for a real task completion.
+//
+// `subagent_stop` is intentionally mapped to `thinking` — the main agent
+// keeps running after a Task subagent finishes, so emitting `done` here
+// would fire premature notifications. `session_end` is mapped to `done`
+// but flagged with source=`shutdown` so the renderer can suppress sound
+// (the user already knew they were closing the session).
 const HOOK_TO_EVENT = {
   pre_tool_use: 'thinking',
   post_tool_use: 'thinking',
@@ -39,10 +45,12 @@ const HOOK_TO_EVENT = {
   notification: 'awaiting_input',
   permission_request: 'awaiting_input',
   stop: 'done',
-  subagent_stop: 'done',
+  subagent_stop: 'thinking',
   session_start: 'session_start',
   session_end: 'done',
 }
+
+const SHUTDOWN_HOOKS = new Set(['session_end'])
 
 function main() {
   const hookKind = String(process.argv[2] || '').trim()
@@ -92,12 +100,15 @@ function main() {
     if (parsed.session_id) detail.sessionId = String(parsed.session_id)
     if (parsed.turn_id) detail.turnId = String(parsed.turn_id)
 
+    const source = SHUTDOWN_HOOKS.has(hookKind) ? 'shutdown' : 'hook'
+
     const line =
       JSON.stringify({
         tabId,
         agent,
         event: evKind,
         ts: Date.now(),
+        source,
         detail: Object.keys(detail).length ? detail : undefined,
       }) + '\n'
 

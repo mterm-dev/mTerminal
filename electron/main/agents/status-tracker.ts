@@ -8,7 +8,7 @@
  */
 
 import { ipcMain, type BrowserWindow } from 'electron'
-import { agentBridge, type AgentEvent } from './bridge-server'
+import { agentBridge, type AgentEvent, type AgentEventSource } from './bridge-server'
 import { recordCodexSession } from './codex-rollout-watcher'
 
 export type AgentState = 'idle' | 'thinking' | 'awaitingInput' | 'done'
@@ -17,6 +17,7 @@ export interface AgentStatus {
   state: AgentState
   agent: 'claude' | 'codex' | null
   lastChangeMs: number
+  source?: AgentEventSource
   detail?: { tool?: string; message?: string }
 }
 
@@ -71,6 +72,7 @@ function handle(evt: AgentEvent): void {
   const agent = evt.agent === 'claude' || evt.agent === 'codex' ? evt.agent : null
   const ts = evt.ts ?? Date.now()
   const detail = evt.detail
+  const source = evt.source ?? 'hook'
 
   // Hook payloads carry sessionId — feed it into the rollout watcher so we
   // can route TurnAborted events back to the right tab.
@@ -81,24 +83,24 @@ function handle(evt: AgentEvent): void {
 
   switch (evt.event) {
     case 'session_start':
-      set(evt.tabId, { state: 'thinking', agent, lastChangeMs: ts, detail })
+      set(evt.tabId, { state: 'thinking', agent, lastChangeMs: ts, source, detail })
       return
     case 'thinking':
     case 'tool_use':
-      set(evt.tabId, { state: 'thinking', agent, lastChangeMs: ts, detail })
+      set(evt.tabId, { state: 'thinking', agent, lastChangeMs: ts, source, detail })
       return
     case 'awaiting_input':
-      set(evt.tabId, { state: 'awaitingInput', agent, lastChangeMs: ts, detail })
+      set(evt.tabId, { state: 'awaitingInput', agent, lastChangeMs: ts, source, detail })
       return
     case 'done':
-      set(evt.tabId, { state: 'done', agent, lastChangeMs: ts, detail })
+      set(evt.tabId, { state: 'done', agent, lastChangeMs: ts, source, detail })
       return
     case 'idle':
-      set(evt.tabId, { state: 'idle', agent, lastChangeMs: ts, detail })
+      set(evt.tabId, { state: 'idle', agent, lastChangeMs: ts, source, detail })
       return
     case 'error':
       // Treat as done so the UI stops spinning; detail.message carries info.
-      set(evt.tabId, { state: 'done', agent, lastChangeMs: ts, detail })
+      set(evt.tabId, { state: 'done', agent, lastChangeMs: ts, source, detail })
       return
   }
 }

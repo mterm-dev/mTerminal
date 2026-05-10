@@ -123,10 +123,17 @@ function ensureBridge() {
   })
 }
 
-function postEvent(event, detail) {
+function postEvent(event, detail, source) {
   if (!sockPath || !tabId) return
   const line =
-    JSON.stringify({ tabId, agent: 'codex', event, ts: Date.now(), detail }) + '\n'
+    JSON.stringify({
+      tabId,
+      agent: 'codex',
+      event,
+      ts: Date.now(),
+      source: source || 'hook',
+      detail,
+    }) + '\n'
   ensureBridge()
   if (bridgeReady && bridgeSock) {
     try {
@@ -243,17 +250,17 @@ process.stdin.on('data', (chunk) => {
 })
 
 process.stdin.on('end', () => {
-  postEvent('done')
+  postEvent('done', undefined, 'shutdown')
   setTimeout(() => process.exit(0), 50)
 })
 
 process.on('SIGTERM', () => {
-  postEvent('done')
+  postEvent('done', undefined, 'shutdown')
   setTimeout(() => process.exit(0), 50)
 })
 
 process.on('SIGINT', () => {
-  postEvent('done')
+  postEvent('done', undefined, 'shutdown')
   setTimeout(() => process.exit(0), 50)
 })
 

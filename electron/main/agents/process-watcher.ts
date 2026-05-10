@@ -98,6 +98,7 @@ function emit(tabId: number, agent: Agent, event: AgentEvent['event']): void {
     agent,
     event,
     ts: Date.now(),
+    source: 'watcher',
   } satisfies AgentEvent)
 }
 

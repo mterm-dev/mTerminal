@@ -23,12 +23,21 @@ export type AgentEventKind =
   | 'done'
   | 'error'
 
+/**
+ * Origin of an event. Distinguishes legitimate hook/MCP-driven completions
+ * from incidental ones (process disappeared because the user killed the
+ * terminal, session_end fired because the user typed `/exit`, etc.). The
+ * renderer suppresses sound notifications when source is not `hook`.
+ */
+export type AgentEventSource = 'hook' | 'watcher' | 'shutdown'
+
 export interface AgentEvent {
   /** Tab id assigned by `electron/main/sessions.ts` when spawning the PTY. */
   tabId: number
   agent: 'claude' | 'codex' | 'unknown'
   event: AgentEventKind
   ts: number
+  source?: AgentEventSource
   detail?: { tool?: string; message?: string; exitCode?: number }
 }
 
@@ -104,6 +113,7 @@ class AgentBridge extends EventEmitter {
               agent: evt.agent,
               event: evt.event,
               ts: typeof evt.ts === 'number' ? evt.ts : Date.now(),
+              source: evt.source,
               detail: evt.detail,
             } as AgentEvent)
           }
