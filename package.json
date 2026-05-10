@@ -24,7 +24,7 @@
     "package:win": "electron-vite build && electron-builder --win --publish never",
     "package:mac": "electron-vite build && electron-builder --mac --publish never",
     "rebuild": "electron-rebuild -f -w node-pty",
-    "postinstall": "electron-rebuild -f -w node-pty || true",
+    "postinstall": "node node_modules/electron/install.js && electron-rebuild -f -w node-pty || true",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
