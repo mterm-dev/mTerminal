@@ -158,9 +158,18 @@ const api = {
     stop: (): Promise<{ running: boolean; socketPath: string | null }> =>
       ipcRenderer.invoke('mcp:stop'),
   },
+  wsl: {
+    listDistros: (): Promise<
+      Array<{ name: string; default: boolean; version: 1 | 2; state: string }>
+    > => ipcRenderer.invoke('wsl:list-distros'),
+  },
   system: {
-    info: (): Promise<{ user: string; host: string }> =>
-      ipcRenderer.invoke('system:info'),
+    info: (): Promise<{
+      user: string
+      host: string
+      home: string
+      platform: NodeJS.Platform
+    }> => ipcRenderer.invoke('system:info'),
     platform: (): Promise<NodeJS.Platform> =>
       ipcRenderer.invoke('system:platform'),
   },

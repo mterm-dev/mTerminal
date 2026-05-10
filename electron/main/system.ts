@@ -32,10 +32,25 @@ function detectHost(): string {
   return process.env.COMPUTERNAME || process.env.HOSTNAME || 'host'
 }
 
+function detectHome(): string {
+  try {
+    const h = os.homedir()
+    if (h) return h
+  } catch {}
+  return (
+    process.env.HOME ||
+    process.env.USERPROFILE ||
+    process.env.HOMEPATH ||
+    ''
+  )
+}
+
 export function registerSystemHandlers(): void {
   ipcMain.handle('system:info', () => ({
     user: detectUser(),
     host: detectHost(),
+    home: detectHome(),
+    platform: process.platform,
   }))
   ipcMain.handle('system:platform', () => process.platform)
 }

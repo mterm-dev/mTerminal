@@ -21,8 +21,15 @@ let server: net.Server | null = null
 let socketPath: string | null = null
 let starting: Promise<McpStatus> | null = null
 
+function sanitizePipeUser(user: string): string {
+  return user.replace(/[^A-Za-z0-9._-]/g, '_') || 'user'
+}
+
 export function computeSocketPath(): string {
   const user = os.userInfo().username || 'user'
+  if (process.platform === 'win32') {
+    return `\\\\.\\pipe\\mterminal-mcp-${sanitizePipeUser(user)}`
+  }
   if (process.platform === 'darwin') {
     const dir = path.join(os.homedir(), 'Library', 'Caches', 'mterminal')
     fs.mkdirSync(dir, { recursive: true })
@@ -226,9 +233,6 @@ function attachClient(socket: net.Socket): void {
 }
 
 export function startServer(): Promise<McpStatus> {
-  if (process.platform === 'win32') {
-    return Promise.reject(new Error('MCP server not yet supported on Windows'))
-  }
   if (server) {
     return Promise.resolve({ running: true, socketPath })
   }
@@ -237,11 +241,13 @@ export function startServer(): Promise<McpStatus> {
   }
   starting = (async (): Promise<McpStatus> => {
     const sp = computeSocketPath()
-    try {
-      await fsp.unlink(sp)
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error('[mcp] failed to remove stale socket:', e)
+    if (process.platform !== 'win32') {
+      try {
+        await fsp.unlink(sp)
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.error('[mcp] failed to remove stale socket:', e)
+        }
       }
     }
     await new Promise<void>((resolve, reject) => {
@@ -251,10 +257,12 @@ export function startServer(): Promise<McpStatus> {
         s.removeListener('error', reject)
         server = s
         socketPath = sp
-        try {
-          fs.chmodSync(sp, 0o600)
-        } catch (e) {
-          console.error('[mcp] chmod failed:', e)
+        if (process.platform !== 'win32') {
+          try {
+            fs.chmodSync(sp, 0o600)
+          } catch (e) {
+            console.error('[mcp] chmod failed:', e)
+          }
         }
         resolve()
       })
@@ -275,7 +283,7 @@ export async function stopServer(): Promise<McpStatus> {
   if (s) {
     await new Promise<void>((resolve) => s.close(() => resolve()))
   }
-  if (sp) {
+  if (sp && process.platform !== 'win32') {
     try {
       await fsp.unlink(sp)
     } catch {}

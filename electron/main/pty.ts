@@ -15,6 +15,11 @@ import {
   getMainWindow,
   type PtySession,
 } from './sessions'
+import {
+  buildWslSpawnArgs,
+  readWslProcInfo,
+  newestWslChildPid,
+} from './wsl'
 
 export { setMainWindow } from './sessions'
 
@@ -157,6 +162,7 @@ export function spawnSession(opts: {
   args: string[]
   env: Record<string, string>
   cwd?: string
+  wslDistro?: string
 }): number {
   const cwd = resolveSpawnCwd(opts.cwd)
   const id = nextId()
@@ -192,6 +198,7 @@ export function spawnSession(opts: {
     ringBuffer: ring,
     lastActivityMs: Date.now(),
     shell: opts.shell,
+    ...(opts.wslDistro ? { wslDistro: opts.wslDistro } : {}),
   }
   SESSIONS.set(id, session)
 
@@ -241,6 +248,7 @@ export function spawnSession(opts: {
     const bus = ensureExtBus()
     if (bus) bus.emit('app:terminal:exit', { ptyId: id })
     SESSIONS.delete(id)
+    WSL_INFO_CACHE.delete(id)
   })
 
   return id
@@ -418,19 +426,61 @@ async function ptyInfo(
   return { cwd: info.cwd, cmd: info.cmd, pid: leaf }
 }
 
+interface WslInfoCacheEntry {
+  expiresAt: number
+  promise: Promise<{ cwd: string | null; cmd: string | null; pid: number }>
+}
+const WSL_INFO_CACHE = new Map<number, WslInfoCacheEntry>()
+const WSL_INFO_TTL_MS = 1500
+
+async function wslPtyInfo(
+  sessionId: number,
+  distro: string
+): Promise<{ cwd: string | null; cmd: string | null; pid: number }> {
+  const now = Date.now()
+  const cached = WSL_INFO_CACHE.get(sessionId)
+  if (cached && cached.expiresAt > now) return cached.promise
+  const promise = (async () => {
+    const pid = await newestWslChildPid(distro)
+    if (pid === null) return { cwd: null, cmd: null, pid: 0 }
+    const info = await readWslProcInfo(distro, pid)
+    return { cwd: info.cwd, cmd: info.cmd, pid }
+  })()
+  WSL_INFO_CACHE.set(sessionId, { expiresAt: now + WSL_INFO_TTL_MS, promise })
+  promise.catch(() => {
+    WSL_INFO_CACHE.delete(sessionId)
+  })
+  return promise
+}
+
+export function resolveWslSentinel(
+  shell: string
+): { shell: string; args: string[]; wslDistro: string } | null {
+  const m = /^wsl:\/\/(.*)$/.exec(shell)
+  if (!m) return null
+  const distro = (m[1] ?? '').trim()
+  const built = buildWslSpawnArgs(distro || null, null)
+  if (!built) return null
+  return { shell: built.shell, args: built.args, wslDistro: distro }
+}
+
 export function registerPtyHandlers(): void {
   ipcMain.handle('pty:spawn', (_e, args: SpawnArgs) => {
-    const shell =
+    const requested =
       args.shell && args.shell.trim().length > 0 ? args.shell : loginShell()
+    const wsl = resolveWslSentinel(requested)
+    const shell = wsl ? wsl.shell : requested
     const passedArgs = (args.args ?? []).filter((a) => a !== '')
+    const finalArgs = wsl ? wsl.args : passedArgs
     const env = buildEnv(shell, args.env)
     return spawnSession({
       rows: args.rows,
       cols: args.cols,
       shell,
-      args: passedArgs,
+      args: finalArgs,
       env,
       cwd: args.cwd,
+      ...(wsl ? { wslDistro: wsl.wslDistro } : {}),
     })
   })
 
@@ -459,11 +509,15 @@ export function registerPtyHandlers(): void {
       s.pty.kill()
     } catch {}
     SESSIONS.delete(args.id)
+    WSL_INFO_CACHE.delete(args.id)
   })
 
   ipcMain.handle('pty:info', async (_e, args: { id: number }) => {
     const s = SESSIONS.get(args.id)
     if (!s) throw new Error(`no pty session ${args.id}`)
+    if (s.wslDistro !== undefined) {
+      return wslPtyInfo(s.id, s.wslDistro)
+    }
     return ptyInfo(s.pid)
   })
 

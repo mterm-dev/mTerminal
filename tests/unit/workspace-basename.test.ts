@@ -44,4 +44,34 @@ describe('basename', () => {
       delete (window as unknown as { __MT_HOME?: string }).__MT_HOME
     }
   })
+
+  it('returns last segment of a Windows drive path', () => {
+    expect(basename('C:\\Users\\alice')).toBe('alice')
+  })
+
+  it('handles trailing backslashes on Windows paths', () => {
+    expect(basename('C:\\Users\\alice\\')).toBe('alice')
+  })
+
+  it('handles forward slashes mixed into Windows paths', () => {
+    expect(basename('C:\\Users/alice/Documents')).toBe('Documents')
+  })
+
+  it("returns drive root as 'C:' style", () => {
+    expect(basename('C:\\')).toBe('C:')
+  })
+
+  it('returns last segment of a UNC WSL path', () => {
+    expect(basename('\\\\wsl$\\Ubuntu\\home\\alice')).toBe('alice')
+  })
+
+  it("collapses Windows __MT_HOME case-insensitively to '~'", () => {
+    ;(window as unknown as { __MT_HOME?: string }).__MT_HOME = 'C:\\Users\\alice'
+    try {
+      expect(basename('c:\\users\\alice')).toBe('~')
+      expect(basename('C:\\Users\\alice')).toBe('~')
+    } finally {
+      delete (window as unknown as { __MT_HOME?: string }).__MT_HOME
+    }
+  })
 })

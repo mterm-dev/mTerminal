@@ -1,5 +1,11 @@
 import { AGENT_SOUND_TYPES, type AgentSoundType } from "../lib/agentSound";
-import type { CursorStyle, Settings, VoiceEngineId } from "./useSettings";
+import type {
+  CursorStyle,
+  Settings,
+  ShellProfile,
+  ShellProfileKind,
+  VoiceEngineId,
+} from "./useSettings";
 import { DEFAULT_SETTINGS } from "./useSettings";
 
 const CURSOR_STYLES: readonly CursorStyle[] = ["block", "bar", "underline"] as const;
@@ -50,12 +56,57 @@ function pickRecord<T>(value: unknown): Record<string, T> {
   return {};
 }
 
+const SHELL_PROFILE_KINDS: readonly ShellProfileKind[] = ["native", "wsl"] as const;
+
+function normalizeShellProfile(raw: unknown): ShellProfile | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const id = typeof r.id === "string" ? r.id.trim() : "";
+  const name = typeof r.name === "string" ? r.name.trim() : "";
+  const kind =
+    typeof r.kind === "string" && (SHELL_PROFILE_KINDS as readonly string[]).includes(r.kind)
+      ? (r.kind as ShellProfileKind)
+      : "native";
+  const shell = typeof r.shell === "string" ? r.shell : "";
+  if (!id || !name) return null;
+  if (kind === "native" && !shell) return null;
+  const args = typeof r.args === "string" ? r.args : "";
+  const icon = typeof r.icon === "string" && r.icon ? r.icon : undefined;
+  const wslDistro =
+    kind === "wsl" && typeof r.wslDistro === "string" ? r.wslDistro : undefined;
+  const out: ShellProfile = {
+    id,
+    name,
+    kind,
+    shell: kind === "wsl" ? `wsl://${wslDistro ?? ""}` : shell,
+    args,
+  };
+  if (icon) out.icon = icon;
+  if (wslDistro !== undefined) out.wslDistro = wslDistro;
+  return out;
+}
+
+function normalizeShellProfiles(raw: unknown): ShellProfile[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ShellProfile[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const p = normalizeShellProfile(item);
+    if (!p) continue;
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    out.push(p);
+  }
+  return out;
+}
+
 export function normalizeSettings(raw: unknown): Settings {
   const r = (raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {});
   const out: Settings = { ...DEFAULT_SETTINGS };
   const corrections: string[] = [];
 
   for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
+    if (k === "shellProfiles" || k === "defaultShellProfileId") continue;
     const def = DEFAULT_SETTINGS[k];
     const value = r[k as string];
 
@@ -93,6 +144,14 @@ export function normalizeSettings(raw: unknown): Settings {
       cleaned[extId] = pickRecord<unknown>(sub);
     }
     out.extensions = cleaned;
+  }
+
+  out.shellProfiles = normalizeShellProfiles(r.shellProfiles);
+  if (typeof r.defaultShellProfileId === "string") {
+    const id = r.defaultShellProfileId;
+    out.defaultShellProfileId = out.shellProfiles.some((p) => p.id === id) ? id : null;
+  } else {
+    out.defaultShellProfileId = null;
   }
 
   if (corrections.length > 0) {

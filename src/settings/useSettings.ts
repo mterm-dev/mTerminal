@@ -19,6 +19,18 @@ export interface AiProviderConfig {
   baseUrl?: string;
 }
 
+export type ShellProfileKind = "native" | "wsl";
+
+export interface ShellProfile {
+  id: string;
+  name: string;
+  kind: ShellProfileKind;
+  shell: string;
+  args: string;
+  icon?: string;
+  wslDistro?: string;
+}
+
 export interface Settings {
   settingsSchemaVersion: number;
   themeId: string;
@@ -30,6 +42,8 @@ export interface Settings {
   scrollback: number;
   shellOverride: string;
   shellArgs: string;
+  shellProfiles: ShellProfile[];
+  defaultShellProfileId: string | null;
   uiFontSize: number;
   windowOpacity: number;
   confirmCloseMultipleTabs: boolean;
@@ -83,6 +97,8 @@ export const DEFAULT_SETTINGS: Settings = {
   scrollback: 5000,
   shellOverride: "",
   shellArgs: "",
+  shellProfiles: [],
+  defaultShellProfileId: null,
   uiFontSize: 13,
   windowOpacity: 1,
   confirmCloseMultipleTabs: true,

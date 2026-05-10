@@ -55,4 +55,51 @@ describe("normalizeSettings", () => {
     expect(out.extensions?.["ext-a"]).toEqual({ x: 1 });
     expect(out.extensions?.["ext-b"]).toEqual({});
   });
+
+  it("defaults shellProfiles to empty array and defaultShellProfileId to null", () => {
+    const out = normalizeSettings({});
+    expect(out.shellProfiles).toEqual([]);
+    expect(out.defaultShellProfileId).toBeNull();
+  });
+
+  it("keeps valid shellProfiles entries and rewrites WSL shell to wsl:// sentinel", () => {
+    const out = normalizeSettings({
+      shellProfiles: [
+        {
+          id: "abc",
+          name: "WSL: Ubuntu",
+          kind: "wsl",
+          shell: "ignored",
+          args: "",
+          wslDistro: "Ubuntu",
+        },
+        {
+          id: "def",
+          name: "PowerShell",
+          kind: "native",
+          shell: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          args: "-NoLogo",
+        },
+      ],
+      defaultShellProfileId: "def",
+    });
+    expect(out.shellProfiles).toHaveLength(2);
+    expect(out.shellProfiles[0]?.shell).toBe("wsl://Ubuntu");
+    expect(out.shellProfiles[1]?.shell).toContain("powershell.exe");
+    expect(out.defaultShellProfileId).toBe("def");
+  });
+
+  it("drops malformed profile entries and dedupes by id", () => {
+    const out = normalizeSettings({
+      shellProfiles: [
+        { id: "a", name: "ok", kind: "native", shell: "/bin/bash", args: "" },
+        { id: "a", name: "dup", kind: "native", shell: "/bin/sh", args: "" },
+        { id: "", name: "no-id", kind: "native", shell: "/bin/sh", args: "" },
+        "garbage",
+      ],
+      defaultShellProfileId: "missing",
+    });
+    expect(out.shellProfiles.map((p) => p.id)).toEqual(["a"]);
+    expect(out.defaultShellProfileId).toBeNull();
+  });
 });

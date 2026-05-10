@@ -141,6 +141,16 @@ describe('mcp server lifecycle + IPC', () => {
     expect(mcp.statusServer()).toEqual({ running: false, socketPath: null })
   })
 
+  it('computeSocketPath returns a Windows named-pipe path on win32', async () => {
+    const { computeSocketPath } = await import('../../electron/main/mcp')
+    const sp = computeSocketPath()
+    if (process.platform === 'win32') {
+      expect(sp.startsWith('\\\\.\\pipe\\mterminal-mcp-')).toBe(true)
+    } else {
+      expect(sp.startsWith('\\\\.\\pipe\\')).toBe(false)
+    }
+  })
+
   it.skipIf(process.platform === 'win32')(
     'startServer() returns running:true and socket file exists',
     { timeout: TEST_TIMEOUT },
@@ -323,22 +333,15 @@ describe('mcp server lifecycle + IPC', () => {
     }
   )
 
-  it('startServer() on win32 throws "not yet supported on Windows"', async () => {
-    mcp = await loadMcp()
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', {
-      value: 'win32',
-      configurable: true,
-    })
-    try {
-      await expect(mcp.startServer()).rejects.toThrow(
-        /MCP server not yet supported on Windows/
-      )
-    } finally {
-      Object.defineProperty(process, 'platform', {
-        value: originalPlatform,
-        configurable: true,
-      })
-    }
-  })
+  it.skipIf(process.platform === 'win32')(
+    'startServer() returns a unix socket path on POSIX',
+    { timeout: TEST_TIMEOUT },
+    async () => {
+      mcp = await loadMcp()
+      const status = await mcp.startServer()
+      expect(status.running).toBe(true)
+      expect(status.socketPath).not.toBeNull()
+      expect(status.socketPath?.startsWith('\\\\.\\pipe\\')).toBe(false)
+    },
+  )
 })

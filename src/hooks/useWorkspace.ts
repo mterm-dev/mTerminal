@@ -9,14 +9,31 @@ import {
 
 export type GroupLayout = CustomLayout;
 
+function isWindowsPath(p: string): boolean {
+  if (/^[A-Za-z]:[\\/]/.test(p)) return true;
+  if (p.startsWith("\\\\") || p.startsWith("//")) return true;
+  return false;
+}
+
 export function basename(p: string): string {
   if (!p) return "";
-  const trimmed = p.replace(/\/+$/, "");
-  if (trimmed === "" || trimmed === "/") return "/";
   const userHome = (window as unknown as { __MT_HOME?: string }).__MT_HOME;
-  if (userHome && trimmed === userHome) return "~";
-  const parts = trimmed.split("/");
-  return parts[parts.length - 1] || "/";
+  const win = isWindowsPath(p);
+  const sepRe = win ? /[\\/]+$/ : /\/+$/;
+  const trimmed = p.replace(sepRe, "");
+  if (trimmed === "" || trimmed === "/" || /^[A-Za-z]:$/.test(trimmed)) {
+    return win ? trimmed.toUpperCase() || "\\" : "/";
+  }
+  if (userHome) {
+    if (win) {
+      if (trimmed.toLowerCase() === userHome.toLowerCase()) return "~";
+    } else if (trimmed === userHome) {
+      return "~";
+    }
+  }
+  const splitRe = win ? /[\\/]/ : /\//;
+  const parts = trimmed.split(splitRe);
+  return parts[parts.length - 1] || (win ? "\\" : "/");
 }
 
 export type TabKind = "local" | "custom";
@@ -31,6 +48,7 @@ export interface Tab {
   kind: TabKind;
   customType?: string;
   customProps?: unknown;
+  profileId?: string;
 }
 
 export interface Group {
@@ -311,37 +329,42 @@ export function useWorkspace() {
     setState((s) => ({ ...s, activeId: id }));
   }, []);
 
-  const addTab = useCallback((groupId?: string | null): number => {
-    let createdId = -1;
-    setState((s) => {
-      const active = s.tabs.find((t) => t.id === s.activeId);
-      const activeGroup =
-        active && (active.kind === "local" || active.kind === "custom")
-          ? active.groupId
+  const addTab = useCallback(
+    (groupId?: string | null, opts?: { profileId?: string | null }): number => {
+      let createdId = -1;
+      setState((s) => {
+        const active = s.tabs.find((t) => t.id === s.activeId);
+        const activeGroup =
+          active && (active.kind === "local" || active.kind === "custom")
+            ? active.groupId
+            : null;
+        const targetGroup =
+          groupId === undefined ? activeGroup ?? null : groupId;
+        const group = targetGroup
+          ? s.groups.find((g) => g.id === targetGroup)
           : null;
-      const targetGroup = groupId === undefined ? activeGroup ?? null : groupId;
-      const group = targetGroup
-        ? s.groups.find((g) => g.id === targetGroup)
-        : null;
-      const id = s.nextTabId;
-      createdId = id;
-      const tab: Tab = {
-        id,
-        label: "shell",
-        groupId: targetGroup,
-        autoLabel: true,
-        kind: "local",
-        cwd: group?.defaultCwd,
-      };
-      return {
-        ...s,
-        tabs: [...s.tabs, tab],
-        activeId: id,
-        nextTabId: id + 1,
-      };
-    });
-    return createdId;
-  }, []);
+        const id = s.nextTabId;
+        createdId = id;
+        const tab: Tab = {
+          id,
+          label: "shell",
+          groupId: targetGroup,
+          autoLabel: true,
+          kind: "local",
+          cwd: group?.defaultCwd,
+          ...(opts?.profileId ? { profileId: opts.profileId } : {}),
+        };
+        return {
+          ...s,
+          tabs: [...s.tabs, tab],
+          activeId: id,
+          nextTabId: id + 1,
+        };
+      });
+      return createdId;
+    },
+    [],
+  );
 
   const addCustomTab = useCallback(
     (opts: {
@@ -425,7 +448,23 @@ export function useWorkspace() {
         const baseFromCwd = info.cwd ? basename(info.cwd) : undefined;
         const isShell =
           cmd != null &&
-          ["bash", "zsh", "fish", "sh", "dash", "ksh"].includes(cmd);
+          [
+            "bash",
+            "zsh",
+            "fish",
+            "sh",
+            "dash",
+            "ksh",
+            "powershell",
+            "pwsh",
+            "cmd",
+            "wsl",
+            "bash.exe",
+            "powershell.exe",
+            "pwsh.exe",
+            "cmd.exe",
+            "wsl.exe",
+          ].includes(cmd.toLowerCase());
         const autoSub = isShell ? baseFromCwd : cmd;
         const autoLabel = isShell
           ? baseFromCwd ?? "shell"

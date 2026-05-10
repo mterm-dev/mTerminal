@@ -12,6 +12,7 @@ import {
 import path from 'node:path'
 import { registerPtyHandlers, setMainWindow as setPtyWindow } from './pty'
 import { registerSystemHandlers } from './system'
+import { registerWslHandlers } from './wsl'
 import { registerVaultHandlers } from './vault'
 import { registerAiHandlers } from './ai'
 import { agentBridge } from './agents/bridge-server'
@@ -150,6 +151,7 @@ app
       void getExtensionHost().shutdown()
     })
     registerSystemHandlers()
+    registerWslHandlers()
 
     // Spin up the extension system. Manifest scan + activation happen here
     // so plugin contributions are visible by the time the renderer asks for

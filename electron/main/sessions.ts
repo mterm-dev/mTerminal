@@ -64,6 +64,7 @@ export interface PtySession {
   ringBuffer: RingBuffer
   lastActivityMs: number
   shell: string
+  wslDistro?: string
 }
 
 export const SESSIONS: Map<number, PtySession> = new Map()

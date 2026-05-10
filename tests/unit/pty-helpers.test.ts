@@ -8,6 +8,7 @@ import {
   buildEnv,
   readProcInfo,
   resolveSpawnCwd,
+  resolveWslSentinel,
   type NodeInfo,
 } from '../../electron/main/pty'
 
@@ -245,4 +246,29 @@ describe('resolveSpawnCwd', () => {
       fs.rmSync(tmp, { recursive: true, force: true })
     }
   })
+})
+
+describe('resolveWslSentinel', () => {
+  it('returns null for non-wsl shell strings', () => {
+    expect(resolveWslSentinel('/bin/bash')).toBeNull()
+    expect(resolveWslSentinel('cmd.exe')).toBeNull()
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'resolves wsl://Distro to wsl.exe -d Distro',
+    () => {
+      const r = resolveWslSentinel('wsl://Ubuntu')
+      expect(r).not.toBeNull()
+      expect(r?.shell.toLowerCase()).toContain('wsl.exe')
+      expect(r?.args.slice(0, 2)).toEqual(['-d', 'Ubuntu'])
+      expect(r?.wslDistro).toBe('Ubuntu')
+    },
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'returns null off Windows because wsl.exe is unreachable',
+    () => {
+      expect(resolveWslSentinel('wsl://Ubuntu')).toBeNull()
+    },
+  )
 })

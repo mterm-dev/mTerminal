@@ -301,8 +301,11 @@ function AppInner({
   updateUiRef.current = updateUi;
 
   useEffect(() => {
-    (window as unknown as { __MT_HOME?: string }).__MT_HOME = `/home/${sys.user}`;
-  }, [sys.user]);
+    const fallback =
+      sys.platform === "win32" ? `C:\\Users\\${sys.user}` : `/home/${sys.user}`;
+    (window as unknown as { __MT_HOME?: string }).__MT_HOME =
+      sys.home || fallback;
+  }, [sys.home, sys.platform, sys.user]);
 
   // ── Extension system: settings/workspace backends + boot ────────────────
   // Wire the renderer host's settings/workspace backends to the live React
@@ -474,6 +477,29 @@ function AppInner({
         .map((s) => s.trim())
         .filter(Boolean),
     [settings.shellArgs],
+  );
+
+  const resolveShellForTab = useCallback(
+    (profileId: string | undefined): { shell: string; args: string[] } => {
+      const id = profileId ?? settings.defaultShellProfileId ?? null;
+      if (id) {
+        const p = settings.shellProfiles.find((sp) => sp.id === id);
+        if (p) {
+          const args = p.args
+            .split(/\s+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          return { shell: p.shell, args };
+        }
+      }
+      return { shell: settings.shellOverride, args: shellArgs };
+    },
+    [
+      settings.defaultShellProfileId,
+      settings.shellProfiles,
+      settings.shellOverride,
+      shellArgs,
+    ],
   );
 
   const activeTab = useMemo(
@@ -831,12 +857,21 @@ function AppInner({
   const spawnClaudeTab = useCallback(() => {
     const cur = ws.tabs.find((t) => t.id === ws.activeId);
     const cwd = cur?.cwd;
-    const cmd = cwd ? `cd ${shq(cwd)} && claude\n` : `claude\n`;
+    const profileId = cur?.profileId ?? settings.defaultShellProfileId ?? null;
+    const profile = profileId
+      ? settings.shellProfiles.find((p) => p.id === profileId) ?? null
+      : null;
+    const isWsl = profile?.kind === "wsl";
+    const looksLinuxPath = !!cwd && cwd.startsWith("/");
+    const cwdUsable = isWsl ? looksLinuxPath : !!cwd;
+    const cmd = cwdUsable && cwd
+      ? `cd ${shq(cwd)} && claude\n`
+      : `claude\n`;
     setGridGroupId(null);
     setSoloTabId(null);
-    const id = ws.addTab();
+    const id = ws.addTab(undefined, profileId ? { profileId } : undefined);
     pendingCommandsRef.current.set(id, cmd);
-  }, [ws]);
+  }, [ws, settings.defaultShellProfileId, settings.shellProfiles]);
 
   const toggleSolo = useCallback((id: number) => {
     setSoloTabId((cur) => (cur === id ? null : id));
@@ -1016,7 +1051,32 @@ function AppInner({
               active && active.kind === "local" ? active.groupId : null;
             const target = g === undefined ? activeGroup : g;
             if (target !== gridGroupId) setGridGroupId(null);
-            ws.addTab(g);
+            const profileId = settings.defaultShellProfileId ?? null;
+            ws.addTab(g, profileId ? { profileId } : undefined);
+          }}
+          onAddTabContextMenu={(x, y, groupId) => {
+            const profiles = settings.shellProfiles;
+            if (profiles.length === 0) return;
+            const items: MenuItem[] = [
+              {
+                label: "default shell",
+                onSelect: () => {
+                  if (groupId !== gridGroupId) setGridGroupId(null);
+                  ws.addTab(groupId ?? undefined);
+                },
+              },
+              { label: "", onSelect: () => {}, separator: true },
+              ...profiles.map<MenuItem>((p) => ({
+                label: `${p.kind === "wsl" ? "wsl: " : ""}${p.name}${
+                  settings.defaultShellProfileId === p.id ? " (default)" : ""
+                }`,
+                onSelect: () => {
+                  if (groupId !== gridGroupId) setGridGroupId(null);
+                  ws.addTab(groupId ?? undefined, { profileId: p.id });
+                },
+              })),
+            ];
+            setCtx({ x, y, items });
           }}
           onAddFileBrowser={
             registeredTabTypes.has("file-browser")
@@ -1132,6 +1192,7 @@ function AppInner({
                   />
                 );
               }
+              const tabShell = resolveShellForTab(t.profileId);
               return (
                 <TerminalTab
                   key={t.id}
@@ -1161,8 +1222,8 @@ function AppInner({
                   cursorBlink={settings.cursorBlink}
                   scrollback={settings.scrollback}
                   theme={xtermTheme}
-                  shell={settings.shellOverride}
-                  shellArgs={shellArgs}
+                  shell={tabShell.shell}
+                  shellArgs={tabShell.args}
                   showGreeting={settings.showGreeting}
                   copyOnSelect={settings.copyOnSelect}
                   initialCwd={t.cwd}

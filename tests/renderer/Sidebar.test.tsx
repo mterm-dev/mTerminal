@@ -230,7 +230,7 @@ describe("Sidebar - tab interactions", () => {
 
   it("9. + tab button calls onAddTab() with no args (ungrouped)", () => {
     const { handlers } = renderSidebar();
-    fireEvent.click(screen.getByTitle("new tab"));
+    fireEvent.click(screen.getByTitle(/^new tab/));
     expect(handlers.onAddTab).toHaveBeenCalledTimes(1);
     expect(handlers.onAddTab).toHaveBeenCalledWith();
   });

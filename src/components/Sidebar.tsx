@@ -21,6 +21,7 @@ interface Props {
   setEditingGroupId: (id: string | null) => void;
   onSelectTab: (id: number) => void;
   onAddTab: (groupId?: string | null) => void;
+  onAddTabContextMenu?: (x: number, y: number, groupId?: string | null) => void;
   onAddFileBrowser?: (groupId: string) => void;
   onAddGroup: () => void;
   onToggleGroup: (id: string) => void;
@@ -97,6 +98,7 @@ export function Sidebar(props: Props) {
     setEditingGroupId,
     onSelectTab,
     onAddTab,
+    onAddTabContextMenu,
     onAddFileBrowser,
     onAddGroup,
     onToggleGroup,
@@ -392,8 +394,13 @@ export function Sidebar(props: Props) {
         <div className="term-side-actions">
           <button
             className="ghost-btn"
-            title="new tab"
+            title="new tab (right-click for profile)"
             onClick={() => onAddTab()}
+            onContextMenu={(e) => {
+              if (!onAddTabContextMenu) return;
+              e.preventDefault();
+              onAddTabContextMenu(e.clientX, e.clientY, null);
+            }}
           >
             + tab
           </button>
@@ -608,9 +615,14 @@ export function Sidebar(props: Props) {
                   </span>
                   <button
                     className="ghost-btn small"
-                    title="new tab in group"
+                    title="new tab in group (right-click for profile)"
                     aria-label="new tab in group"
                     onClick={() => onAddTab(g.id)}
+                    onContextMenu={(e) => {
+                      if (!onAddTabContextMenu) return;
+                      e.preventDefault();
+                      onAddTabContextMenu(e.clientX, e.clientY, g.id);
+                    }}
                   >
                     +
                   </button>
