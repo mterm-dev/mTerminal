@@ -210,7 +210,14 @@ export function parsePorcelainV2(stdout: string): Omit<GitStatus, 'isRepo' | 'er
 }
 
 async function readUntrackedAsDiff(cwd: string, relPath: string): Promise<{ text: string; truncated: boolean }> {
-  const abs = path.join(cwd, relPath)
+  let rel = relPath
+  let base = cwd
+  if (rel.startsWith(':/')) {
+    rel = rel.slice(2)
+    const top = await runGit(['rev-parse', '--show-toplevel'], { cwd, timeout: 5_000 })
+    if (top.code === 0 && top.stdout.trim()) base = top.stdout.trim()
+  }
+  const abs = path.join(base, rel)
   try {
     const st = await fsp.stat(abs)
     if (st.size > DIFF_MAX_BUFFER) {
@@ -221,7 +228,7 @@ async function readUntrackedAsDiff(cwd: string, relPath: string): Promise<{ text
       return { text: 'Binary file (untracked)\n', truncated: false }
     }
     const lines = buf.toString('utf8').split('\n')
-    const header = `diff --git a/dev/null b/${relPath}\n--- /dev/null\n+++ b/${relPath}\n@@ -0,0 +1,${lines.length} @@\n`
+    const header = `diff --git a/dev/null b/${rel}\n--- /dev/null\n+++ b/${rel}\n@@ -0,0 +1,${lines.length} @@\n`
     return { text: header + lines.map((l) => '+' + l).join('\n') + '\n', truncated: false }
   } catch (err) {
     return { text: `Could not read file: ${(err as Error).message}\n`, truncated: false }
