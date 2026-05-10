@@ -39,7 +39,7 @@ export function ExtensionDetailsView({ id, installedVersion, onBack, onChanged }
         stars: ratingStars,
         comment: ratingComment || undefined,
       })
-      setRatingMsg('thanks for rating')
+      setRatingMsg('Thanks for rating')
       setRatingComment('')
     } catch (err) {
       setRatingMsg((err as MarketplaceClientError).message)
@@ -50,126 +50,79 @@ export function ExtensionDetailsView({ id, installedVersion, onBack, onChanged }
   const isOutdated = installed && detail && installedVersion !== detail.latestVersion
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 12, overflow: 'auto', height: '100%' }}>
-      <button
-        type="button"
-        onClick={onBack}
-        style={{
-          alignSelf: 'flex-start',
-          padding: '4px 8px',
-          fontSize: 11,
-          background: 'transparent',
-          color: 'var(--fg-dim, #888)',
-          border: '1px solid var(--border-subtle, #2a2a2a)',
-          borderRadius: 4,
-          cursor: 'pointer',
-        }}
-      >
-        ← back
+    <div className="ext-mkt-details">
+      <button type="button" className="ext-mkt-back" onClick={onBack}>
+        ← Back
       </button>
-      {loading && <div style={{ color: 'var(--fg-dim, #888)', fontSize: 12 }}>loading...</div>}
-      {error && <div style={{ color: 'var(--c-red, #d66)', fontSize: 12 }}>{error}</div>}
+      {loading && (
+        <div className="ext-mkt-state">
+          <div className="ext-mkt-state-sub">Loading…</div>
+        </div>
+      )}
+      {error && <div className="ext-mkt-error">{error}</div>}
       {detail && (
         <>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{detail.displayName}</div>
-            <div style={{ fontSize: 12, color: 'var(--fg-dim, #888)', marginTop: 2 }}>
-              {detail.description}
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: 'var(--fg-dim, #888)' }}>
+          <div className="ext-mkt-head">
+            <div className="ext-mkt-head-title">{detail.displayName}</div>
+            {detail.description && (
+              <div className="ext-mkt-head-desc">{detail.description}</div>
+            )}
+            <div className="ext-mkt-head-meta">
               <RatingStars value={Math.round(detail.avgStars ?? 0)} size={12} />
               <span>{detail.ratingCount} ratings</span>
-              <span>•</span>
+              <span className="ext-mkt-row-meta-sep">·</span>
               <span>{detail.downloadTotal} downloads</span>
-              <span>•</span>
+              <span className="ext-mkt-row-meta-sep">·</span>
               <span>by {detail.authorLogin}</span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div className="ext-mkt-actions">
             {!installed && (
               <button
                 type="button"
+                className="st-btn primary"
                 disabled={busy}
                 onClick={() => void handleInstall()}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: 12,
-                  background: 'var(--accent, #4a9)',
-                  color: 'var(--surface-1, #111)',
-                  border: 'none',
-                  borderRadius: 4,
-                  cursor: busy ? 'wait' : 'pointer',
-                }}
               >
-                install v{detail.latestVersion}
+                Install v{detail.latestVersion}
               </button>
             )}
             {installed && isOutdated && (
               <button
                 type="button"
+                className="st-btn primary"
                 disabled={busy}
                 onClick={() => void handleUpdate()}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: 12,
-                  background: 'var(--accent, #4a9)',
-                  color: 'var(--surface-1, #111)',
-                  border: 'none',
-                  borderRadius: 4,
-                  cursor: busy ? 'wait' : 'pointer',
-                }}
               >
-                update to v{detail.latestVersion}
+                Update to v{detail.latestVersion}
               </button>
             )}
             {installed && (
               <button
                 type="button"
+                className="st-btn danger"
                 disabled={busy}
                 onClick={() => void handleUninstall()}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: 12,
-                  background: 'transparent',
-                  color: 'var(--c-red, #d66)',
-                  border: '1px solid var(--border-subtle, #2a2a2a)',
-                  borderRadius: 4,
-                  cursor: busy ? 'wait' : 'pointer',
-                }}
               >
-                uninstall
+                Uninstall
               </button>
             )}
           </div>
-          {lastError && <div style={{ color: 'var(--c-red, #d66)', fontSize: 12 }}>{lastError}</div>}
+          {lastError && <div className="ext-mkt-error">{lastError}</div>}
 
           {detail.readmeMd && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>readme</div>
-              <pre
-                style={{
-                  fontSize: 11,
-                  fontFamily: 'var(--font-mono, monospace)',
-                  whiteSpace: 'pre-wrap',
-                  background: 'var(--surface-1, #18181a)',
-                  border: '1px solid var(--border-subtle, #2a2a2a)',
-                  borderRadius: 4,
-                  padding: 10,
-                  margin: 0,
-                  color: 'var(--fg, #e9e9e9)',
-                }}
-              >
-                {detail.readmeMd}
-              </pre>
+              <div className="st-section-label">Readme</div>
+              <pre className="ext-mkt-readme">{detail.readmeMd}</pre>
             </div>
           )}
 
           {detail.versions.length > 0 && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>versions</div>
-              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div className="st-section-label">Versions</div>
+              <ul className="ext-mkt-versions">
                 {detail.versions.slice(0, 10).map((v) => (
-                  <li key={v.version} style={{ fontSize: 11, color: 'var(--fg-dim, #888)' }}>
+                  <li key={v.version}>
                     v{v.version} {v.yanked ? '(yanked)' : ''}
                   </li>
                 ))}
@@ -178,45 +131,26 @@ export function ExtensionDetailsView({ id, installedVersion, onBack, onChanged }
           )}
 
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>rate this extension</div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+            <div className="st-section-label">Rate this extension</div>
+            <div className="ext-mkt-rate-row" style={{ marginBottom: 6 }}>
               <RatingStars value={ratingStars} onChange={setRatingStars} size={18} />
             </div>
             <textarea
+              className="ext-mkt-rate-comment"
               value={ratingComment}
               onChange={(e) => setRatingComment(e.target.value)}
-              placeholder="optional comment"
-              style={{
-                width: '100%',
-                minHeight: 50,
-                padding: 6,
-                background: 'var(--surface-2, #222)',
-                color: 'var(--fg, #e9e9e9)',
-                border: '1px solid var(--border-subtle, #2a2a2a)',
-                borderRadius: 4,
-                fontSize: 11,
-                outline: 'none',
-                resize: 'vertical',
-              }}
+              placeholder="Optional comment"
             />
-            <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center' }}>
+            <div className="ext-mkt-rate-row" style={{ marginTop: 6 }}>
               <button
                 type="button"
+                className="st-btn"
                 disabled={!ratingStars}
                 onClick={() => void submitRating()}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: 11,
-                  background: 'var(--surface-2, #222)',
-                  color: 'var(--fg, #e9e9e9)',
-                  border: '1px solid var(--border-subtle, #2a2a2a)',
-                  borderRadius: 4,
-                  cursor: ratingStars ? 'pointer' : 'not-allowed',
-                }}
               >
-                submit rating
+                Submit rating
               </button>
-              {ratingMsg && <span style={{ fontSize: 11, color: 'var(--fg-dim, #888)' }}>{ratingMsg}</span>}
+              {ratingMsg && <span className="ext-mkt-rate-msg">{ratingMsg}</span>}
             </div>
           </div>
         </>

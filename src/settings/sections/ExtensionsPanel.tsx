@@ -4,15 +4,133 @@ import {
 } from "../../extensions/registries/settings-schema";
 import { getRendererHost, type ManifestSnapshot } from "../../extensions";
 import { ContextMenu, type MenuItem } from "../../components/ContextMenu";
+import { BrowseTab } from "../../marketplace/components/BrowseTab";
+import { UpdatesTab } from "../../marketplace/components/UpdatesTab";
+import { ExtensionDetailsView } from "../../marketplace/components/ExtensionDetailsView";
+import { useUpdates } from "../../marketplace/hooks/useUpdates";
+import { useInstallActions } from "../../marketplace/hooks/useMarketplace";
+import { marketplaceApi } from "../../marketplace/api";
+import type { ExtSummary, InstalledWithMeta } from "../../marketplace/types";
 
 export { ExtensionSettingsForm } from "./ExtensionDetails";
 
+export type ExtensionsView = "installed" | "browse" | "updates";
+
 export function ExtensionsOverview({
   onPickExtension,
-  onOpenMarketplace,
+  initialView = "installed",
 }: {
   onPickExtension: (extId: string) => void;
-  onOpenMarketplace?: () => void;
+  initialView?: ExtensionsView;
+}) {
+  const [view, setView] = useState<ExtensionsView>(initialView);
+  const [browseSelectedId, setBrowseSelectedId] = useState<string | null>(null);
+  const [marketplaceInstalled, setMarketplaceInstalled] = useState<InstalledWithMeta[]>([]);
+
+  const refreshMarketplaceInstalled = async (): Promise<void> => {
+    try {
+      const list = await marketplaceApi.listInstalled();
+      setMarketplaceInstalled(list);
+    } catch {
+      setMarketplaceInstalled([]);
+    }
+  };
+
+  useEffect(() => {
+    void refreshMarketplaceInstalled();
+  }, []);
+
+  useEffect(() => {
+    setView(initialView);
+  }, [initialView]);
+
+  useEffect(() => {
+    setBrowseSelectedId(null);
+  }, [view]);
+
+  const { count: updateCount } = useUpdates();
+
+  const installedIds = useMemo(
+    () => new Set(marketplaceInstalled.map((it) => it.id)),
+    [marketplaceInstalled],
+  );
+
+  const installedVersionFor = (id: string): string | null =>
+    marketplaceInstalled.find((it) => it.id === id)?.installedVersion ?? null;
+
+  return (
+    <>
+      <div className="ext-subtabs" role="tablist">
+        <SubTabButton active={view === "installed"} onClick={() => setView("installed")}>
+          Installed
+        </SubTabButton>
+        <SubTabButton active={view === "browse"} onClick={() => setView("browse")}>
+          Browse
+        </SubTabButton>
+        <SubTabButton active={view === "updates"} onClick={() => setView("updates")}>
+          Updates
+          {updateCount > 0 && <span className="ext-subtab-badge">{updateCount}</span>}
+        </SubTabButton>
+      </div>
+
+      {view === "installed" && (
+        <InstalledList
+          onPickExtension={onPickExtension}
+          marketplaceInstalledIds={installedIds}
+          refreshMarketplaceInstalled={refreshMarketplaceInstalled}
+        />
+      )}
+
+      {view === "browse" &&
+        (browseSelectedId ? (
+          <ExtensionDetailsView
+            id={browseSelectedId}
+            installedVersion={installedVersionFor(browseSelectedId)}
+            onBack={() => setBrowseSelectedId(null)}
+            onChanged={() => void refreshMarketplaceInstalled()}
+          />
+        ) : (
+          <BrowseTab
+            installedIds={installedIds}
+            onSelect={(ext: ExtSummary) => setBrowseSelectedId(ext.id)}
+          />
+        ))}
+
+      {view === "updates" && <UpdatesTab />}
+    </>
+  );
+}
+
+function SubTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`ext-subtab${active ? " active" : ""}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function InstalledList({
+  onPickExtension,
+  marketplaceInstalledIds,
+  refreshMarketplaceInstalled,
+}: {
+  onPickExtension: (extId: string) => void;
+  marketplaceInstalledIds: Set<string>;
+  refreshMarketplaceInstalled: () => Promise<void>;
 }) {
   const host = getRendererHost();
   const [snaps, setSnaps] = useState<ManifestSnapshot[]>(() => host.list());
@@ -20,6 +138,7 @@ export function ExtensionsOverview({
 
   const [menu, setMenu] = useState<{ x: number; y: number; snap: ManifestSnapshot } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { uninstall, busy: uninstallBusy } = useInstallActions();
 
   const withSettingsIds = useMemo(() => {
     const ids = new Set(getSettingsSchemaRegistry().list().map((e) => e.extId));
@@ -81,6 +200,19 @@ export function ExtensionsOverview({
     }
   };
 
+  const uninstallOne = async (snap: ManifestSnapshot): Promise<void> => {
+    setBusyId(snap.manifest.id);
+    try {
+      const ok = await uninstall(snap.manifest.id);
+      if (ok) {
+        await refreshMarketplaceInstalled();
+        await host.refreshSnapshots();
+      }
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const menuItems: MenuItem[] = useMemo(() => {
     if (!menu) return [];
     const snap = menu.snap;
@@ -96,50 +228,38 @@ export function ExtensionsOverview({
       onSelect: () => void toggleEnabled(snap),
     });
     items.push({ label: "Reload", onSelect: () => void reloadOne(snap) });
+    if (snap.manifest.source !== "built-in" && marketplaceInstalledIds.has(id)) {
+      items.push({ label: "", separator: true });
+      items.push({
+        label: "Uninstall",
+        danger: true,
+        onSelect: () => void uninstallOne(snap),
+      });
+    }
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menu, withSettingsIds]);
+  }, [menu, withSettingsIds, marketplaceInstalledIds]);
 
   if (sortedSnaps.length === 0) {
     return (
-      <>
-        {onOpenMarketplace && (
-          <div className="ext-toolbar">
-            <button type="button" className="ext-marketplace-btn" onClick={onOpenMarketplace}>
-              <span className="ext-marketplace-btn-icon">⬡</span>
-              <span>Browse marketplace</span>
-              <span className="ext-marketplace-btn-hint">{marketplaceHotkeyLabel()}</span>
-            </button>
-          </div>
-        )}
-        <div className="ext-empty">
-          <div className="ext-empty-icon">⬡</div>
-          <div className="ext-empty-title">No extensions installed</div>
-          <div className="ext-empty-sub">
-            Install from the marketplace, or drop a folder into{" "}
-            <code>~/.mterminal/extensions/&lt;id&gt;/</code> and reload.
-          </div>
+      <div className="ext-empty">
+        <div className="ext-empty-icon">⬡</div>
+        <div className="ext-empty-title">No extensions installed</div>
+        <div className="ext-empty-sub">
+          Install from the marketplace, or drop a folder into{" "}
+          <code>~/.mterminal/extensions/&lt;id&gt;/</code> and reload.
         </div>
-      </>
+      </div>
     );
   }
 
   return (
     <>
-      {onOpenMarketplace && (
-        <div className="ext-toolbar">
-          <button type="button" className="ext-marketplace-btn" onClick={onOpenMarketplace}>
-            <span className="ext-marketplace-btn-icon">⬡</span>
-            <span>Browse marketplace</span>
-            <span className="ext-marketplace-btn-hint">{marketplaceHotkeyLabel()}</span>
-          </button>
-        </div>
-      )}
       <div className="ext-card-grid">
         {sortedSnaps.map((snap) => {
           const m = snap.manifest;
           const hasSettings = withSettingsIds.has(m.id);
-          const isBusy = busyId === m.id;
+          const isBusy = busyId === m.id || (uninstallBusy && busyId === m.id);
           return (
             <button
               key={m.id}
@@ -183,11 +303,6 @@ export function ExtensionsOverview({
       )}
     </>
   );
-}
-
-function marketplaceHotkeyLabel(): string {
-  const isMac = (window as { mt?: { platform?: string } }).mt?.platform === "darwin";
-  return isMac ? "⌘⇧X" : "Ctrl+Shift+X";
 }
 
 function summarize(m: ManifestSnapshot["manifest"]): string {
