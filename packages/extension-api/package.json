@@ -1,6 +1,6 @@
 {
   "name": "@mterminal/extension-api",
-  "version": "1.0.0-alpha.0",
+  "version": "1.6.0",
   "description": "TypeScript declarations for the mTerminal extension API",
   "license": "MIT",
   "homepage": "https://github.com/arthurr0/mTerminal",

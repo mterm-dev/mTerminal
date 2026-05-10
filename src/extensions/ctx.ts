@@ -52,7 +52,6 @@ import { createGlobalState, createWorkspaceState } from './kv-store'
 import { getServiceRegistry } from './services'
 import { getSettingsBackend } from './settings-namespace'
 import { createAiBridge } from './api-bridge/ai'
-import { createGitBridge } from './api-bridge/git'
 import { createTerminalBridge } from './api-bridge/terminal'
 import { createWorkspaceBridge, getWorkspaceBackend } from './api-bridge/workspace'
 import { createUiBridge, createNotifyBridge } from './api-bridge/ui'
@@ -303,7 +302,6 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
 
   // ─ ai / git / terminal / workspace / ui / notify ───────────────────────
   const ai = createAiBridge({ extId: id })
-  const git = createGitBridge()
   const terminal = createTerminalBridge()
   const workspace = createWorkspaceBridge()
   const ui = createUiBridge()
@@ -415,7 +413,6 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
     events,
     ipc,
     ai,
-    git,
     terminal,
     workspace,
     notify,

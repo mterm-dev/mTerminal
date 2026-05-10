@@ -273,7 +273,6 @@ export interface ExtensionContext {
   readonly events: EventBus
   readonly ipc: ExtIpc
   readonly ai: AiApi
-  readonly git: GitApi
   readonly terminal: TerminalApi
   readonly workspace: WorkspaceApi
   readonly notify: NotifyApi
@@ -674,42 +673,6 @@ export interface AiApi {
    * @since mterminal-api 1.4.0
    */
   getSdk<T = unknown>(providerId: string): T | null
-}
-
-export interface GitStatusEntry {
-  path: string
-  staged: boolean
-  unstaged: boolean
-  status: 'A' | 'M' | 'D' | 'R' | 'U' | '?'
-}
-
-export interface GitStatus {
-  cwd: string
-  branch: string | null
-  ahead: number
-  behind: number
-  files: GitStatusEntry[]
-  conflicts: string[]
-  isRepo: boolean
-}
-
-export interface GitAuthProvider {
-  id: string
-  label: string
-  resolve(repoUrl: string): Promise<{ username?: string; password?: string; token?: string } | null>
-}
-
-export interface GitApi {
-  status(cwd: string): Promise<GitStatus>
-  diff(cwd: string, path: string, staged: boolean): Promise<{ text: string; truncated: boolean }>
-  stage(cwd: string, paths: string[]): Promise<void>
-  unstage(cwd: string, paths: string[]): Promise<void>
-  commit(cwd: string, message: string, paths?: string[]): Promise<{ commit: string }>
-  push(cwd: string, remote?: string, branch?: string): Promise<void>
-  pull(cwd: string, strategy?: 'ff-only' | 'merge' | 'rebase'): Promise<void>
-  fetch(cwd: string): Promise<void>
-  branches(cwd: string): Promise<Array<{ name: string; current: boolean; remote: string | null }>>
-  registerAuthProvider(p: GitAuthProvider): Disposable
 }
 
 export interface ProvidersApi {

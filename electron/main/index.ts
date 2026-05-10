@@ -33,7 +33,6 @@ import { registerMcpHandlers, stopServer as stopMcpServer } from './mcp'
 import { setupAppMenu } from './menu'
 import { registerWorkspaceHandlers } from './workspace'
 import { registerSettingsHandlers } from './settings-store'
-import { registerGitHandlers } from './git'
 import { registerVoiceHandlers } from './voice'
 import {
   getExtensionHost,
@@ -137,7 +136,6 @@ app
     registerMcpHandlers()
     registerWorkspaceHandlers()
     registerSettingsHandlers()
-    registerGitHandlers()
     registerVoiceHandlers()
     app.on('before-quit', () => {
       void stopMcpServer()

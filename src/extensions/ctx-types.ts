@@ -123,7 +123,6 @@ export interface ExtensionContext {
   readonly events: EventBus
   readonly ipc: ExtIpc
   readonly ai: AiApi
-  readonly git: GitApi
   readonly terminal: TerminalApi
   readonly workspace: WorkspaceApi
   readonly notify: NotifyApi
@@ -278,19 +277,6 @@ export interface AiApi {
   stream(req: unknown): AsyncIterable<unknown>
   registerProvider(p: unknown): Disposable
   listProviders(): AiProviderInfoLite[]
-}
-
-export interface GitApi {
-  status(cwd: string): Promise<unknown>
-  diff(cwd: string, path: string, staged: boolean): Promise<{ text: string; truncated: boolean }>
-  stage(cwd: string, paths: string[]): Promise<void>
-  unstage(cwd: string, paths: string[]): Promise<void>
-  commit(cwd: string, message: string, paths?: string[]): Promise<{ commit: string }>
-  push(cwd: string, remote?: string, branch?: string): Promise<void>
-  pull(cwd: string, strategy?: 'ff-only' | 'merge' | 'rebase'): Promise<void>
-  fetch(cwd: string): Promise<void>
-  branches(cwd: string): Promise<Array<{ name: string; current: boolean; remote: string | null }>>
-  registerAuthProvider(p: unknown): Disposable
 }
 
 export interface TerminalHandle {
