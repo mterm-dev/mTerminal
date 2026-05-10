@@ -24,6 +24,7 @@
     "package:win": "electron-vite build && electron-builder --win --publish never",
     "package:mac": "electron-vite build && electron-builder --mac --publish never",
     "rebuild": "electron-rebuild -f -w node-pty",
+    "postinstall": "electron-rebuild -f -w node-pty || true",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -67,6 +68,11 @@
       "cpu-features"
     ]
   },
+  "trustedDependencies": [
+    "electron",
+    "node-pty",
+    "esbuild"
+  ],
   "devDependencies": {
     "@electron/rebuild": "^4.0.0",
     "@testing-library/dom": "^10.4.1",
