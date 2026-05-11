@@ -9,9 +9,10 @@ import type { SectionProps } from "../_shared";
 import { playAgentSound, type AgentSoundType } from "../../../lib/agentSound";
 
 const SOUND_OPTIONS: OptionItem<AgentSoundType>[] = [
-  { value: "bell", label: "Bell" },
   { value: "chime", label: "Chime" },
-  { value: "ping", label: "Ping" },
+  { value: "pop", label: "Pop" },
+  { value: "drop", label: "Drop" },
+  { value: "success", label: "Success" },
 ];
 
 export function AgentSound({ settings, update }: SectionProps) {
