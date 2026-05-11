@@ -39,6 +39,8 @@ jobs:
           mkdir -p release-artifacts
           cp release/*.AppImage release-artifacts/ || true
           cp release/*.deb release-artifacts/ || true
+          cp release/latest-linux.yml release-artifacts/ || true
+          cp release/*.AppImage.blockmap release-artifacts/ || true
           ls -la release-artifacts/
 
       - name: Upload artifacts

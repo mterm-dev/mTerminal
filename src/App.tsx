@@ -61,6 +61,7 @@ import { PluginManager } from "./extensions/components/PluginManager";
 import { PluginTabHost } from "./extensions/components/PluginTabHost";
 import { OnboardingModal } from "./marketplace/components/OnboardingModal";
 import { marketplaceApi } from "./marketplace/api";
+import { UpdateBanner } from "./components/UpdateBanner";
 
 interface CtxState {
   x: number;
@@ -1033,6 +1034,8 @@ function AppInner({
         sidebarCollapsed={uiState.sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
       />
+
+      <UpdateBanner />
 
       <div className="term-body">
         <Sidebar

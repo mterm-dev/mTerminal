@@ -36,6 +36,8 @@ jobs:
         run: |
           mkdir -p release-artifacts
           cp release/*.dmg release-artifacts/ || true
+          cp release/latest-mac.yml release-artifacts/ || true
+          cp release/*.dmg.blockmap release-artifacts/ || true
           ls -la release-artifacts/
 
       - name: Upload artifacts

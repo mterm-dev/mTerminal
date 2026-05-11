@@ -75,6 +75,7 @@ export interface Settings {
   voiceOpenaiModel: string;
   voiceOpenaiBaseUrl: string;
   vaultIdleLockMs: number;
+  updaterBetaChannel: boolean;
   marketplaceEndpoint?: string;
   extensions?: Record<string, Record<string, unknown>>;
 }
@@ -130,6 +131,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceOpenaiModel: "whisper-1",
   voiceOpenaiBaseUrl: "https://api.openai.com/v1",
   vaultIdleLockMs: 15 * 60 * 1000,
+  updaterBetaChannel: false,
 };
 
 const KEY = "mterminal:settings:v1";

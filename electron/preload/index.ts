@@ -356,6 +356,21 @@ const api = {
       },
     },
   },
+  updater: {
+    check: (): Promise<unknown> => ipcRenderer.invoke('updater:check'),
+    download: (): Promise<unknown> => ipcRenderer.invoke('updater:download'),
+    install: (): Promise<unknown> => ipcRenderer.invoke('updater:install'),
+    getState: (): Promise<unknown> => ipcRenderer.invoke('updater:get-state'),
+    setBetaChannel: (enabled: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('updater:set-beta-channel', enabled),
+    onState: (cb: (state: unknown) => void): (() => void) => {
+      const listener = (_: unknown, s: unknown): void => cb(s)
+      ipcRenderer.on('updater:state', listener)
+      return () => {
+        ipcRenderer.off('updater:state', listener)
+      }
+    },
+  },
   marketplace: {
     search: (req?: unknown): Promise<unknown> =>
       ipcRenderer.invoke('marketplace:search', req ?? {}),

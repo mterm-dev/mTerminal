@@ -64,3 +64,11 @@ mac:
 
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
+
+publish:
+  - provider: github
+    owner: arthurr0
+    repo: mTerminal
+    releaseType: release
+    vPrefixedTagName: true
+    publishAutoUpdate: true

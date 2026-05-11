@@ -1,6 +1,6 @@
 import type { AiProviderConfig } from "./useSettings";
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 const DEAD_KEYS = [
   "gitPanelCollapsed",

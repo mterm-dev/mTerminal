@@ -40,6 +40,7 @@ import {
   registerMtExtProtocolPrivileges,
 } from './extensions'
 import { registerMarketplaceHandlers } from './marketplace'
+import { registerUpdaterHandlers, runStartupCheck } from './updater'
 import { runOneShotMarketplaceMigrations } from './extensions/migrations-marketplace'
 import { attachExternalLinkHandlers, isExternalUrl } from './external-links'
 
@@ -180,6 +181,9 @@ app
 
     const win = createWindow()
     setPtyWindow(win)
+
+    registerUpdaterHandlers(() => mainWindow)
+    void runStartupCheck()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

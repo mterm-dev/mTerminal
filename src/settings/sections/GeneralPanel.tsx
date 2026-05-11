@@ -38,6 +38,22 @@ export function GeneralPanel({ settings, update }: SectionProps) {
         />
       </Group>
 
+      <SectionLabel>Updates</SectionLabel>
+      <Group>
+        <ToggleRow
+          label="Receive beta updates"
+          desc="Includes pre-release builds. May be less stable."
+          checked={settings.updaterBetaChannel}
+          onChange={(b) => {
+            update("updaterBetaChannel", b);
+            const u = (window as unknown as {
+              mt?: { updater?: { setBetaChannel?: (v: boolean) => Promise<boolean> } };
+            }).mt?.updater;
+            if (u?.setBetaChannel) void u.setBetaChannel(b).catch(() => {});
+          }}
+        />
+      </Group>
+
       <SectionLabel>Marketplace</SectionLabel>
       <Group>
         <TextRow

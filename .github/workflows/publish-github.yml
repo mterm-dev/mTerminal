@@ -56,3 +56,7 @@ jobs:
             release-artifacts/*.deb
             release-artifacts/*-setup.exe
             release-artifacts/*.dmg
+            release-artifacts/latest.yml
+            release-artifacts/latest-linux.yml
+            release-artifacts/latest-mac.yml
+            release-artifacts/*.blockmap
