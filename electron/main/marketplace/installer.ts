@@ -4,9 +4,43 @@ import { validateManifest } from '@mterminal/manifest-validator'
 import type { ExtensionHostMain } from '../extensions/host'
 import { getTrustStore } from '../extensions/trust'
 import { userExtensionsDir, extensionDir } from '../extensions/locations'
+import { getMainEventBus } from '../extensions/event-bus-main'
 import { MarketplaceApiClient, MarketplaceNetworkError } from './api-client'
 import { MarketplaceStore } from './store'
 import { verifyPackage } from './verifier'
+
+const NATIVE_DEPENDENCY_HINTS = new Set([
+  'node-gyp-build',
+  'bindings',
+  'node-pty',
+  'better-sqlite3',
+  'keytar',
+  'nan',
+  'node-addon-api',
+])
+
+export function detectNativeDeps(
+  entries: Record<string, Buffer | Uint8Array>,
+  manifest: unknown,
+): boolean {
+  for (const entryPath of Object.keys(entries)) {
+    const normalized = entryPath.replace(/\\/g, '/')
+    if (normalized === 'binding.gyp' || normalized.endsWith('/binding.gyp')) return true
+    if (normalized.endsWith('.node')) return true
+  }
+  if (!manifest || typeof manifest !== 'object') return false
+  const m = manifest as {
+    dependencies?: Record<string, unknown>
+    mterminal?: { requiresRestart?: unknown }
+  }
+  if (m.mterminal && m.mterminal.requiresRestart === true) return true
+  if (m.dependencies) {
+    for (const dep of Object.keys(m.dependencies)) {
+      if (NATIVE_DEPENDENCY_HINTS.has(dep)) return true
+    }
+  }
+  return false
+}
 
 export interface InstallProgressEvent {
   kind: 'fetching' | 'verifying' | 'extracting' | 'activating' | 'done'
@@ -95,6 +129,12 @@ export class Installer {
     const stagingDir = `${target}.installing-${Date.now()}`
 
     try {
+      await getHost().deactivate(id)
+    } catch (err) {
+      console.warn(`[marketplace] pre-install deactivate ${id} failed:`, err)
+    }
+
+    try {
       await fs.mkdir(stagingDir, { recursive: true })
       for (const [entryPath, data] of Object.entries(verified.entries)) {
         if (entryPath === 'signature.sig') continue
@@ -121,12 +161,16 @@ export class Installer {
       await host.scanAndSync()
       await host.setTrusted(id, true)
       try {
-        await host.activate(id)
+        await host.reload(id)
       } catch (err) {
-        console.warn(`[marketplace] activate ${id} failed:`, err)
+        console.warn(`[marketplace] reload ${id} failed:`, err)
       }
     } catch (err) {
       console.warn(`[marketplace] post-install host wiring for ${id} failed:`, err)
+    }
+
+    if (detectNativeDeps(verified.entries, parsed)) {
+      getMainEventBus().emit('extension:restart-required', { id, version: resolvedVersion })
     }
 
     opts.onProgress?.({ kind: 'done', id, version: resolvedVersion })

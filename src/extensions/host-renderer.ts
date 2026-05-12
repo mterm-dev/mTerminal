@@ -96,6 +96,8 @@ export class ExtensionHostRenderer {
   private active = new Map<string, ActiveEntry>()
   private listeners = new Set<() => void>()
   private loadErrorNotified = new Set<string>()
+  private appliedDeclarative = new Set<string>()
+  private restartRequiredNotified = new Set<string>()
 
   async boot(): Promise<void> {
     await this.loadManifests()
@@ -109,6 +111,9 @@ export class ExtensionHostRenderer {
     })
     bus.on('extension:deactivated', (payload) => {
       void this.onMainDeactivated(payload)
+    })
+    bus.on('extension:restart-required', (payload) => {
+      void this.onRestartRequired(payload)
     })
 
     getRendererEventBus().emit('app:ready', { version: '1.0.0-alpha.0' })
@@ -151,9 +156,10 @@ export class ExtensionHostRenderer {
     await this.refreshSnapshots()
     const id = (payload as { id?: string } | null)?.id
     if (!id) return
-    if (this.active.has(id)) return
     const snap = this.snapshots.get(id)
     if (!snap || !snap.enabled) return
+    this.applyDeclarativeContributionsFor(snap)
+    if (this.active.has(id)) return
     try {
       await this.activate(id)
     } catch (err) {
@@ -176,6 +182,29 @@ export class ExtensionHostRenderer {
       }
     }
     await this.refreshSnapshots()
+    if (!id) return
+    const snap = this.snapshots.get(id)
+    if (!snap || !snap.enabled) {
+      this.removeDeclarativeContributionsFor(id)
+    }
+  }
+
+  private async onRestartRequired(payload: unknown): Promise<void> {
+    const p = payload as { id?: string; version?: string } | null
+    if (!p?.id) return
+    if (this.restartRequiredNotified.has(p.id)) return
+    this.restartRequiredNotified.add(p.id)
+    const snap = this.snapshots.get(p.id)
+    const displayName = snap?.manifest.displayName ?? p.id
+    const versionSuffix = p.version ? ` v${p.version}` : ''
+    try {
+      await window.mt.notification.send({
+        title: 'Restart required',
+        body: `${displayName}${versionSuffix} contains native modules — restart mTerminal to finish loading.`,
+      })
+    } catch (err) {
+      console.error(`[ext] restart-required notification failed for "${p.id}":`, err)
+    }
   }
 
   list(): ManifestSnapshot[] {
@@ -191,42 +220,58 @@ export class ExtensionHostRenderer {
    *   - themes: load JSON theme files from disk
    */
   private applyDeclarativeContributions(): void {
+    for (const snap of this.snapshots.values()) {
+      this.applyDeclarativeContributionsFor(snap)
+    }
+  }
+
+  private applyDeclarativeContributionsFor(snap: ManifestSnapshot): void {
+    const m = snap.manifest
+    if (this.appliedDeclarative.has(m.id)) return
     const cmdReg = getCommandRegistry()
     const schemaReg = getSettingsSchemaRegistry()
     const themeReg = getThemeRegistry()
 
-    for (const snap of this.snapshots.values()) {
-      const m = snap.manifest
-
-      for (const cmd of m.contributes.commands) {
-        cmdReg.registerStub({
-          id: cmd.id,
-          title: cmd.title,
-          source: m.id,
-          onInvoke: async () => {
-            await this.activate(m.id)
-          },
-        })
-      }
-
-      if (m.contributes.settings) {
-        schemaReg.register({
-          extId: m.id,
-          displayName: m.displayName ?? m.id,
-          schema: m.contributes.settings,
-          source: m.id,
-        })
-      }
-
-      for (const t of m.contributes.themes) {
-        // Load theme JSON via mt-ext:// protocol (no code activation needed).
-        void this.loadThemeFile(m.id, t.id, t.label, t.path).then((def) => {
-          if (def) themeReg.register(def, m.id)
-        }).catch((err) => {
-          console.warn(`[ext] failed to load theme ${m.id}:${t.id}:`, err)
-        })
-      }
+    for (const cmd of m.contributes.commands) {
+      cmdReg.registerStub({
+        id: cmd.id,
+        title: cmd.title,
+        source: m.id,
+        onInvoke: async () => {
+          await this.activate(m.id)
+        },
+      })
     }
+
+    if (m.contributes.settings) {
+      schemaReg.register({
+        extId: m.id,
+        displayName: m.displayName ?? m.id,
+        schema: m.contributes.settings,
+        source: m.id,
+      })
+    }
+
+    for (const t of m.contributes.themes) {
+      void this.loadThemeFile(m.id, t.id, t.label, t.path).then((def) => {
+        if (!def) return
+        if (!this.appliedDeclarative.has(m.id)) return
+        themeReg.register(def, m.id)
+      }).catch((err) => {
+        console.warn(`[ext] failed to load theme ${m.id}:${t.id}:`, err)
+      })
+    }
+
+    this.appliedDeclarative.add(m.id)
+  }
+
+  private removeDeclarativeContributionsFor(extId: string): void {
+    if (!this.appliedDeclarative.has(extId)) return
+    getCommandRegistry().removeBySource(extId)
+    getSettingsSchemaRegistry().removeByExt(extId)
+    getThemeRegistry().removeBySource(extId)
+    this.appliedDeclarative.delete(extId)
+    this.restartRequiredNotified.delete(extId)
   }
 
   private async loadThemeFile(
