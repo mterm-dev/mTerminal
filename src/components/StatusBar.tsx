@@ -72,7 +72,11 @@ export function StatusBar({
           type="button"
           className="vault-lock-btn"
           data-locked={vaultLock.unlocked ? "false" : "true"}
-          onClick={vaultLock.onClick}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            vaultLock.onClick();
+            (e.currentTarget as HTMLButtonElement).blur();
+          }}
           title={vaultLockTooltip(vaultLock)}
           aria-label={vaultLockTooltip(vaultLock)}
         >
@@ -83,7 +87,11 @@ export function StatusBar({
         <button
           type="button"
           className={`mic-btn mic-${voice.state}`}
-          onClick={voice.onToggle}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            voice.onToggle();
+            (e.currentTarget as HTMLButtonElement).blur();
+          }}
           title={voice.tooltip ?? micDefaultTooltip(voice.state)}
           aria-label={voice.tooltip ?? micDefaultTooltip(voice.state)}
         >

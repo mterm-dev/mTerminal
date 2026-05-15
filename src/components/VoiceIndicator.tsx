@@ -56,7 +56,11 @@ export function VoiceIndicator({ state, stream, onStop, modelLabel }: Props) {
       <button
         type="button"
         className="voice-indicator__stop"
-        onClick={onStop}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          onStop();
+          (e.currentTarget as HTMLButtonElement).blur();
+        }}
         title={state === "recording" ? "stop recording" : "cancel"}
         aria-label={state === "recording" ? "stop recording" : "cancel"}
       >
