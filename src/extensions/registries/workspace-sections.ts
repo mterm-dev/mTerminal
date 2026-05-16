@@ -14,6 +14,7 @@ export interface WorkspaceSectionEntry {
   id: string
   label: string
   allowNewTab: boolean
+  allowNewGroup: boolean
   source: string
 }
 
@@ -25,13 +26,19 @@ export class WorkspaceSectionRegistry {
   private listeners = new Set<Listener>()
 
   register(
-    section: { id: string; label: string; allowNewTab?: boolean },
+    section: {
+      id: string
+      label: string
+      allowNewTab?: boolean
+      allowNewGroup?: boolean
+    },
     source: string,
   ): Disposable {
     const entry: WorkspaceSectionEntry = {
       id: section.id,
       label: section.label,
       allowNewTab: Boolean(section.allowNewTab),
+      allowNewGroup: section.allowNewGroup ?? true,
       source,
     }
     if (!this.sections.has(entry.id)) this.order.push(entry.id)

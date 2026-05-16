@@ -405,8 +405,9 @@ export function Sidebar(props: Props) {
     sectionTabs: Tab[];
     sectionGroups: Group[];
     showAddTab: boolean;
+    showAddGroup: boolean;
   }) => {
-    const { kind, label, sectionTabs, sectionGroups, showAddTab } = opts;
+    const { kind, label, sectionTabs, sectionGroups, showAddTab, showAddGroup } = opts;
     const sectionUngrouped = sectionTabs.filter((t) => t.groupId === null);
     const sectionKey = `term-side-section-${kind}`;
     return (
@@ -428,13 +429,15 @@ export function Sidebar(props: Props) {
                 + tab
               </button>
             )}
-            <button
-              className="ghost-btn"
-              title="new group"
-              onClick={() => onAddGroup(kind)}
-            >
-              + group
-            </button>
+            {showAddGroup && (
+              <button
+                className="ghost-btn"
+                title="new group"
+                onClick={() => onAddGroup(kind)}
+              >
+                + group
+              </button>
+            )}
           </div>
         </div>
 
@@ -725,6 +728,7 @@ export function Sidebar(props: Props) {
         sectionTabs: localTabs,
         sectionGroups: localGroups,
         showAddTab: true,
+        showAddGroup: true,
       })}
 
       {workspaceSections.map((section) => {
@@ -738,6 +742,7 @@ export function Sidebar(props: Props) {
               sectionTabs,
               sectionGroups,
               showAddTab: section.allowNewTab,
+              showAddGroup: section.allowNewGroup,
             })}
             <PluginPanelSlot
               location={`workspace-section.${section.id}` as never}

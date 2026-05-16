@@ -319,6 +319,7 @@ export interface WorkspaceSection {
   id: string
   label: string
   allowNewTab?: boolean
+  allowNewGroup?: boolean
 }
 
 export interface WorkspaceSectionsApi {

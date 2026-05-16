@@ -785,6 +785,14 @@ export interface WorkspaceSection {
    * off. Default: false.
    */
   allowNewTab?: boolean
+  /**
+   * When true, the section header shows the `+ group` button (creates a
+   * workspace group bound to this section's tab kind). Extensions that
+   * organise their content with their own grouping concept (e.g. remote
+   * SSH host groups) should set this to false to avoid a duplicate
+   * affordance in the section header. Default: true.
+   */
+  allowNewGroup?: boolean
 }
 
 export interface WorkspaceSectionsApi {

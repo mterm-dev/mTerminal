@@ -67,7 +67,12 @@ export function createWorkspaceBridge(extId: string): WorkspaceApi {
       list: () =>
         sectionReg
           .list()
-          .map(({ id, label, allowNewTab }) => ({ id, label, allowNewTab })),
+          .map(({ id, label, allowNewTab, allowNewGroup }) => ({
+            id,
+            label,
+            allowNewTab,
+            allowNewGroup,
+          })),
     },
   }
 }
