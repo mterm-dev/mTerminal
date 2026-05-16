@@ -731,25 +731,12 @@ export function Sidebar(props: Props) {
         showAddGroup: true,
       })}
 
-      {workspaceSections.map((section) => {
-        const sectionTabs = tabs.filter((t) => t.kind === section.id);
-        const sectionGroups = groups.filter((g) => g.kind === section.id);
-        return (
-          <Fragment key={`workspace-section-${section.id}`}>
-            {renderWorkspaceSection({
-              kind: section.id,
-              label: section.label,
-              sectionTabs,
-              sectionGroups,
-              showAddTab: section.allowNewTab,
-              showAddGroup: section.allowNewGroup,
-            })}
-            <PluginPanelSlot
-              location={`workspace-section.${section.id}` as never}
-            />
-          </Fragment>
-        );
-      })}
+      {workspaceSections.map((section) => (
+        <PluginPanelSlot
+          key={`workspace-section-${section.id}`}
+          location={`workspace-section.${section.id}` as never}
+        />
+      ))}
 
       <div
         className="term-side-resize"
