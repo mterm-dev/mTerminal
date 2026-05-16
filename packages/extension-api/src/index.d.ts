@@ -75,7 +75,18 @@ export interface PanelContribution {
   id: string
   title: string
   icon?: string
-  location: 'sidebar' | 'sidebar.bottom' | 'bottombar'
+  /**
+   * Where the panel mounts.
+   * - `'sidebar'` / `'sidebar.bottom'` / `'bottombar'` — built-in host slots.
+   * - `` `workspace-section.${string}` `` — slot owned by a workspace section
+   *   registered via `ctx.workspace.sections.register({ id })`. The slot only
+   *   renders while at least one extension keeps that section alive.
+   */
+  location:
+    | 'sidebar'
+    | 'sidebar.bottom'
+    | 'bottombar'
+    | `workspace-section.${string}`
   initialCollapsed?: boolean
 }
 
@@ -397,7 +408,11 @@ export interface PanelsApi {
     id: string
     title: string
     icon?: string
-    location: 'sidebar' | 'sidebar.bottom' | 'bottombar'
+    location:
+      | 'sidebar'
+      | 'sidebar.bottom'
+      | 'bottombar'
+      | `workspace-section.${string}`
     initialCollapsed?: boolean
     /**
      * Render the panel. Return a disposer to clean up DOM listeners; React
@@ -475,6 +490,14 @@ export interface TabsApi {
     title?: string
     props?: unknown
     groupId?: string | null
+    /**
+     * Which workspace section the tab belongs to. Built-in values are
+     * `'local'` and `'custom'`; any other string routes the tab to the
+     * workspace section registered with that id via
+     * `ctx.workspace.sections.register({ id })`.
+     * @since mterminal-api 1.6.0
+     */
+    kind?: string
   }): Promise<number>
   close(tabId: number): void
   active(): { id: number; type: string } | null
@@ -737,6 +760,36 @@ export interface WorkspaceApi {
   tabs(groupId?: string): TabSummary[]
   /** Get the current working directory of the active terminal, if any. */
   cwd(): string | null
+  /**
+   * Registry of workspace sections shown as additional headers in the
+   * sidebar (alongside the built-in local workspace). A section owns a tab
+   * kind (`id === tabKind`) and gets a dedicated panel slot at
+   * `` `workspace-section.${id}` ``. The section is removed when the
+   * extension disposes the returned handle (or on deactivate).
+   * @since mterminal-api 1.6.0
+   */
+  readonly sections: WorkspaceSectionsApi
+}
+
+export interface WorkspaceSection {
+  /**
+   * Identifier — used as both the tab `kind` and the panel location suffix
+   * (`workspace-section.<id>`). Lowercase kebab-case is recommended.
+   */
+  id: string
+  /** Display label shown above the section in the sidebar. */
+  label: string
+  /**
+   * When true, the section header shows the `+ tab` button. Extensions that
+   * spawn tabs via custom flows (modals, host pickers) should leave this
+   * off. Default: false.
+   */
+  allowNewTab?: boolean
+}
+
+export interface WorkspaceSectionsApi {
+  register(section: WorkspaceSection): Disposable
+  list(): WorkspaceSection[]
 }
 
 // UI helpers ──────────────────────────────────────────────────────────────────

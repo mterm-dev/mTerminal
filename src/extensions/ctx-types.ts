@@ -37,7 +37,11 @@ export interface PanelSpec {
   id: string
   title: string
   icon?: string
-  location: 'sidebar' | 'sidebar.bottom' | 'bottombar'
+  location:
+    | 'sidebar'
+    | 'sidebar.bottom'
+    | 'bottombar'
+    | `workspace-section.${string}`
   initialCollapsed?: boolean
   render(host: HTMLElement, panelCtx: PanelCtx): void | (() => void)
 }
@@ -308,6 +312,18 @@ export interface WorkspaceApi {
   setActiveGroup(id: string): void
   tabs(groupId?: string): Array<{ id: number; type: string; title: string; groupId: string | null; active: boolean }>
   cwd(): string | null
+  readonly sections: WorkspaceSectionsApi
+}
+
+export interface WorkspaceSection {
+  id: string
+  label: string
+  allowNewTab?: boolean
+}
+
+export interface WorkspaceSectionsApi {
+  register(section: WorkspaceSection): Disposable
+  list(): WorkspaceSection[]
 }
 
 export interface NotifyApi {

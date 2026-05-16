@@ -2,6 +2,7 @@ import {
   Fragment,
   type DragEvent as RDragEvent,
   type PointerEvent as RPointerEvent,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -9,6 +10,21 @@ import type { Group, Tab } from "../hooks/useWorkspace";
 import type { AgentStatus } from "../hooks/useAgentStatus";
 import { InlineEdit } from "./InlineEdit";
 import { PluginPanelSlot } from "../extensions/components/PluginPanelSlot";
+import {
+  getWorkspaceSectionRegistry,
+  type WorkspaceSectionEntry,
+} from "../extensions/registries/workspace-sections";
+
+function useWorkspaceSections(): WorkspaceSectionEntry[] {
+  const reg = getWorkspaceSectionRegistry();
+  const [sections, setSections] = useState<WorkspaceSectionEntry[]>(() =>
+    reg.list(),
+  );
+  useEffect(() => {
+    return reg.subscribe(() => setSections(reg.list())).dispose;
+  }, [reg]);
+  return sections;
+}
 
 interface Props {
   tabs: Tab[];
@@ -23,7 +39,7 @@ interface Props {
   onAddTab: (groupId?: string | null) => void;
   onAddTabContextMenu?: (x: number, y: number, groupId?: string | null) => void;
   onAddFileBrowser?: (groupId: string) => void;
-  onAddGroup: () => void;
+  onAddGroup: (kind?: string) => void;
   onToggleGroup: (id: string) => void;
   onRenameTab: (id: number, name: string) => void;
   onRenameGroup: (id: string, name: string) => void;
@@ -139,7 +155,10 @@ export function Sidebar(props: Props) {
     document.addEventListener("pointerup", up);
   };
 
-  const localTabs = tabs;
+  const workspaceSections = useWorkspaceSections();
+  const sectionIds = new Set(workspaceSections.map((s) => s.id));
+  const localTabs = tabs.filter((t) => !sectionIds.has(t.kind));
+  const localGroups = groups.filter((g) => !sectionIds.has(g.kind));
 
   const [dragTabId, setDragTabId] = useState<number | null>(null);
   const [dragGroupId, setDragGroupId] = useState<string | null>(null);
@@ -156,8 +175,6 @@ export function Sidebar(props: Props) {
 
   const tabIndexMap = new Map<number, number>();
   tabs.forEach((t, i) => tabIndexMap.set(t.id, i));
-
-  const ungroupedTabs = localTabs.filter((t) => t.groupId === null);
 
   const focusTabByOffset = (currentId: number, offset: number) => {
     const idx = tabs.findIndex((t) => t.id === currentId);
@@ -382,78 +399,91 @@ export function Sidebar(props: Props) {
       <div className="drop-line" />
     ) : null;
 
-  return (
-    <aside className="term-side" aria-label="Workspace">
-      <div className="term-side-h">
-        <span className="name">mTerminal</span>
-        <span title={sessionLabel}>{sessionLabel}</span>
-      </div>
-
-      <div className="term-side-section term-side-section-row">
-        <span>local workspace</span>
-        <div className="term-side-actions">
-          <button
-            className="ghost-btn"
-            title="new tab (right-click for profile)"
-            onClick={() => onAddTab()}
-            onContextMenu={(e) => {
-              if (!onAddTabContextMenu) return;
-              e.preventDefault();
-              onAddTabContextMenu(e.clientX, e.clientY, null);
-            }}
-          >
-            + tab
-          </button>
-          <button className="ghost-btn" title="new group" onClick={onAddGroup}>
-            + group
-          </button>
+  const renderWorkspaceSection = (opts: {
+    kind: string;
+    label: string;
+    sectionTabs: Tab[];
+    sectionGroups: Group[];
+    showAddTab: boolean;
+  }) => {
+    const { kind, label, sectionTabs, sectionGroups, showAddTab } = opts;
+    const sectionUngrouped = sectionTabs.filter((t) => t.groupId === null);
+    const sectionKey = `term-side-section-${kind}`;
+    return (
+      <Fragment key={sectionKey}>
+        <div className="term-side-section term-side-section-row">
+          <span>{label}</span>
+          <div className="term-side-actions">
+            {showAddTab && (
+              <button
+                className="ghost-btn"
+                title="new tab (right-click for profile)"
+                onClick={() => onAddTab()}
+                onContextMenu={(e) => {
+                  if (!onAddTabContextMenu) return;
+                  e.preventDefault();
+                  onAddTabContextMenu(e.clientX, e.clientY, null);
+                }}
+              >
+                + tab
+              </button>
+            )}
+            <button
+              className="ghost-btn"
+              title="new group"
+              onClick={() => onAddGroup(kind)}
+            >
+              + group
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div
-        className="term-side-scroll"
-        role="tablist"
-        aria-orientation="vertical"
-        onDragOver={(e) => {
-          if (dragGroupRef.current != null) {
+        <div
+          className={`term-side-scroll term-side-scroll-${kind}`}
+          role="tablist"
+          aria-orientation="vertical"
+          onDragOver={(e) => {
+            if (dragGroupRef.current != null) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              if (groupDropMarkRef.current == null) {
+                setGroupMark({ kind: "end" });
+              }
+              return;
+            }
+            if (dragTabRef.current == null) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = "move";
-            if (groupDropMarkRef.current == null) {
-              setGroupMark({ kind: "end" });
+            if (dropMarkRef.current == null) {
+              setMark({ kind: "endOf", groupId: null });
             }
-            return;
-          }
-          if (dragTabRef.current == null) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          if (dropMarkRef.current == null) {
-            setMark({ kind: "endOf", groupId: null });
-          }
-        }}
-        onDrop={commitDrop}
-      >
-        <div
-          className={`term-ungrouped ${
-            dropMark?.kind === "endOf" && dropMark.groupId === null
-              ? "drop-target"
-              : ""
-          } ${ungroupedTabs.length === 0 ? "empty" : ""}`}
-          onDragOver={(e) => handleSectionDragOver(e, null, ungroupedTabs)}
+          }}
           onDrop={commitDrop}
         >
-          {ungroupedTabs.map((t) => renderTab(t, ungroupedTabs))}
-          {renderEndMarker(null)}
-          {ungroupedTabs.length === 0 && (
-            <div className="drop-hint">
-              {dragTabId != null
-                ? "drop here to ungroup"
-                : "ungrouped tabs"}
-            </div>
-          )}
-        </div>
+          <div
+            className={`term-ungrouped ${
+              dropMark?.kind === "endOf" && dropMark.groupId === null
+                ? "drop-target"
+                : ""
+            } ${sectionUngrouped.length === 0 ? "empty" : ""}`}
+            onDragOver={(e) => handleSectionDragOver(e, null, sectionUngrouped)}
+            onDrop={commitDrop}
+          >
+            {sectionUngrouped.map((t) => renderTab(t, sectionUngrouped))}
+            {renderEndMarker(null)}
+            {sectionUngrouped.length === 0 && (
+              <div className="drop-hint">
+                {dragTabId != null
+                  ? "drop here to ungroup"
+                  : kind === "local"
+                    ? "ungrouped tabs"
+                    : `no ${label} tabs yet`}
+              </div>
+            )}
+          </div>
 
-        {groups.map((g) => {
-          const groupTabs = tabs.filter((t) => t.groupId === g.id);
+          {sectionGroups.map((g) => {
+            const groupTabs = sectionTabs.filter((t) => t.groupId === g.id);
           const groupAgentCounts = g.collapsed
             ? groupTabs.reduce(
                 (acc, t) => {
@@ -660,24 +690,61 @@ export function Sidebar(props: Props) {
           );
         })}
 
-        {groupDropMark?.kind === "end" && (
-          <div
-            className="drop-line group-drop-line"
-            style={{
-              ["--group-accent" as never]: `var(--c-${
-                groups.find((g) => g.id === dragGroupId)?.accent ?? "orange"
-              })`,
-            }}
-          />
-        )}
+          {groupDropMark?.kind === "end" && (
+            <div
+              className="drop-line group-drop-line"
+              style={{
+                ["--group-accent" as never]: `var(--c-${
+                  sectionGroups.find((g) => g.id === dragGroupId)?.accent ?? "orange"
+                })`,
+              }}
+            />
+          )}
 
-        {groups.length === 0 && ungroupedTabs.length > 0 && (
-          <div className="term-empty-groups">
-            tip — click <span className="kbd">+ group</span> to organize tabs
-          </div>
-        )}
+          {sectionGroups.length === 0 && sectionUngrouped.length > 0 && (
+            <div className="term-empty-groups">
+              tip — click <span className="kbd">+ group</span> to organize tabs
+            </div>
+          )}
 
+        </div>
+      </Fragment>
+    );
+  };
+
+  return (
+    <aside className="term-side" aria-label="Workspace">
+      <div className="term-side-h">
+        <span className="name">mTerminal</span>
+        <span title={sessionLabel}>{sessionLabel}</span>
       </div>
+
+      {renderWorkspaceSection({
+        kind: "local",
+        label: "local workspace",
+        sectionTabs: localTabs,
+        sectionGroups: localGroups,
+        showAddTab: true,
+      })}
+
+      {workspaceSections.map((section) => {
+        const sectionTabs = tabs.filter((t) => t.kind === section.id);
+        const sectionGroups = groups.filter((g) => g.kind === section.id);
+        return (
+          <Fragment key={`workspace-section-${section.id}`}>
+            {renderWorkspaceSection({
+              kind: section.id,
+              label: section.label,
+              sectionTabs,
+              sectionGroups,
+              showAddTab: section.allowNewTab,
+            })}
+            <PluginPanelSlot
+              location={`workspace-section.${section.id}` as never}
+            />
+          </Fragment>
+        );
+      })}
 
       <div
         className="term-side-resize"

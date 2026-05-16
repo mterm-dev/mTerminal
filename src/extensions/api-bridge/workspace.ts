@@ -7,6 +7,7 @@
  */
 
 import type { Disposable, WorkspaceApi } from '../ctx-types'
+import { getWorkspaceSectionRegistry } from '../registries/workspace-sections'
 
 export interface WorkspaceTab {
   id: number
@@ -53,12 +54,20 @@ function createNoopBackend(): WorkspaceBackend {
   }
 }
 
-export function createWorkspaceBridge(): WorkspaceApi {
+export function createWorkspaceBridge(extId: string): WorkspaceApi {
+  const sectionReg = getWorkspaceSectionRegistry()
   return {
     groups: () => backend.groups(),
     activeGroup: () => backend.activeGroup(),
     setActiveGroup: (id) => backend.setActiveGroup(id),
     tabs: (groupId) => backend.tabs(groupId),
     cwd: () => backend.cwd(),
+    sections: {
+      register: (section) => sectionReg.register(section, extId),
+      list: () =>
+        sectionReg
+          .list()
+          .map(({ id, label, allowNewTab }) => ({ id, label, allowNewTab })),
+    },
   }
 }

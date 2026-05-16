@@ -327,7 +327,7 @@ function AppInner({
       onCoreChange: (cb) => ({ dispose: onCoreChange(cb) }),
     });
     const tabType = (t: { kind: string; customType?: string }): string =>
-      t.kind === "custom" ? t.customType ?? "custom" : "terminal";
+      t.kind === "local" ? "terminal" : t.customType ?? "custom";
     setWorkspaceBackend({
       groups: () => wsRef.current.groups.map((g) => ({ id: g.id, label: g.name })),
       activeGroup: () => {
@@ -356,23 +356,38 @@ function AppInner({
         }
         return null;
       },
-      openTab: async (args: { type: string; title?: string; props?: unknown; groupId?: string | null }) => {
+      openTab: async (args: {
+        type: string
+        title?: string
+        props?: unknown
+        groupId?: string | null
+        kind?: string
+      }) => {
         if (args.type === "terminal") {
           return wsRef.current.addTab(args.groupId ?? undefined);
         }
         const ws = wsRef.current;
+        const kind = args.kind ?? "custom";
+        const isBuiltinKind = kind === "local" || kind === "custom";
         const active = ws.tabs.find((t) => t.id === ws.activeId);
+        const matchesSection = (t: { kind: string }): boolean =>
+          isBuiltinKind
+            ? t.kind === "local" || t.kind === "custom"
+            : t.kind === kind;
         const inferredGroupId =
           args.groupId === undefined
-            ? active && (active.kind === "local" || active.kind === "custom")
+            ? active && matchesSection(active)
               ? active.groupId
-              : null
+              : isBuiltinKind
+                ? null
+                : ws.tabs.filter((t) => t.kind === kind).at(-1)?.groupId ?? null
             : args.groupId;
         const id = ws.addCustomTab({
           customType: args.type,
           label: args.title,
           groupId: inferredGroupId,
           props: args.props,
+          kind,
         });
         if (inferredGroupId) setGridGroupId(inferredGroupId);
         return id;
@@ -1093,7 +1108,7 @@ function AppInner({
                 }
               : undefined
           }
-          onAddGroup={() => ws.addGroup()}
+          onAddGroup={(kind) => ws.addGroup(undefined, kind)}
           onToggleGroup={ws.toggleGroup}
           onRenameTab={ws.renameTab}
           onRenameGroup={ws.renameGroup}
@@ -1174,7 +1189,7 @@ function AppInner({
                   onCommitRename={(v) => ws.renameTab(t.id, v)}
                 />
               ) : undefined;
-              if (t.kind === "custom" && t.customType) {
+              if (t.kind !== "local" && t.customType) {
                 return (
                   <PluginTabHost
                     key={t.id}

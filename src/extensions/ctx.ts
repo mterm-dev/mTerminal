@@ -47,6 +47,7 @@ import { getContextMenuRegistry } from './registries/context-menu'
 import { getTabTypeRegistry } from './registries/tab-types'
 import { getDecoratorRegistry } from './registries/decorators'
 import { getThemeRegistry } from './registries/themes'
+import { getWorkspaceSectionRegistry } from './registries/workspace-sections'
 import { getRendererEventBus } from './event-bus'
 import { createGlobalState, createWorkspaceState } from './kv-store'
 import { getServiceRegistry } from './services'
@@ -103,6 +104,7 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
   const ttReg = getTabTypeRegistry()
   const decReg = getDecoratorRegistry()
   const themeReg = getThemeRegistry()
+  const wsSectionReg = getWorkspaceSectionRegistry()
   const bus = getRendererEventBus()
   const settingsBackend = getSettingsBackend()
   const wsBackend = getWorkspaceBackend()
@@ -303,7 +305,7 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
   // ─ ai / git / terminal / workspace / ui / notify ───────────────────────
   const ai = createAiBridge({ extId: id })
   const terminal = createTerminalBridge()
-  const workspace = createWorkspaceBridge()
+  const workspace = createWorkspaceBridge(id)
   const ui = createUiBridge()
   const notify = createNotifyBridge()
 
@@ -453,6 +455,7 @@ export function createRendererCtx(manifest: NormalizedManifest): CreateCtxResult
     ttReg.removeBySource(id)
     decReg.removeBySource(id)
     themeReg.removeBySource(id)
+    wsSectionReg.removeBySource(id)
   }
 
   return { ctx, dispose }

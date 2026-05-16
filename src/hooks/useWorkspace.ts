@@ -36,7 +36,13 @@ export function basename(p: string): string {
   return parts[parts.length - 1] || (win ? "\\" : "/");
 }
 
-export type TabKind = "local" | "custom";
+/**
+ * Built-in kinds: `'local'` (PTY tab in the workspace) and `'custom'`
+ * (extension-provided tab without a dedicated workspace section). Any other
+ * string identifies a workspace section registered by an extension via
+ * `ctx.workspace.sections.register({ id })`.
+ */
+export type TabKind = string;
 
 export interface Tab {
   id: number;
@@ -51,12 +57,16 @@ export interface Tab {
   profileId?: string;
 }
 
+export type GroupKind = string;
+
 export interface Group {
   id: string;
   name: string;
   collapsed: boolean;
   accent: string;
   defaultCwd?: string;
+  /** Workspace section id this group lives under (`'local'` by default). */
+  kind: GroupKind;
 }
 
 export interface WorkspaceState {
@@ -134,21 +144,26 @@ function loadInitial(): WorkspaceState {
         Array.isArray(parsed.tabs) &&
         typeof parsed.nextTabId === "number"
       ) {
-        const groups: Group[] = parsed.groups.map((g, i) => ({
-          id: g.id!,
-          name: g.name || "group",
-          collapsed: !!g.collapsed,
-          accent: normalizeAccent(g.accent, i),
-          defaultCwd:
-            typeof g.defaultCwd === "string" && g.defaultCwd.length > 0
-              ? g.defaultCwd
-              : undefined,
-        }));
+        const groups: Group[] = parsed.groups.map((g, i) => {
+          const rawKind = (g as { kind?: unknown }).kind;
+          return {
+            id: g.id!,
+            name: g.name || "group",
+            collapsed: !!g.collapsed,
+            accent: normalizeAccent(g.accent, i),
+            defaultCwd:
+              typeof g.defaultCwd === "string" && g.defaultCwd.length > 0
+                ? g.defaultCwd
+                : undefined,
+            kind: typeof rawKind === "string" && rawKind.length > 0 ? rawKind : "local",
+          };
+        });
         const groupIds = new Set(groups.map((g) => g.id));
         const tabs: Tab[] = parsed.tabs
-          .filter((t) => (t.kind as string | undefined) !== "remote")
           .map((t) => {
-            const kind: TabKind = t.kind === "custom" ? "custom" : "local";
+            const rawKind = (t as { kind?: unknown }).kind;
+            const kind: TabKind =
+              typeof rawKind === "string" && rawKind.length > 0 ? rawKind : "local";
             const gid =
               typeof t.groupId === "string" && groupIds.has(t.groupId)
                 ? t.groupId
@@ -162,7 +177,7 @@ function loadInitial(): WorkspaceState {
               autoLabel: t.autoLabel ?? true,
               kind,
             };
-            if (kind === "custom") {
+            if (kind !== "local") {
               tab.customType =
                 typeof (t as { customType?: unknown }).customType === "string"
                   ? ((t as { customType?: string }).customType as string)
@@ -374,16 +389,26 @@ export function useWorkspace() {
       groupId?: string | null;
       cwd?: string;
       props?: unknown;
+      kind?: TabKind;
     }): number => {
       let createdId = -1;
+      const tabKind: TabKind = opts.kind ?? "custom";
+      const isBuiltinKind = tabKind === "local" || tabKind === "custom";
       setState((s) => {
         const active = s.tabs.find((t) => t.id === s.activeId);
+        const matchesSection = (t: Tab): boolean =>
+          isBuiltinKind
+            ? t.kind === "local" || t.kind === "custom"
+            : t.kind === tabKind;
         const activeGroup =
-          active && (active.kind === "local" || active.kind === "custom")
-            ? active.groupId
-            : null;
+          active && matchesSection(active) ? active.groupId : null;
+        const fallbackGroup =
+          activeGroup ??
+          (isBuiltinKind
+            ? null
+            : (s.tabs.filter((t) => t.kind === tabKind).at(-1)?.groupId ?? null));
         const targetGroup =
-          opts.groupId === undefined ? activeGroup ?? null : opts.groupId;
+          opts.groupId === undefined ? fallbackGroup : opts.groupId;
         const id = s.nextTabId;
         createdId = id;
         const tab: Tab = {
@@ -393,7 +418,7 @@ export function useWorkspace() {
           cwd: opts.cwd,
           groupId: targetGroup,
           autoLabel: false,
-          kind: "custom",
+          kind: tabKind,
           customType: opts.customType,
           customProps: opts.props,
         };
@@ -494,7 +519,7 @@ export function useWorkspace() {
     setState((s) => ({
       ...s,
       tabs: s.tabs.map((t) =>
-        t.id === id && t.kind === "local" ? { ...t, groupId } : t,
+        t.id === id && t.kind !== "custom" ? { ...t, groupId } : t,
       ),
     }));
   }, []);
@@ -528,20 +553,24 @@ export function useWorkspace() {
     [],
   );
 
-  const addGroup = useCallback((name?: string): string => {
+  const addGroup = useCallback((name?: string, kind: GroupKind = "local"): string => {
     const id = `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    setState((s) => ({
-      ...s,
-      groups: [
-        ...s.groups,
-        {
-          id,
-          name: name || `group ${s.groups.length + 1}`,
-          collapsed: false,
-          accent: pickDefaultAccent(s.groups.length),
-        },
-      ],
-    }));
+    setState((s) => {
+      const sameKindCount = s.groups.filter((g) => g.kind === kind).length;
+      return {
+        ...s,
+        groups: [
+          ...s.groups,
+          {
+            id,
+            name: name || `group ${sameKindCount + 1}`,
+            collapsed: false,
+            accent: pickDefaultAccent(s.groups.length),
+            kind,
+          },
+        ],
+      };
+    });
     return id;
   }, []);
 
