@@ -40,7 +40,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@mterminal/manifest-validator": "^0.2.0",
     "@mterminal/marketplace-types": "^0.2.0",
-    "@noble/ciphers": "^1.0.0",
+    "@noble/ciphers": "^2.0.0",
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.5.0",
     "@openai/codex-sdk": "^0.129.0",
