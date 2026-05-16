@@ -62,6 +62,7 @@ const appIcon = nativeImage.createFromPath(appIconPath)
 
 const createWindow = (): BrowserWindow => {
   const isMac = process.platform === 'darwin'
+  const isWin = process.platform === 'win32'
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -70,8 +71,8 @@ const createWindow = (): BrowserWindow => {
     frame: isMac ? undefined : false,
     titleBarStyle: isMac ? 'hiddenInset' : undefined,
     trafficLightPosition: isMac ? { x: 14, y: 14 } : undefined,
-    transparent: true,
-    backgroundColor: '#00000000',
+    transparent: !isWin,
+    backgroundColor: isWin ? '#000000' : '#00000000',
     hasShadow: true,
     show: false,
     icon: appIcon.isEmpty() ? undefined : appIcon,
