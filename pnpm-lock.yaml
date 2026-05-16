@@ -18,11 +18,11 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       '@mterminal/manifest-validator':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.0
+        version: 0.2.0
       '@mterminal/marketplace-types':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.0
+        version: 0.2.0
       '@noble/ciphers':
         specifier: ^1.0.0
         version: 1.3.0
@@ -715,11 +715,11 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  '@mterminal/manifest-validator@0.1.0':
-    resolution: {integrity: sha512-fwpo7DkNnHC15xmvIF4xTOAW0o8jaJsEG224jT9IYOijYqnTlg0WP0c7+RvHJTg86a7EHVmSH4LRCvkWSD0A3Q==}
+  '@mterminal/manifest-validator@0.2.0':
+    resolution: {integrity: sha512-TyRyz9gnZ/Kltca006XGXOlPjr1vYOhYKCCPvMkpU/qP0z/F5q5BoGFpgvnilgUADsmLXgA2C+/q7nhV1/cm/w==}
 
-  '@mterminal/marketplace-types@0.1.0':
-    resolution: {integrity: sha512-AvkTbwRnHXLvkYOz5u3+wiZUlESbRp2SmHD6lDG31kQ7mbxmwiT0QFAypWZhzm95T5N7j2gPiua5qD/znJccBA==}
+  '@mterminal/marketplace-types@0.2.0':
+    resolution: {integrity: sha512-9Pgtc15M1GISL0NjfyKVx5iIubwPhoFvNtP40lWlLgZrQxe5mAZOTDqWzFLZSFZ29gIRDWTrhceViIRvFPWq+w==}
 
   '@napi-rs/wasm-runtime@1.1.4':
     resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
@@ -3294,9 +3294,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@mterminal/manifest-validator@0.1.0': {}
+  '@mterminal/manifest-validator@0.2.0': {}
 
-  '@mterminal/marketplace-types@0.1.0': {}
+  '@mterminal/marketplace-types@0.2.0': {}
 
   '@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
     dependencies:

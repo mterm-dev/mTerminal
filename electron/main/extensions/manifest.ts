@@ -41,7 +41,11 @@ export interface PanelContribution {
   id: string
   title: string
   icon?: string
-  location: 'sidebar' | 'sidebar.bottom' | 'bottombar'
+  location:
+    | 'sidebar'
+    | 'sidebar.bottom'
+    | 'bottombar'
+    | `workspace-section.${string}`
   initialCollapsed?: boolean
 }
 
@@ -400,7 +404,13 @@ function readContributes(v: unknown, issues: string[]): ExtensionManifest['contr
       if (!isObject(x)) return false
       if (typeof x.id !== 'string' || typeof x.title !== 'string') return false
       const loc = x.location
-      if (loc !== 'sidebar' && loc !== 'sidebar.bottom' && loc !== 'bottombar') {
+      const isBuiltinSlot =
+        loc === 'sidebar' || loc === 'sidebar.bottom' || loc === 'bottombar'
+      const isWorkspaceSectionSlot =
+        typeof loc === 'string' &&
+        loc.startsWith('workspace-section.') &&
+        loc.length > 'workspace-section.'.length
+      if (!isBuiltinSlot && !isWorkspaceSectionSlot) {
         issues.push(`panel "${String(x.id)}" has invalid location "${String(loc)}"`)
         return false
       }

@@ -110,7 +110,7 @@ describe("useWorkspace - initial state", () => {
     expect(result.current.tabs[2].groupId).toBeNull();
   });
 
-  it("5. legacy remote tab seed is dropped on load", () => {
+  it("5. custom-kind seeds (e.g. legacy 'remote') survive load — extensions own the section routing", () => {
     const seed = {
       tabs: [
         {
@@ -137,8 +137,8 @@ describe("useWorkspace - initial state", () => {
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
     const { result } = renderHook(() => useWorkspace());
-    expect(result.current.tabs).toHaveLength(1);
-    expect(result.current.tabs[0].kind).toBe("local");
+    expect(result.current.tabs).toHaveLength(2);
+    expect(result.current.tabs.map((t) => t.kind)).toEqual(["remote", "local"]);
   });
 });
 
