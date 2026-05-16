@@ -732,10 +732,15 @@ export function Sidebar(props: Props) {
       })}
 
       {workspaceSections.map((section) => (
-        <PluginPanelSlot
+        <div
           key={`workspace-section-${section.id}`}
-          location={`workspace-section.${section.id}` as never}
-        />
+          className="term-side-extension-section"
+          data-section-id={section.id}
+        >
+          <PluginPanelSlot
+            location={`workspace-section.${section.id}` as never}
+          />
+        </div>
       ))}
 
       <div

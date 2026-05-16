@@ -326,6 +326,20 @@ body.resizing-sidebar * {
 .term-side-scroll::-webkit-scrollbar-thumb { background: var(--n-250); border-radius: 4px; }
 .term-side-scroll::-webkit-scrollbar-thumb:hover { background: var(--n-300); }
 
+.term-side-extension-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-subtle);
+}
+.term-side-extension-section .ext-panel-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── group ───────────────────────────────────────────────── */
 .term-group {
   margin: 2px 8px 4px;
