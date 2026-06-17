@@ -36,10 +36,10 @@ export class AppErrorBoundary extends Component<Props, State> {
           justifyContent: "center",
           padding: 24,
           gap: 12,
-          background: "var(--bg-base, #0c0c0c)",
-          color: "var(--fg, #ebebeb)",
+          background: "var(--bg-base, #100e0c)",
+          color: "var(--fg, #efe7da)",
           fontFamily:
-            '"JetBrains Mono", ui-monospace, monospace',
+            'var(--font-mono, "Commit Mono", ui-monospace, monospace)',
           fontSize: 13,
           textAlign: "center",
         }}
@@ -52,8 +52,8 @@ export class AppErrorBoundary extends Component<Props, State> {
             maxWidth: 720,
             maxHeight: "60vh",
             overflow: "auto",
-            background: "rgba(220, 80, 80, 0.08)",
-            border: "1px solid rgba(220, 80, 80, 0.4)",
+            background: "color-mix(in oklch, var(--err, #d76a55) 12%, transparent)",
+            border: "1px solid color-mix(in oklch, var(--err, #d76a55) 40%, transparent)",
             borderRadius: 6,
             padding: "10px 14px",
             whiteSpace: "pre-wrap",
@@ -68,8 +68,8 @@ export class AppErrorBoundary extends Component<Props, State> {
           onClick={this.reset}
           style={{
             padding: "6px 14px",
-            background: "var(--accent, #f5b056)",
-            color: "var(--bg-base, #0c0c0c)",
+            background: "var(--accent, #d7693a)",
+            color: "var(--on-accent, #fdfaf4)",
             border: 0,
             borderRadius: 6,
             cursor: "pointer",

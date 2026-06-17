@@ -18,7 +18,7 @@ export function TerminalPanel({ settings, update }: SectionProps) {
           label="Font family"
           desc="Any font family list valid in CSS; leave the fallback chain to keep glyph coverage"
           value={settings.fontFamily}
-          placeholder='"JetBrains Mono", monospace'
+          placeholder='"Commit Mono", monospace'
           onChange={(v) => update("fontFamily", v)}
           grow
         />
@@ -72,6 +72,16 @@ export function TerminalPanel({ settings, update }: SectionProps) {
           step={500}
           suffix="lines"
           onChange={(v) => update("scrollback", v)}
+        />
+      </Group>
+
+      <SectionLabel>Input</SectionLabel>
+      <Group>
+        <ToggleRow
+          label="Mouse reporting"
+          desc="Let terminal apps (Claude Code, vim, htop) capture mouse clicks and scroll. When off, dragging always selects text so Ctrl+Shift+C can copy it — including inside Claude Code. With it on, hold Shift while dragging to select."
+          checked={settings.mouseReporting}
+          onChange={(b) => update("mouseReporting", b)}
         />
       </Group>
 

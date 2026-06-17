@@ -36,6 +36,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
+    "@fontsource-variable/bricolage-grotesque": "^5.2.10",
+    "@fontsource-variable/hanken-grotesk": "^5.2.8",
+    "@fontsource/commit-mono": "^5.2.5",
     "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@mterminal/manifest-validator": "^0.2.0",

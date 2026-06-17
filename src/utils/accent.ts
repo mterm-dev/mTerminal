@@ -1,14 +1,14 @@
 export const DEFAULT_ACCENTS: readonly string[] = [
-  "#f5a23d",
-  "#6ea8e8",
-  "#bb9af7",
-  "#74cdc8",
-  "#65d39a",
-  "#c98ff0",
-  "#5cd0d0",
-  "#f5c176",
-  "#d4b3f7",
-  "#e8615a",
+  "#d7693a",
+  "#c9a14a",
+  "#8a9a5b",
+  "#6fa39b",
+  "#6f93a8",
+  "#b07b9e",
+  "#c2705a",
+  "#9a8f7d",
+  "#7f9e7a",
+  "#c98f6b",
 ] as const;
 
 export const FALLBACK_ACCENT = DEFAULT_ACCENTS[0];

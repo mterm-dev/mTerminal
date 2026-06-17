@@ -44,6 +44,10 @@ const { shimMock, fakeTerminals, fitMock, webLinksMock } = vi.hoisted(() => {
     public loadAddon = vi.fn((addon: unknown) => {
       this.addons.push(addon);
     });
+    public paste = vi.fn((d: string) => {
+      this._onData?.(d);
+    });
+    public parser = { registerCsiHandler: vi.fn(() => ({ dispose: () => {} })) };
     public open = vi.fn((host: HTMLElement) => {
       this.openedOn = host;
     });
@@ -118,6 +122,10 @@ vi.mock("@xterm/xterm", () => {
     public loadAddon = vi.fn((a: unknown) => {
       this.addons.push(a);
     });
+    public paste = vi.fn((d: string) => {
+      this._onData?.(d);
+    });
+    public parser = { registerCsiHandler: vi.fn(() => ({ dispose: () => {} })) };
     public open = vi.fn((h: HTMLElement) => {
       this.openedOn = h;
     });

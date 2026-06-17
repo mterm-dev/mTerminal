@@ -26,7 +26,7 @@ interface PendingModalView {
 const overlay: CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0, 0, 0, 0.45)',
+  background: 'rgba(10, 8, 6, 0.5)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -34,18 +34,18 @@ const overlay: CSSProperties = {
 }
 
 const panel: CSSProperties = {
-  background: 'var(--surface, #1a1a1a)',
-  color: 'var(--text, #eee)',
+  background: 'var(--surface, #1b1714)',
+  color: 'var(--text, #efe7da)',
   borderRadius: 8,
   width: 'min(640px, 92vw)',
   maxHeight: '85vh',
   overflow: 'auto',
-  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4)',
+  boxShadow: 'var(--shadow-2, 0 12px 40px rgba(10, 8, 6, 0.55))',
 }
 
 const titleBar: CSSProperties = {
   padding: '10px 16px',
-  borderBottom: '1px solid var(--border, #333)',
+  borderBottom: '1px solid var(--border, #f0e4d11f)',
   fontWeight: 600,
   fontSize: 14,
 }

@@ -110,3 +110,58 @@ describe("themes - findTheme", () => {
     expect(findTheme("")).toBe(THEMES[0]);
   });
 });
+
+describe("themes - graphite atelier redesign", () => {
+  const ORIGINAL_IDS = [
+    "mterminal",
+    "tokyo-night",
+    "catppuccin-mocha",
+    "solarized-dark",
+    "gruvbox-dark",
+    "entire",
+    "vercel",
+    "linear",
+    "carbon",
+    "rose-pine",
+    "dracula",
+    "nord",
+    "ayu-mirage",
+    "kanagawa-wave",
+    "monokai-pro",
+    "midnight",
+    "mterminal-light",
+  ];
+
+  it("keeps the default theme first and as the unknown-id fallback", () => {
+    expect(THEMES[0].id).toBe("mterminal");
+    expect(findTheme("mterminal")).toBe(THEMES[0]);
+    expect(findTheme("nope").id).toBe("mterminal");
+  });
+
+  it("ships the two new signature themes", () => {
+    expect(findTheme("atelier-dim").id).toBe("atelier-dim");
+    expect(findTheme("atelier-light").id).toBe("atelier-light");
+  });
+
+  it("preserves every original community theme", () => {
+    for (const id of ORIGINAL_IDS) {
+      expect(findTheme(id).id, `${id} missing`).toBe(id);
+    }
+  });
+
+  it("totals 19 themes (17 original + 2 atelier)", () => {
+    expect(THEMES.length).toBe(19);
+  });
+
+  it("uses a warm ember accent for the default theme", () => {
+    expect(findTheme("mterminal").cssVars["--accent"]).toBe("oklch(0.70 0.155 47)");
+  });
+
+  it("makes atelier-light a light surface with dark warm borders", () => {
+    const light = findTheme("atelier-light");
+    expect(light.cssVars["--bg-base"]).toBe("#f5efe4");
+    expect(light.cssVars["--fg"]).toBe("#2a2017");
+    expect(light.cssVars["--border"]).toBe("#3023121f");
+    expect(light.cssVars["--bg-hover"]).toBe("#30231214");
+  });
+});

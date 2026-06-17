@@ -3,9 +3,17 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { attachRenderer } from "../lib/xterm-renderer";
+import {
+  terminalClipboardChord,
+  shouldHandleTerminalClipboard,
+} from "../lib/terminal-copy";
+import { resolveTerminalPaste } from "../lib/terminal-paste";
+import { isMouseTrackingDecset } from "../lib/terminal-mouse";
 import { Channel, invoke, writeText } from "../lib/ipc";
 import type { CursorStyle } from "../settings/useSettings";
 import { getTerminalRegistry, type TerminalAdapter } from "../extensions";
+
+let focusedTerminalTabId: number | null = null;
 
 export interface GridPlacement {
   colStart: number;
@@ -45,6 +53,7 @@ interface Props {
   shellArgs: string[];
   showGreeting: boolean;
   copyOnSelect: boolean;
+  mouseReporting?: boolean;
   claudeActive?: boolean;
   initialCwd?: string;
   toolbar?: ReactNode;
@@ -81,6 +90,7 @@ export function TerminalTab({
   shellArgs,
   showGreeting,
   copyOnSelect,
+  mouseReporting,
   claudeActive,
   initialCwd,
   toolbar,
@@ -115,6 +125,8 @@ export function TerminalTab({
   activeRef.current = active;
   const claudeActiveRef = useRef(claudeActive);
   claudeActiveRef.current = claudeActive;
+  const mouseReportingRef = useRef(mouseReporting);
+  mouseReportingRef.current = mouseReporting;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -149,6 +161,11 @@ export function TerminalTab({
     term.open(host);
     attachRenderer(term);
 
+    term.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
+      if (mouseReportingRef.current) return false;
+      return isMouseTrackingDecset(params);
+    });
+
     let disposed = false;
     const pendingInput: string[] = [];
     let pendingResize: { rows: number; cols: number } | null = null;
@@ -168,12 +185,19 @@ export function TerminalTab({
         void (async () => {
           const id = ptyIdRef.current;
           if (id == null) return;
-          let saved: string | null = null;
+          let text = "";
           try {
-            saved = await window.mt.clipboard.readImage();
+            text = await window.mt.clipboard.readText();
           } catch {}
-          const data = saved ? saved + " " : "\x16";
-          invoke("pty_write", { id, data }).catch(() => {});
+          let image: string | null = null;
+          if (!text) {
+            try {
+              image = await window.mt.clipboard.readImage();
+            } catch {}
+          }
+          const action = resolveTerminalPaste(text, image);
+          if (action.kind === "text") term.paste(action.data);
+          else invoke("pty_write", { id, data: action.data }).catch(() => {});
         })();
         return false;
       }
@@ -193,14 +217,56 @@ export function TerminalTab({
         return false;
       }
 
-      if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return true;
-      if (e.key.toLowerCase() !== "c") return true;
-      const sel = term.getSelection();
-      if (!sel) return true;
-      writeText(sel).catch(() => {});
-      term.clearSelection();
-      return false;
+      return true;
     });
+
+    const onClipboardKey = (e: KeyboardEvent) => {
+      const action = terminalClipboardChord(e);
+      if (!action) return;
+      const owner =
+        focusedTerminalTabId != null ? focusedTerminalTabId : activeRef.current ? tabId : null;
+      if (owner !== tabId) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        !shouldHandleTerminalClipboard({
+          tagName: t?.tagName,
+          inEditable: !!t?.isContentEditable,
+          inTerminal: !!t?.closest?.(".term-pane-host"),
+        })
+      )
+        return;
+
+      if (action === "copy") {
+        const sel = term.getSelection();
+        if (!sel) return;
+        e.preventDefault();
+        e.stopPropagation();
+        writeText(sel).catch(() => {});
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      void (async () => {
+        const id = ptyIdRef.current;
+        if (id == null) return;
+        let text = "";
+        try {
+          text = await window.mt.clipboard.readText();
+        } catch {}
+        let image: string | null = null;
+        if (!text && claudeActiveRef.current) {
+          try {
+            image = await window.mt.clipboard.readImage();
+          } catch {}
+        }
+        const paste = resolveTerminalPaste(text, image);
+        if (paste.kind === "text") term.paste(paste.data);
+        else if (paste.kind === "image")
+          invoke("pty_write", { id, data: paste.data }).catch(() => {});
+      })();
+    };
+    window.addEventListener("keydown", onClipboardKey, { capture: true });
 
     if (copyOnSelect) {
       term.onSelectionChange(() => {
@@ -385,6 +451,8 @@ export function TerminalTab({
 
     return () => {
       disposed = true;
+      window.removeEventListener("keydown", onClipboardKey, { capture: true });
+      if (focusedTerminalTabId === tabId) focusedTerminalTabId = null;
       ro.disconnect();
       if (fitTimer) clearTimeout(fitTimer);
       const id = ptyIdRef.current;
@@ -404,6 +472,7 @@ export function TerminalTab({
 
   useEffect(() => {
     if (!active) return;
+    focusedTerminalTabId = tabId;
     if (adapterDisposeRef.current) {
       getTerminalRegistry().setActive(tabId);
     }
@@ -503,6 +572,7 @@ export function TerminalTab({
         className="term-pane-host"
         onMouseDown={(e) => {
           mouseDownTargetRef.current = e.target;
+          focusedTerminalTabId = tabId;
           onActivateRef.current?.(tabId);
         }}
         onMouseUp={(e) => {

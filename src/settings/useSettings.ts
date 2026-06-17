@@ -48,6 +48,7 @@ export interface Settings {
   windowOpacity: number;
   confirmCloseMultipleTabs: boolean;
   copyOnSelect: boolean;
+  mouseReporting: boolean;
   showGreeting: boolean;
   aiEnabled: boolean;
   aiDefaultProvider: AiProviderId;
@@ -91,7 +92,7 @@ Rules:
 export const DEFAULT_SETTINGS: Settings = {
   settingsSchemaVersion: CURRENT_SCHEMA_VERSION,
   themeId: "mterminal",
-  fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+  fontFamily: '"Commit Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   fontSize: 13,
   lineHeight: 1.25,
   cursorStyle: "bar",
@@ -105,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   windowOpacity: 1,
   confirmCloseMultipleTabs: true,
   copyOnSelect: false,
+  mouseReporting: false,
   showGreeting: true,
   aiEnabled: false,
   aiDefaultProvider: "",

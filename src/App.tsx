@@ -1408,6 +1408,7 @@ function AppInner({
                   shellArgs={tabShell.args}
                   showGreeting={settings.showGreeting}
                   copyOnSelect={settings.copyOnSelect}
+                  mouseReporting={settings.mouseReporting}
                   claudeActive={(() => {
                     const s = agentStatuses.get(t.id);
                     return s?.agent === "claude" && s.state !== "done";

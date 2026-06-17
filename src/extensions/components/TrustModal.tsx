@@ -21,14 +21,14 @@ const overlay: CSSProperties = {
 }
 
 const panel: CSSProperties = {
-  background: 'var(--surface, #1a1a1a)',
-  color: 'var(--text, #eee)',
+  background: 'var(--surface, #1b1714)',
+  color: 'var(--text, #efe7da)',
   borderRadius: 8,
   padding: '20px 24px',
   width: 'min(560px, 90vw)',
   maxHeight: '85vh',
   overflow: 'auto',
-  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4)',
+  boxShadow: 'var(--shadow-2, 0 12px 40px rgba(10, 8, 6, 0.55))',
 }
 
 const titleStyle: CSSProperties = {
@@ -45,7 +45,7 @@ const intro: CSSProperties = {
 }
 
 const row: CSSProperties = {
-  border: '1px solid var(--border, #333)',
+  border: '1px solid var(--border, #f0e4d11f)',
   borderRadius: 6,
   padding: 12,
   marginBottom: 10,
@@ -61,7 +61,7 @@ const buttonRow: CSSProperties = {
 const btn: CSSProperties = {
   padding: '6px 14px',
   borderRadius: 4,
-  border: '1px solid var(--border, #444)',
+  border: '1px solid var(--border, #f0e4d11f)',
   background: 'transparent',
   color: 'inherit',
   cursor: 'pointer',
@@ -70,9 +70,9 @@ const btn: CSSProperties = {
 
 const btnPrimary: CSSProperties = {
   ...btn,
-  background: 'var(--accent, #4a90e2)',
-  borderColor: 'var(--accent, #4a90e2)',
-  color: 'white',
+  background: 'var(--accent, #d7693a)',
+  borderColor: 'var(--accent, #d7693a)',
+  color: 'var(--on-accent, #fdfaf4)',
 }
 
 export function TrustModal() {
